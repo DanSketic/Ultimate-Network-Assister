@@ -11,6 +11,49 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.4.0] — 2026-08-14
+
+### Added
+
+- **Cards can be dragged, and put back.** The automatic layout optimises a
+  number; a person looking at their own network knows things the number does
+  not — which switch is in the cellar, which two machines belong together, what
+  the room actually looks like. So a card can be moved by hand and stays where
+  it was put, and a control appears to return everything to the automatic
+  arrangement. Only what was moved is remembered, so a device found by a later
+  survey still lands somewhere sensible rather than at the origin.
+
+  Movement is divided by the zoom, so a drag at 40% moves the card as far as
+  the hand went rather than two and a half times further, and a move is only
+  committed once the pointer has actually travelled — selecting a device by
+  clicking it must not nudge it sideways.
+
+### Fixed
+
+- **A cable running along a tier now orders the devices it joins.** Since the
+  hypervisor gained a measured cable to the switch it is plugged into, that
+  cable could run the whole width of a row with everything else arching over
+  it. The ordering could not see it at all: it orders each tier against the
+  tiers above and below, and both ends of this cable are in the same row.
+
+  It is counted now, and weighted for what it costs — a cable spanning three
+  positions passes over three cards and everything they are wired to, which is
+  worth about as much as a crossing each.
+
+  That alone was not enough. Swapping neighbours could never reach the better
+  arrangement, because every single swap left the total exactly where it was:
+  the pair moved one position closer while another moved one further, so a
+  search accepting only strict improvements sat on that plateau while the
+  arrangement two moves away was plainly better. Lifting one end out and
+  setting it down beside the other crosses the plateau in one step, and every
+  placement is scored on the whole objective so a tidy row cannot be bought
+  with a tangle above it.
+
+  On a representative estate this puts the hypervisor beside its switch and
+  takes crossings between separate devices to none.
+
+---
+
 ## [1.3.0] — 2026-08-14
 
 ### Added

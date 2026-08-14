@@ -193,8 +193,57 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
     }
   });
 
+  /*
+   * How far apart two devices on the same tier are left.
+   *
+   * A cable that runs along a tier — a switch to the switch beside it, or a
+   * hypervisor to the switch it is plugged into — has to cross everything
+   * standing between its two ends. The sweeps above cannot see such a cable at
+   * all, because they order each tier against the tiers above and below, and
+   * both ends of this one are in the same row.
+   *
+   * So it is counted here instead: every position between the two ends costs,
+   * and the swapping pass has a reason to bring them together. Adjacent costs
+   * nothing, which is the whole aim.
+   */
+  const alongTier: [string, string][][] = tiers.map(() => []);
+  for (const link of links) {
+    const layer = layerOf.get(link.from);
+    if (layer === undefined || layer !== layerOf.get(link.to) || link.from === link.to) continue;
+    alongTier[layer]!.push([link.from, link.to]);
+  }
+
+  const spread = (index: number) => {
+    const layer = order[index];
+    if (!layer) return 0;
+    const at = new Map(layer.map((id, i) => [id, i]));
+    let sum = 0;
+    for (const [a, b] of alongTier[index] ?? []) {
+      const x = at.get(a);
+      const y = at.get(b);
+      if (x === undefined || y === undefined) continue;
+      sum += Math.max(0, Math.abs(x - y) - 1);
+    }
+    return sum;
+  };
+
+  /*
+   * A cable stretched along a tier is not one problem but several.
+   *
+   * It passes over every card between its two ends, and over whatever those
+   * cards are wired to — so each position it spans is worth about as much as a
+   * crossing on its own. Weighting it below a single crossing, as this first
+   * did, left a hypervisor at one end of a row and the switch it is plugged
+   * into at the other, with everything else arching over the gap.
+   */
+  const CROSSING_WEIGHT = 10;
+  const SPREAD_WEIGHT = 9;
+
   const total = () =>
-    between.reduce((sum, edges, i) => sum + crossingsBetween(order[i]!, order[i + 1] ?? [], edges), 0);
+    between.reduce(
+      (sum, edges, i) => sum + crossingsBetween(order[i]!, order[i + 1] ?? [], edges) * CROSSING_WEIGHT,
+      0,
+    ) + order.reduce((sum, _, i) => sum + spread(i) * SPREAD_WEIGHT, 0);
 
   const snapshot = () => order.map((layer) => [...layer]);
   let best = snapshot();
@@ -236,24 +285,70 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
     for (let i = 1; i < order.length; i++) sweep(i, 'up', how);
     for (let i = order.length - 2; i >= 0; i--) sweep(i, 'down', how);
 
-    // Swapping neighbours clears up what averaging cannot.
-    for (let round = 0; round < 4; round++) {
+    // Swapping neighbours clears up what averaging cannot. The objective
+    // includes cables running along the tier, which the sweeps cannot see.
+    const localCost = (i: number) =>
+      (i > 0 ? crossingsBetween(order[i - 1]!, order[i]!, between[i - 1]!) : 0) * CROSSING_WEIGHT +
+      (i + 1 < order.length
+        ? crossingsBetween(order[i]!, order[i + 1]!, between[i]!) * CROSSING_WEIGHT
+        : 0) +
+      spread(i) * SPREAD_WEIGHT;
+
+    for (let round = 0; round < 6; round++) {
       let improved = false;
       for (let i = 0; i < order.length; i++) {
         const layer = order[i]!;
         for (let j = 0; j + 1 < layer.length; j++) {
-          const before =
-            (i > 0 ? crossingsBetween(order[i - 1]!, layer, between[i - 1]!) : 0) +
-            (i + 1 < order.length ? crossingsBetween(layer, order[i + 1]!, between[i]!) : 0);
+          const before = localCost(i);
           [layer[j], layer[j + 1]] = [layer[j + 1]!, layer[j]!];
-          const after =
-            (i > 0 ? crossingsBetween(order[i - 1]!, layer, between[i - 1]!) : 0) +
-            (i + 1 < order.length ? crossingsBetween(layer, order[i + 1]!, between[i]!) : 0);
-          if (after < before) improved = true;
+          if (localCost(i) < before) improved = true;
           else [layer[j], layer[j + 1]] = [layer[j + 1]!, layer[j]!];
         }
       }
       if (!improved) break;
+    }
+
+    /*
+     * Bring the two ends of a tier cable together.
+     *
+     * Swapping neighbours cannot do this. With a hypervisor at one end of a row
+     * and its switch at the other, every single swap leaves the total exactly
+     * where it was — the pair gets one position closer and some other pair one
+     * further — so a search that only accepts strict improvements sits on that
+     * plateau forever, while the arrangement two moves away is plainly better.
+     *
+     * Lifting one end out and setting it down beside the other crosses the
+     * plateau in one step. Every placement is scored on the whole objective, so
+     * this cannot trade a tidy row for a tangle above it.
+     */
+    for (const [layerIndex, edges] of alongTier.entries()) {
+      const layer = order[layerIndex];
+      if (!layer) continue;
+
+      for (const [a, b] of edges) {
+        if (Math.abs(layer.indexOf(a) - layer.indexOf(b)) <= 1) continue;
+
+        let bestArrangement = [...layer];
+        let bestScore = total();
+
+        for (const [moving, anchor] of [
+          [a, b],
+          [b, a],
+        ]) {
+          const without = layer.filter((id) => id !== moving);
+          const at = without.indexOf(anchor);
+          if (at < 0) continue;
+          for (const where of [at, at + 1]) {
+            order[layerIndex] = [...without.slice(0, where), moving, ...without.slice(where)];
+            const score = total();
+            if (score < bestScore) {
+              bestScore = score;
+              bestArrangement = [...order[layerIndex]!];
+            }
+          }
+        }
+        order[layerIndex] = bestArrangement;
+      }
     }
 
     const count = total();

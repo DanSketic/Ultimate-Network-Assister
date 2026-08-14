@@ -75,17 +75,23 @@ const snapshot = {
     ],
     guests: [{ vmid: 100, name: 'CT100', kind: 'lxc', node: 'pve', status: 'stopped',
       cpuCount: 2, memTotal: 2e9, diskTotal: 8e9, tags: '' }],
-    interfaces: [], disks: [], backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false,
+    interfaces: [{ node: 'pve', name: 'vmbr0', kind: 'bridge', address: '192.168.11.10',
+      cidr: '192.168.11.10/24', bridgePorts: 'eno1', vlanAware: false, active: true }],
+    disks: [], backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false,
   },
   unifi: {
     site: 'default', devices, networks: [], wlans: [], firewallRules: [],
     clients: [
       { mac: 'c1', hostname: 'phone', ip: '192.168.14.50', network: 'LAN', vlan: null,
-        wired: false, apMac: 'achd', oui: 'Apple' },
+        wired: false, apMac: 'achd', oui: 'Apple', switchMac: '', switchPort: 0 },
       { mac: 'c2', hostname: 'tv', ip: '192.168.14.51', network: 'LAN', vlan: null,
-        wired: false, apMac: 'mesh', oui: 'Samsung' },
+        wired: false, apMac: 'mesh', oui: 'Samsung', switchMac: '', switchPort: 0 },
       { mac: 'c3', hostname: 'laptop', ip: '192.168.14.52', network: 'LAN', vlan: null,
-        wired: false, apMac: 'nano', oui: 'Dell' },
+        wired: false, apMac: 'nano', oui: 'Dell', switchMac: '', switchPort: 0 },
+      // The hypervisor, learned on a port of the smallest switch — which is
+      // what puts a cable along the tier and pulls the two together.
+      { mac: 'c4', hostname: 'pve', ip: '192.168.11.10', network: 'LAN', vlan: null,
+        wired: true, apMac: '', oui: 'Intel', switchMac: 'mini', switchPort: 1 },
     ],
     portProfiles: [],
   },

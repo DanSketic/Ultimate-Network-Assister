@@ -8,20 +8,26 @@ export function NodeCard({
   node,
   selected,
   hovered,
+  dragging,
   palette,
   accent,
   onSelect,
   onEnter,
   onLeave,
+  onDragStart,
 }: {
   node: NetNode;
   selected: boolean;
   hovered: boolean;
+  /** True while this card is the one being dragged. */
+  dragging?: boolean;
   palette: Palette;
   accent: string;
   onSelect: () => void;
   onEnter: () => void;
   onLeave: () => void;
+  /** Absent where the map is read-only. */
+  onDragStart?: (e: React.MouseEvent) => void;
 }) {
   const borderColor = selected ? accent : hovered ? palette.line2 : palette.line;
 
@@ -34,13 +40,23 @@ export function NodeCard({
         {
           '--node-bg': selected ? palette.cardSelected : palette.card,
           '--node-bc': borderColor,
-          '--node-sh': selected
-            ? `0 0 0 3px ${accent}22, 0 10px 24px rgba(0,0,0,.22)`
-            : '0 1px 2px rgba(0,0,0,.14)',
+          '--node-sh': dragging
+            ? `0 0 0 3px ${accent}44, 0 16px 34px rgba(0,0,0,.32)`
+            : selected
+              ? `0 0 0 3px ${accent}22, 0 10px 24px rgba(0,0,0,.22)`
+              : '0 1px 2px rgba(0,0,0,.14)',
         },
-        { left: node.x, top: node.y },
+        {
+          left: node.x,
+          top: node.y,
+          // Lifted while held, so it passes over its neighbours rather than
+          // under them, and the pointer says what the card will do.
+          zIndex: dragging ? 5 : undefined,
+          cursor: onDragStart ? (dragging ? 'grabbing' : 'grab') : undefined,
+        },
       )}
       onClick={onSelect}
+      onMouseDown={onDragStart}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >

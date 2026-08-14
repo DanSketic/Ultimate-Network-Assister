@@ -177,6 +177,11 @@ export const en: Dict = {
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     fit: 'Fit',
+    resetLayout: 'Automatic',
+    arrangedBy: (n: number) =>
+      n === 1
+        ? '1 device placed by hand — put the automatic layout back'
+        : `${n} devices placed by hand — put the automatic layout back`,
   },
 
   inspector: {

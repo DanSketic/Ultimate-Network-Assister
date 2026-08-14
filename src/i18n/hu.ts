@@ -187,6 +187,9 @@ export const hu = {
     zoomIn: 'Nagyítás',
     zoomOut: 'Kicsinyítés',
     fit: 'Illesztés',
+    resetLayout: 'Automatikus',
+    arrangedBy: (n: number) =>
+      `${n} eszközt helyeztél át kézzel — visszaállítás az automatikus elrendezésre`,
   },
 
   inspector: {

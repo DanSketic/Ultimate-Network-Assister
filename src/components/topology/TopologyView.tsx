@@ -1,6 +1,8 @@
+import { useCallback, useMemo, useState } from 'react';
 import type { InspectorTab } from '@/config';
 import { useT } from '@/i18n';
 import { vars } from '@/lib/css';
+import { loadLayout, saveLayout, type Layout } from '@/lib/layout';
 import type { Palette } from '@/lib/palette';
 import type { Estate } from '@/survey/mapping';
 import type { AppState, CopyApi } from '@/state/useAppState';
@@ -33,9 +35,39 @@ export function TopologyView(props: TopologyViewProps) {
   const { state, estate, palette, accent, copy, onSub, onTab, onSelect } = props;
   const t = useT();
   const onMap = state.sub === 'map';
+
+  /*
+   * Cards the user has moved by hand.
+   *
+   * The automatic layout optimises a number; a person looking at their own
+   * network knows things the number does not — which switch is in the cellar,
+   * which two machines belong together. So a card can be dragged, only what was
+   * dragged is remembered, and everything else keeps following the automatic
+   * layout. A device added by a later survey therefore still lands somewhere
+   * sensible rather than at the origin.
+   */
+  const [layout, setLayout] = useState<Layout>(() => loadLayout());
+
+  const placed = useMemo(
+    () => estate.nodes.map((n) => (layout[n.id] ? { ...n, ...layout[n.id]! } : n)),
+    [estate.nodes, layout],
+  );
+
+  const moveNode = useCallback((id: string, x: number, y: number) => {
+    setLayout((prev) => {
+      const next = { ...prev, [id]: { x: Math.round(x), y: Math.round(y) } };
+      saveLayout(next);
+      return next;
+    });
+  }, []);
+
+  const resetLayout = useCallback(() => {
+    setLayout({});
+    saveLayout({});
+  }, []);
+
   // The selection is an id, and a fresh survey can retire the node it named.
-  const selectedNode =
-    estate.nodes.find((n) => n.id === state.selected) ?? estate.nodes[0] ?? null;
+  const selectedNode = placed.find((n) => n.id === state.selected) ?? placed[0] ?? null;
 
   return (
     <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0 }}>
@@ -96,8 +128,11 @@ export function TopologyView(props: TopologyViewProps) {
 
         {onMap ? (
           <TopologyCanvas
-            nodes={estate.nodes}
+            nodes={placed}
             links={estate.links}
+            arranged={Object.keys(layout).length}
+            onMoveNode={moveNode}
+            onResetLayout={resetLayout}
             counts={estate.counts}
             palette={palette}
             accent={accent}

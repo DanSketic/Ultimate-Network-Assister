@@ -34,6 +34,10 @@ export interface TopologyCanvasProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomFit: (fit?: { zoom: number; panX: number; panY: number }) => void;
+  /** How many cards the user has placed by hand; 0 means fully automatic. */
+  arranged?: number;
+  onMoveNode?: (id: string, x: number, y: number) => void;
+  onResetLayout?: () => void;
 }
 
 interface DragOrigin {
@@ -41,6 +45,17 @@ interface DragOrigin {
   y: number;
   panX: number;
   panY: number;
+}
+
+/** Where a card was, and where the pointer was, when its drag began. */
+interface NodeDrag {
+  id: string;
+  pointerX: number;
+  pointerY: number;
+  nodeX: number;
+  nodeY: number;
+  /** Set once the pointer has travelled far enough for this to be a drag. */
+  moved: boolean;
 }
 
 export function TopologyCanvas(props: TopologyCanvasProps) {
@@ -66,12 +81,17 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
     onZoomIn,
     onZoomOut,
     onZoomFit,
+    arranged = 0,
+    onMoveNode,
+    onResetLayout,
   } = props;
 
   const t = useT();
   const dragRef = useRef<DragOrigin | null>(null);
+  const nodeDragRef = useRef<NodeDrag | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [panning, setPanning] = useState(false);
+  const [draggingNode, setDraggingNode] = useState<string | null>(null);
 
   // Hover highlights take precedence over the current selection.
   const focus = hovered ?? selected;
@@ -99,6 +119,60 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
     },
     [panX, panY],
   );
+
+  /*
+   * Dragging one card rather than the whole map.
+   *
+   * The pointer moves in screen pixels and the cards live in canvas ones, so
+   * the movement is divided by the zoom — otherwise a drag at 40% would send
+   * the card two and a half times as far as the hand went.
+   *
+   * A click and a drag start identically, so the move is only committed once
+   * the pointer has actually travelled: selecting a device by clicking it must
+   * not nudge it a pixel sideways.
+   */
+  const startNodeDrag = useCallback(
+    (e: React.MouseEvent, node: NetNode) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      if (!onMoveNode) return;
+      nodeDragRef.current = {
+        id: node.id,
+        pointerX: e.clientX,
+        pointerY: e.clientY,
+        nodeX: node.x,
+        nodeY: node.y,
+        moved: false,
+      };
+      setDraggingNode(node.id);
+    },
+    [onMoveNode],
+  );
+
+  useEffect(() => {
+    if (!draggingNode) return;
+
+    const move = (e: MouseEvent) => {
+      const origin = nodeDragRef.current;
+      if (!origin || !onMoveNode) return;
+      const dx = (e.clientX - origin.pointerX) / zoom;
+      const dy = (e.clientY - origin.pointerY) / zoom;
+      if (!origin.moved && Math.hypot(dx, dy) < 3) return;
+      origin.moved = true;
+      onMoveNode(origin.id, origin.nodeX + dx, origin.nodeY + dy);
+    };
+    const end = () => {
+      nodeDragRef.current = null;
+      setDraggingNode(null);
+    };
+
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', end);
+    };
+  }, [draggingNode, onMoveNode, zoom]);
 
   // Listening on the window rather than the canvas keeps the drag alive when
   // the pointer leaves the viewport, and avoids retargeting node clicks the
@@ -342,9 +416,11 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
             hovered={node.id === hovered}
             palette={palette}
             accent={accent}
+            dragging={draggingNode === node.id}
             onSelect={() => onSelect(node.id)}
             onEnter={() => onHover(node.id)}
             onLeave={() => onHover(null)}
+            {...(onMoveNode ? { onDragStart: (e) => startNodeDrag(e, node) } : {})}
           />
         ))}
 
@@ -494,6 +570,27 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
           >
             {t.topology.fit}
           </button>
+
+          {/*
+            * Only offered once something has been moved.
+            *
+            * A button that undoes an arrangement nobody made is noise, and
+            * worse, it invites a click that appears to do nothing.
+            */}
+          {arranged > 0 && onResetLayout ? (
+            <>
+              <div style={{ width: 1, height: 16, background: 'var(--line)', margin: '0 3px' }} />
+              <button
+                type="button"
+                className="zoom-btn"
+                style={{ padding: '0 9px', color: 'var(--accent)' }}
+                title={t.topology.arrangedBy(arranged)}
+                onClick={onResetLayout}
+              >
+                {t.topology.resetLayout}
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
