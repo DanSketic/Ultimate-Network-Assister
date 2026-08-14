@@ -11,6 +11,25 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.5.1] — 2026-08-14
+
+### Fixed
+
+- **A password the server would have taken, refused.** Only the plain
+  `password` method was offered. Many servers — UniFi OS devices among them —
+  advertise `keyboard-interactive` instead, where the same secret is sent as
+  the answer to a prompt. The command-line client tries both without mentioning
+  it, which is why a session that worked from a terminal failed here with
+  nothing to go on. Both are tried now.
+
+- **The refusal now says what would have worked.** When authentication fails,
+  the message carries the list of methods the server says it will accept.
+  That turns a dead end into an instruction: a server offering only `publickey`
+  is telling you it is set to `PermitRootLogin prohibit-password`, and no
+  password will ever get in — a key has to go on the profile instead.
+
+---
+
 ## [1.5.0] — 2026-08-14
 
 ### Fixed

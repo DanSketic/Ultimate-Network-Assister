@@ -191,6 +191,116 @@ fn take(buffer: &mut Vec<u8>, chunk: &[u8], truncated: &mut bool) {
 /// No pty is requested and no shell is spawned: the command string is handed
 /// to the server's exec channel exactly as given. It is authorised first —
 /// there is no path from here to a destructive command.
+/// Signs in, and says what the server would have accepted when it will not.
+///
+/// A password is offered two ways. `password` is the plain method; many
+/// servers — UniFi OS devices among them — advertise only
+/// `keyboard-interactive`, where the same secret is sent as the answer to a
+/// prompt. The command-line client tries both without mentioning it, which is
+/// why a session that works from a terminal could fail here with nothing to go
+/// on but "the server did not accept this user".
+///
+/// When everything fails, the message carries the list of methods the server
+/// says it will take. That turns a dead end into an instruction: a server
+/// offering only `publickey` is telling you it is set to
+/// `PermitRootLogin prohibit-password`, and no password will ever work.
+async fn authenticate(
+    handle: &mut client::Handle<Pinned>,
+    username: &str,
+    auth: SshAuth,
+) -> Result<(), String> {
+    /// What the server is still willing to try, in the order it listed them.
+    fn offered(result: &russh::client::AuthResult) -> String {
+        match result {
+            russh::client::AuthResult::Failure {
+                remaining_methods, ..
+            } => {
+                let names: Vec<String> = remaining_methods
+                    .iter()
+                    .map(|m| format!("{m:?}").to_lowercase())
+                    .collect();
+                if names.is_empty() {
+                    "a kiszolgáló nem ajánl további módot".to_string()
+                } else {
+                    format!("a kiszolgáló ezeket fogadná el: {}", names.join(", "))
+                }
+            }
+            russh::client::AuthResult::Success => String::new(),
+        }
+    }
+
+    match auth {
+        SshAuth::Key { pem, passphrase } => {
+            let key = russh::keys::decode_secret_key(&pem, passphrase.as_deref())
+                .map_err(|e| format!("a privát kulcs nem olvasható: {e}"))?;
+            let hash = handle
+                .best_supported_rsa_hash()
+                .await
+                .map_err(|e| format!("hitelesítés sikertelen: {e}"))?
+                .flatten();
+            let result = handle
+                .authenticate_publickey(
+                    username,
+                    russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key), hash),
+                )
+                .await
+                .map_err(|e| format!("hitelesítés sikertelen: {e}"))?;
+            if result.success() {
+                return Ok(());
+            }
+            Err(format!(
+                "a(z) {username} felhasználó kulcsát a kiszolgáló nem fogadta el — {}",
+                offered(&result)
+            ))
+        }
+
+        SshAuth::Password(password) => {
+            let plain = handle
+                .authenticate_password(username, &password)
+                .await
+                .map_err(|e| format!("hitelesítés sikertelen: {e}"))?;
+            if plain.success() {
+                return Ok(());
+            }
+
+            // The same secret, as the answer to a prompt. Servers that only
+            // advertise keyboard-interactive are the common case behind a
+            // session that works from a terminal and fails here.
+            let mut step = handle
+                .authenticate_keyboard_interactive_start(username, None)
+                .await
+                .map_err(|e| format!("hitelesítés sikertelen: {e}"))?;
+
+            loop {
+                match step {
+                    russh::client::KeyboardInteractiveAuthResponse::Success => return Ok(()),
+                    russh::client::KeyboardInteractiveAuthResponse::InfoRequest {
+                        prompts, ..
+                    } => {
+                        // Every prompt gets the password. A server asking for a
+                        // second factor asks something this cannot answer, and
+                        // the attempt fails rather than looping.
+                        let answers = vec![password.clone(); prompts.len()];
+                        step = handle
+                            .authenticate_keyboard_interactive_respond(answers)
+                            .await
+                            .map_err(|e| format!("hitelesítés sikertelen: {e}"))?;
+                    }
+                    russh::client::KeyboardInteractiveAuthResponse::Failure { .. } => break,
+                }
+            }
+
+            Err(format!(
+                "a(z) {username} felhasználót a kiszolgáló nem fogadta el jelszóval — {}. \
+                 Ha csak publickey szerepel, a kiszolgáló jelszavas belépést nem enged \
+                 ehhez a felhasználóhoz (PermitRootLogin prohibit-password); ilyenkor \
+                 kulcsot kell megadni a profilnál.",
+                offered(&plain)
+            ))
+        }
+    }
+}
+
 pub async fn run_command(
     host: &str,
     port: u16,
@@ -229,34 +339,7 @@ pub async fn run_command(
         }
     })?;
 
-    let authenticated = match auth {
-        SshAuth::Password(password) => handle
-            .authenticate_password(username, password)
-            .await
-            .map_err(|e| format!("hitelesítés sikertelen: {e}"))?,
-        SshAuth::Key { pem, passphrase } => {
-            let key = russh::keys::decode_secret_key(&pem, passphrase.as_deref())
-                .map_err(|e| format!("a privát kulcs nem olvasható: {e}"))?;
-            let hash = handle
-                .best_supported_rsa_hash()
-                .await
-                .map_err(|e| format!("hitelesítés sikertelen: {e}"))?
-                .flatten();
-            handle
-                .authenticate_publickey(
-                    username,
-                    russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key), hash),
-                )
-                .await
-                .map_err(|e| format!("hitelesítés sikertelen: {e}"))?
-        }
-    };
-
-    if !authenticated.success() {
-        return Err(format!(
-            "a(z) {username} felhasználót a kiszolgáló nem fogadta el"
-        ));
-    }
+    authenticate(&mut handle, username, auth).await?;
 
     let mut channel = handle
         .channel_open_session()
