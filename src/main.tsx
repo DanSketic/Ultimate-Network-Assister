@@ -13,6 +13,7 @@ import '@fontsource/ibm-plex-mono/500.css';
 import './styles/theme.css';
 import './styles/app.css';
 
+import { deepLink } from './lib/deeplink';
 import { loadPrefs } from './lib/prefs';
 import { systemTheme } from './lib/palette';
 import App from './App';
@@ -28,9 +29,10 @@ import App from './App';
  * desktop build's CSP allows scripts only from files.
  */
 const stored = loadPrefs({ themePref: 'auto', langPref: 'auto' });
+const wanted = deepLink().theme ?? stored.themePref;
 document.documentElement.setAttribute(
   'data-theme',
-  stored.themePref === 'auto' ? systemTheme() : stored.themePref,
+  wanted === 'auto' ? systemTheme() : wanted,
 );
 
 const container = document.getElementById('root');

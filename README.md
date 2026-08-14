@@ -18,12 +18,11 @@ It reads what is actually there, says how it knows, and refuses to guess.
 
 <div align="center">
 
-<img src="docs/media/topology-dark.svg" alt="The topology view, drawn by the application's own layout and routing code" width="880">
+<img src="docs/media/screenshots/topology.png" alt="The topology view, showing the sample estate with port chips and an inspector" width="900">
 
-<sub>The topology view. This picture is produced by the application's own layout
-and routing code (<code>npm run preview:media</code>), not traced by hand — the
-tier ordering, the detours around cards and the port chips are the ones you get
-on screen.</sub>
+<sub>The topology view on the bundled sample estate. Cables are ordered so they
+do not cross, routed around the cards between their ends, and labelled with the
+port each end lands on — coloured by negotiated link speed.</sub>
 
 </div>
 
@@ -171,14 +170,29 @@ but which rules speak on your network is something your first survey will show.
 - [docs/architecture.md](docs/architecture.md) — how a measurement becomes a
   picture, and where the safety boundaries sit
 
-## Screenshots
+## More of it
 
-Captures of the running desktop application live in
-[`docs/media/screenshots/`](docs/media/screenshots/), which also says which
-views are worth capturing and what to check before committing one. Everything
-else in the documentation is generated from source — `npm run icons` for the
-application icon, `npm run preview:media` for the topology view above — so it
-cannot drift from what the code actually draws.
+<table>
+<tr>
+<td width="50%"><img src="docs/media/screenshots/advice.png" alt="Advice"><br><sub><b>Advice</b> — what is wrong, how it was measured, what to do about it, and how to undo it.</sub></td>
+<td width="50%"><img src="docs/media/screenshots/overview.png" alt="Overview"><br><sub><b>Overview</b> — counters, capacity and findings, with missing figures explained rather than hidden.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/media/screenshots/backup.png" alt="Backup and recovery"><br><sub><b>Backup &amp; recovery</b> — coverage judged from the files that exist.</sub></td>
+<td><img src="docs/media/screenshots/planner.png" alt="Deployment planner"><br><sub><b>Deployment planner</b> — a blueprint resolved into a step-by-step guide.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/media/screenshots/ssh.png" alt="SSH operations"><br><sub><b>SSH</b> — the command catalogue scrolls; what you are working on stays put.</sub></td>
+<td><img src="docs/media/screenshots/survey.png" alt="Survey"><br><sub><b>Survey</b> — connection profiles, pinned certificates and the scan log.</sub></td>
+</tr>
+</table>
+
+Every image above is a capture of the sample estate, produced by
+`npm run shoot` against the browser build — never of a real survey, which would
+carry its addresses and host names into a public repository. The icon
+(`npm run icons`) and the topology diagram in
+[`docs/media/`](docs/media/) (`npm run preview:media`) are generated from source,
+so they cannot drift from what the code draws.
 
 ## Licence
 

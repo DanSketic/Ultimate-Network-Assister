@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NetLink, NetNode } from '@/data/model';
 import { useT } from '@/i18n';
 import { cx } from '@/lib/css';
+import { deepLink } from '@/lib/deeplink';
 import { frameFor } from '@/lib/fit';
 import { buildFlows, SPEED_STEPS, type PortLabel } from '@/lib/flows';
 import { CANVAS_H, CANVAS_W } from '@/lib/geometry';
@@ -226,6 +227,23 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
       panY: usable / 2 - seenY + shift * (originY - fit.centreY) + panY,
     });
   }, [nodes, ports, onZoomFit, zoom, panX, panY]);
+
+  /*
+   * `?fit=1` frames the estate as soon as it is drawn.
+   *
+   * The documentation captures need this: a screenshot of the opening view
+   * shows a map cut off at both edges, which is not what the view looks like
+   * to someone using it. Waiting a frame is what makes it work — the cards have
+   * to be laid out before there is anything to measure.
+   */
+  useEffect(() => {
+    if (!deepLink().fit || nodes.length === 0) return;
+    const frame = requestAnimationFrame(() => fitToContent());
+    return () => cancelAnimationFrame(frame);
+    // Once, when the estate first has nodes: refitting on every change would
+    // undo whatever the user had panned to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes.length === 0]);
 
   return (
     <div

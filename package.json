@@ -23,6 +23,7 @@
     "test:verbose": "node scripts/checks/run.mjs --verbose",
     "icons": "node scripts/gen-icons.mjs",
     "preview:media": "node scripts/gen-preview.mjs",
+    "shoot": "node scripts/shoot.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

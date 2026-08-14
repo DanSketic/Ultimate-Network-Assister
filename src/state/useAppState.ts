@@ -10,6 +10,7 @@ import {
   type ThemeName,
   type ThemePref,
 } from '@/lib/palette';
+import { deepLink } from '@/lib/deeplink';
 import { loadPrefs, savePrefs } from '@/lib/prefs';
 import { loadSession } from '@/lib/session';
 
@@ -87,10 +88,21 @@ export function useAppState(config: AppConfig): AppStateApi {
    */
   const restored = useMemo(() => loadSession(), []);
 
+  /*
+   * An address-bar override outranks both.
+   *
+   * The order is deliberate: what the link asked for, then where the user was,
+   * then what the application is configured to open on. Nothing here is written
+   * back, so following a link cannot change anyone's stored settings.
+   */
+  const link = useMemo(() => deepLink(), []);
+
   const [state, setState] = useState<AppState>(() => ({
     // A saved choice wins over the configured default.
     ...loadPrefs({ themePref: config.initialThemePref, langPref: config.initialLangPref }),
-    view: restored?.view ?? config.startView,
+    ...(link.theme ? { themePref: link.theme } : {}),
+    ...(link.lang ? { langPref: link.lang } : {}),
+    view: link.view ?? restored?.view ?? config.startView,
     sub: restored?.sub ?? 'map',
     tab: restored?.tab ?? 'overview',
     selected: restored?.selected || 'pve',

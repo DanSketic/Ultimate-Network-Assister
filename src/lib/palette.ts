@@ -7,7 +7,9 @@ export type ThemeName = 'dark' | 'light';
  * What the user asked for, which is not the same as what is on screen:
  * `auto` follows the operating system and resolves to a ThemeName at runtime.
  */
-export type ThemePref = 'auto' | 'dark' | 'light';
+export const THEME_PREFS = ['auto', 'dark', 'light'] as const;
+
+export type ThemePref = (typeof THEME_PREFS)[number];
 
 export interface Palette {
   /** Healthy / verified. */

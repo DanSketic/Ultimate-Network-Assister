@@ -605,7 +605,25 @@ function pathCost(
     if (crosses) crossed++;
     else grazed += near;
   }
-  return inside * 10_000 + crossed * 100 + grazed;
+
+  /*
+   * A detour has to be worth its size.
+   *
+   * Without this the search will happily throw a cable most of its own length
+   * sideways to dodge a near miss, and what it draws is a loop — harder to
+   * follow than what it avoided, and far enough out that it drags the whole
+   * map's framing with it.
+   *
+   * The scale is what matters. A cable that has to get past a card in its way
+   * may legitimately swing aside by nearly its own length, and doing so is
+   * still better than crossing something; beyond that it is a loop and the
+   * crossing was the lesser evil. So the cost passes a crossing's at around
+   * one-and-a-half times the run, and stays well under it below that.
+   */
+  const span = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+  const wander = Math.round(((Math.abs(bow) / span / 0.8) ** 2) * 100);
+
+  return inside * 10_000 + crossed * 900 + grazed + wander;
 }
 
 const others = (from: NetNode, to: NetNode, nodes: NetNode[]) =>

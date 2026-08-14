@@ -74,8 +74,18 @@ First public release, under the MIT licence.
   every edge is two pixels of blend. The gradient now ends on the application's
   own accent, which holds the mark above 7:1 everywhere it is drawn, and the mark
   is drawn larger with heavier arms.
+- **Detours are proportionate.** The routing would throw a cable most of its own
+  length sideways to dodge a near miss, drawing a loop that was harder to follow
+  than what it avoided and that reached far below the estate, dragging the map's
+  framing with it. A detour now costs by its size relative to the run: on the
+  sample estate the worst stray fell from 94% of a cable's own length to 44%,
+  and the drawing no longer extends past the cards at all — which took the
+  fitted zoom from 58% to 63% for the same window.
 - Routing results are cached, so hovering a device restyles the lines without
   re-solving their geometry: 557 ms at worst before, 1.08 ms after.
+- `?view=&lang=&theme=&fit=1` in the address bar opens a named view in a named
+  language without touching stored settings. It is what captures the
+  documentation screenshots, and it makes a view linkable.
 
 ### Fixed
 
