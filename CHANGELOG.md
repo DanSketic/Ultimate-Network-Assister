@@ -11,6 +11,36 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.3.0] — 2026-08-14
+
+### Added
+
+- **The port a machine is plugged into, even when it does not announce itself.**
+  Until now a port could be named from two measured sources: what the far end
+  said over LLDP, and what a UniFi device reported about its own uplink. A
+  Proxmox host is neither — it is not in the controller's device list, and a
+  stock install does not run `lldpd` — so the switch showed a port up at a
+  speed with nobody's name on it, and the line from the hypervisor into the
+  network was drawn as a guess.
+
+  The controller knew all along. Every wired client it reports carries the
+  switch and the port it was learned on, and the collector had been reading
+  eight fields from that endpoint while discarding those two. They are read
+  now, and used as a third measured source — the only one that reaches
+  equipment the controller does not manage.
+
+  Where a wired client's address matches a surveyed Proxmox node, the port
+  takes the estate's own name for that node rather than its DHCP hostname, and
+  the cable becomes a measured line to a named switch on a numbered port
+  instead of an inferred one to the gateway. Where the controller has not
+  learned it, the old behaviour stands and the line stays marked as inferred —
+  the map now shows the difference between knowing and assuming.
+
+  LLDP still outranks it: what the far end announced about itself is better
+  evidence than what a switch learned from traffic.
+
+---
+
 ## [1.2.0] — 2026-08-14
 
 ### Added

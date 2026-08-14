@@ -186,6 +186,17 @@ pub struct UnifiClient {
     pub wired: bool,
     pub ap_mac: String,
     pub oui: String,
+    /// For a wired client: the switch it is plugged into, and which port.
+    ///
+    /// This is the third measured source for what is on a port, and the only
+    /// one that works for equipment the controller does not manage. A Proxmox
+    /// host is not a UniFi device, so it has no uplink report, and a stock
+    /// install does not announce itself over LLDP — but the controller still
+    /// learned its MAC on a port, and says so here.
+    #[serde(default)]
+    pub switch_mac: String,
+    #[serde(default)]
+    pub switch_port: u64,
 }
 
 const SOURCE: &str = "unifi";
@@ -571,6 +582,8 @@ pub async fn collect(
                     wired: as_bool(c, "is_wired"),
                     ap_mac: as_str(c, "ap_mac"),
                     oui: as_str(c, "oui"),
+                    switch_mac: as_str(c, "sw_mac"),
+                    switch_port: as_u64(c, "sw_port"),
                 });
             }
             let unknown = snap.clients.iter().filter(|c| c.oui.is_empty()).count();

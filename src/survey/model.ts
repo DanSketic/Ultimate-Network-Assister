@@ -379,6 +379,17 @@ export interface UnifiClient {
   wired: boolean;
   apMac: string;
   oui: string;
+  /**
+   * For a wired client: the switch it is plugged into, and which port.
+   *
+   * The third measured source for what is on a port, and the only one that
+   * works for equipment the controller does not manage. A Proxmox host is not a
+   * UniFi device, so it has no uplink report, and a stock install does not
+   * announce itself over LLDP — but the controller still learned its MAC on a
+   * port, and says so here.
+   */
+  switchMac: string;
+  switchPort: number;
 }
 
 export interface UnifiSnapshot {

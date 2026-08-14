@@ -641,8 +641,45 @@ function proxmoxNodes(
   return { host, guests, storage };
 }
 
+/**
+ * Which machines the controller learned on which port, by name.
+ *
+ * The controller reports every wired client with the switch and port it was
+ * learned on. That is the third measured source for what is on a port, and the
+ * only one that reaches equipment the controller does not manage: a Proxmox
+ * host is not a UniFi device, so it has no uplink report, and a stock install
+ * does not run `lldpd`, so the port shows up at a speed with nobody's name on
+ * it. The controller knew all along.
+ *
+ * Where a client's address matches a surveyed Proxmox node, the estate's own
+ * name for that node is used rather than the DHCP hostname — the two are often
+ * different, and the map should say what the rest of the interface says.
+ *
+ * Keyed `switchMac#portIndex`.
+ */
+function fromWiredClients(unifi: UnifiSnapshot, pve: ProxmoxSnapshot | null): Map<string, string> {
+  const byAddress = new Map<string, string>();
+  for (const node of pve?.nodes ?? []) {
+    for (const iface of pve?.interfaces ?? []) {
+      if (iface.node !== node.name) continue;
+      const address = iface.address ?? iface.cidr?.split('/')[0];
+      if (address) byAddress.set(address, node.name);
+    }
+  }
+
+  const out = new Map<string, string>();
+  for (const c of unifi.clients) {
+    if (!c.wired || !c.switchMac || c.switchPort <= 0) continue;
+    const name = byAddress.get(c.ip) || c.hostname || c.ip;
+    if (!name) continue;
+    out.set(`${c.switchMac.toLowerCase()}#${c.switchPort}`, name);
+  }
+  return out;
+}
+
 function unifiNodes(
   unifi: UnifiSnapshot,
+  pve: ProxmoxSnapshot | null,
   t: Dict,
 ): {
   gateways: Draft[];
@@ -665,6 +702,8 @@ function unifiNodes(
    *
    * Keyed `deviceMac#portIndex`.
    */
+  const onPort = fromWiredClients(unifi, pve);
+
   const fromUplink = new Map<string, string>();
   for (const d of unifi.devices) {
     if (!d.uplinkMac) continue;
@@ -698,9 +737,16 @@ function unifiNodes(
         vlanMode: p.taggedVlanMgmt,
         // Prefer the estate's own name for a known device over the neighbour's
         // self-reported one, then what LLDP said, then the uplink report.
+        // Three measured sources, strongest first: what the far end announced
+        // over LLDP, what a UniFi device said about its own uplink, and what
+        // the controller learned on the port. The last is the only one that
+        // reaches a machine the controller does not manage.
         neighbour:
           nameByMac.get(p.neighbourMac.toLowerCase()) ??
-          (p.neighbourName || fromUplink.get(`${d.mac.toLowerCase()}#${p.idx}`) || ''),
+          (p.neighbourName ||
+            fromUplink.get(`${d.mac.toLowerCase()}#${p.idx}`) ||
+            onPort.get(`${d.mac.toLowerCase()}#${p.idx}`) ||
+            ''),
         neighbourPort: p.neighbourPort,
         uplink: p.isUplink,
       })),
@@ -819,20 +865,44 @@ function buildLinks(
     }
   }
 
-  // The hypervisor's management path to the gateway is not something read-only
-  // access can prove is a cable, so it is drawn as a logical link and labelled
-  // as inferred.
+  /*
+   * The hypervisor's path into the network.
+   *
+   * Where the controller learned the host's address on a port, that is a
+   * measured cable to a named switch on a numbered port, and it is drawn as
+   * one. Where it did not — the host is on a plain switch, or the controller
+   * has not seen its traffic — nothing read-only can prove which box it hangs
+   * off, so the old behaviour stands: a logical line to the gateway, labelled
+   * as inferred. The difference between the two is the difference between
+   * knowing and assuming, and the map now shows which it has.
+   */
   if (unifi && pve) {
-    const gateway = nodes.find((n) => n.kind === 'gateway');
     const host = nodes.find((n) => n.kind === 'host');
-    if (gateway && host) {
-      add({
-        from: gateway.id,
-        to: host.id,
-        kind: 'logical',
-        direction: 'both',
-        provenance: 'Becsült',
-      });
+    const addresses = new Set(
+      pve.interfaces
+        .map((i) => i.address ?? i.cidr?.split('/')[0])
+        .filter((a): a is string => Boolean(a)),
+    );
+    const learned = unifi.clients.find(
+      (c) => c.wired && c.switchMac && c.switchPort > 0 && addresses.has(c.ip),
+    );
+    const switchOf = learned
+      ? nodes.find((n) => n.id.toLowerCase() === `unifi:${learned.switchMac}`.toLowerCase())
+      : undefined;
+
+    if (host && learned && switchOf) {
+      add({ from: switchOf.id, to: host.id, kind: 'physical', direction: 'both' });
+    } else if (host) {
+      const gateway = nodes.find((n) => n.kind === 'gateway');
+      if (gateway) {
+        add({
+          from: gateway.id,
+          to: host.id,
+          kind: 'logical',
+          direction: 'both',
+          provenance: 'Becsült',
+        });
+      }
     }
   }
 
@@ -1024,7 +1094,9 @@ export function estateFromSnapshot(
   const f = t.findings;
   const { proxmox: pve, unifi } = snapshot;
 
-  const uni = unifi ? unifiNodes(unifi, t) : { gateways: [], switches: [], aps: [], clients: [] };
+  const uni = unifi
+    ? unifiNodes(unifi, pve, t)
+    : { gateways: [], switches: [], aps: [], clients: [] };
   const prox = pve ? proxmoxNodes(pve, t) : { host: [], guests: [], storage: [] };
 
   const tiers = [
