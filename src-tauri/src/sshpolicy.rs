@@ -38,7 +38,10 @@ pub enum Clearance {
 const FORBIDDEN: &[&str] = [
     // Filesystems and partition tables.
     "mkfs", "mke2fs", "mkswap", "wipefs", "sgdisk", "gdisk", "fdisk", "parted", "partx",
-    "badblocks", "shred", "dd ", "dd\t", "if=/dev/zero", "of=/dev/",
+    // `dd` is checked as a word rather than a substring, below: as a substring
+    // it also matches "add ", which turned `nft add rule` — and, worse, a
+    // read-only `grep add …` — into commands the application refused to run.
+    "badblocks", "shred", "if=/dev/zero", "of=/dev/",
     // ZFS and LVM.
     "zpool create", "zpool destroy", "zpool labelclear", "zpool replace", "zpool remove",
     "zfs destroy", "zfs rollback", "zfs receive", "zfs recv",
@@ -75,12 +78,27 @@ const READ_ONLY: &[&str] = [
     "pct status", "pvesh get", "ha-manager status",
     // ZFS and SMART, read side.
     "zpool status", "zpool list", "zpool history", "zpool iostat", "zpool get",
-    "zfs list", "zfs get", "zfs mount", "smartctl -H", "smartctl -a", "smartctl -i",
+    "zfs list", "zfs get", "zfs mount", "smartctl -h", "smartctl -a", "smartctl -i",
     "smartctl --scan", "nvme list", "nvme smart-log",
     // Packages, read side.
     "apt list", "apt-cache", "dpkg -l", "dpkg -s", "dpkg-query",
     // UniFi / EdgeOS style shells.
     "info", "show", "mca-cli-op info", "cat /proc",
+    /*
+     * The live firewall.
+     *
+     * This is the one thing that turns a rule read from configuration into a
+     * rule known to be in force, which is the distinction the whole interface
+     * is built around — so it is worth listing precisely.
+     *
+     * Only the reading forms are here. `nft` on its own can flush a ruleset
+     * and cut the machine off, so the bare command stays a mutating one; it is
+     * `nft list` that is safe, and the matcher is a prefix, so `nft flush`
+     * does not slip through on the back of it. `iptables-save` only prints.
+     */
+    "nft list", "iptables-save", "ip6tables-save", "nft -a list",
+    "iptables -l", "iptables -s", "iptables -n -l", "ip6tables -l", "ip6tables -s",
+    "conntrack -l", "ipset list",
 ]
 .as_slice();
 
@@ -114,6 +132,13 @@ fn classify_segment(segment: &str) -> Clearance {
     }
 
     if FORBIDDEN.iter().any(|needle| lower.contains(needle)) {
+        return Clearance::Forbidden;
+    }
+
+    // `dd` writes wherever it is pointed and is dangerous as a command, not as
+    // a run of letters. Matched on whole words so it still catches it as an
+    // argument — `xargs dd`, `time dd` — without catching every "add".
+    if lower.split_whitespace().any(|word| word == "dd") {
         return Clearance::Forbidden;
     }
 
@@ -182,6 +207,63 @@ mod tests {
             "sudo pvesm status",
             "ip -br link",
             "journalctl -u pve-cluster -n 50",
+        ] {
+            assert_eq!(classify(cmd), Clearance::ReadOnly, "{cmd}");
+        }
+    }
+
+    /// The command is lowercased before it is matched, so an entry carrying a
+    /// capital can never match anything. `smartctl -H` sat in this list unable
+    /// to match the health check it was put there for, and every use of it was
+    /// quietly treated as a command that modifies.
+    #[test]
+    fn the_allowlist_is_lowercase_or_it_matches_nothing() {
+        for entry in READ_ONLY {
+            assert_eq!(
+                *entry,
+                entry.to_ascii_lowercase(),
+                "an allowlist entry with a capital can never match: {entry}"
+            );
+        }
+    }
+
+    /// Reading the live firewall is what turns a configured rule into a rule
+    /// known to be in force, so it has to be allowed — and only in the forms
+    /// that read. `nft` can flush a ruleset and cut the machine off.
+    #[test]
+    fn the_firewall_can_be_read_but_not_rewritten() {
+        for cmd in [
+            "nft list ruleset",
+            "sudo nft list ruleset",
+            "iptables-save",
+            "LC_ALL=C iptables -S",
+            "conntrack -L",
+        ] {
+            assert_eq!(classify(cmd), Clearance::ReadOnly, "{cmd}");
+        }
+
+        for cmd in [
+            "nft flush ruleset",
+            "nft add rule inet filter forward drop",
+            "iptables -F",
+            "nft list ruleset; nft flush ruleset",
+        ] {
+            assert_eq!(classify(cmd), Clearance::Mutating, "{cmd}");
+        }
+    }
+
+    /// `dd` matched as a run of letters also matched "add", so `nft add rule`
+    /// and even a read-only `grep add …` came back as destructive. It is a
+    /// command, and is matched as one.
+    #[test]
+    fn dd_is_a_command_not_three_letters() {
+        for cmd in ["dd if=/dev/sda of=/tmp/x", "time dd", "xargs dd"] {
+            assert_eq!(classify(cmd), Clearance::Forbidden, "{cmd}");
+        }
+        for cmd in [
+            "grep add /etc/network/interfaces",
+            "ip addr show",
+            "cat /etc/hosts",
         ] {
             assert_eq!(classify(cmd), Clearance::ReadOnly, "{cmd}");
         }

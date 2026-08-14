@@ -11,6 +11,47 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.5.0] — 2026-08-14
+
+### Fixed
+
+- **Firewall rules on a zone-based controller.** UniFi Network moved the
+  firewall from numbered rulesets to policies between named zones, and the
+  change is invisible from outside: the old `rest/firewallrule` endpoint still
+  answers, still returns 200, and returns an empty list. Read on its own that
+  says "this network has no firewall rules" — a false statement about somebody's
+  estate, and the reason the policy view showed *0 rules* on a controller with a
+  perfectly good firewall.
+
+  The zone endpoints are now read when the legacy one comes back empty, under
+  both names the API has carried, with the zone names fetched first so a policy
+  is described by what it joins rather than by two identifiers. Every attempt
+  goes in the survey log, so which endpoint answered is a matter of record
+  rather than of assumption.
+
+- **`dd` was matched as three letters rather than as a command**, so anything
+  containing the word "add" was refused as destructive — `nft add rule`, and
+  worse, a read-only `grep add …`. It is matched as a word now, which still
+  catches it as an argument (`xargs dd`) without catching every "add".
+
+- **An entry in the read-only allowlist carrying a capital could never match**,
+  because the command is lowercased before comparison. `smartctl -H` — the disk
+  health check — had been sitting in that list unable to match the command it
+  was put there for, so every use of it was quietly treated as one that
+  modifies and demanded confirmation. A test now keeps the list lowercase.
+
+### Added
+
+- **Reading the live firewall over SSH** is permitted as a read-only operation:
+  `nft list`, `iptables-save`, `iptables -S`, `conntrack -L` and their kin. This
+  is the one thing that turns a rule read from configuration into a rule known
+  to be *in force*, which is the distinction the whole interface is built
+  around. Only the reading forms are allowed — `nft` on its own can flush a
+  ruleset and cut the machine off, so `nft flush` stays a command requiring
+  confirmation.
+
+---
+
 ## [1.4.0] — 2026-08-14
 
 ### Added

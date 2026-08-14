@@ -1,6 +1,6 @@
 [package]
 name = "ultimate-network-assister"
-version = "1.4.0"
+version = "1.5.0"
 description = "Read-only survey and advisory console for Proxmox VE and UniFi Network estates."
 authors = ["dansketic"]
 license = "MIT"

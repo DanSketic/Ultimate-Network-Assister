@@ -410,6 +410,122 @@ async fn get(
         .unwrap_or_default())
 }
 
+/// Firewall rules as the zone-based releases keep them.
+///
+/// UniFi Network moved the firewall from numbered rulesets to policies between
+/// named zones, and the change is invisible from the outside: the old
+/// `rest/firewallrule` endpoint still answers, still returns 200, and returns
+/// an empty list. Read on its own that says "this network has no firewall
+/// rules", which is a false statement about somebody's estate.
+///
+/// The zone names are fetched first so a policy can be described by what it
+/// joins rather than by two identifiers. Both calls are tried, both outcomes go
+/// in the log, and a controller old enough not to have these endpoints simply
+/// records that they were not there — the legacy rules it did return still
+/// stand.
+async fn collect_zone_policies(
+    client: &reqwest::Client,
+    profile: &Profile,
+    secret: &str,
+    site: &str,
+    snap: &mut UnifiSnapshot,
+    log: &mut Vec<LogEntry>,
+) {
+    let v2 = format!("/proxy/network/v2/api/site/{site}");
+
+    let mut zones: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    match get(client, profile, secret, &format!("{v2}/firewall/zones")).await {
+        Ok(items) => {
+            for z in &items {
+                zones.insert(as_str(z, "_id"), as_str(z, "name"));
+            }
+            log.push(LogEntry::ok(
+                SOURCE,
+                format!("GET v2 firewall/zones → {} zóna", zones.len()),
+            ));
+        }
+        Err(e) => log.push(LogEntry::fail(SOURCE, format!("{e} — a zónanevek kimaradnak"))),
+    }
+
+    // The endpoint under both names it has carried, so a controller in between
+    // is not missed. The first that answers wins.
+    let mut policies: Vec<Value> = Vec::new();
+    let mut answered: Option<String> = None;
+    for path in [
+        format!("{v2}/firewall-policies"),
+        format!("{v2}/firewall/policies"),
+    ] {
+        match get(client, profile, secret, &path).await {
+            Ok(items) if !items.is_empty() => {
+                policies = items;
+                answered = Some(path);
+                break;
+            }
+            Ok(_) => log.push(LogEntry::ok(SOURCE, format!("GET {path} → üres"))),
+            Err(e) => log.push(LogEntry::fail(SOURCE, e)),
+        }
+    }
+
+    let Some(path) = answered else { return };
+
+    // The policy's endpoints are objects rather than plain ids, and their shape
+    // has moved about between releases: the zone can be on the object or beside
+    // it. Both are looked for, and a zone that cannot be named keeps its id,
+    // which is still more use than an empty cell.
+    let endpoint = |p: &Value, side: &str| -> String {
+        let node = p.get(side);
+        let id = node
+            .and_then(|n| n.get("zone_id").or_else(|| n.get("zoneId")))
+            .and_then(Value::as_str)
+            .map(String::from)
+            .or_else(|| {
+                p.get(&format!("{side}_zone_id"))
+                    .and_then(Value::as_str)
+                    .map(String::from)
+            })
+            .unwrap_or_default();
+        if id.is_empty() {
+            return node
+                .and_then(|n| n.get("matching_target"))
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+        }
+        zones.get(&id).cloned().unwrap_or(id)
+    };
+
+    for (i, p) in policies.iter().enumerate() {
+        snap.firewall_rules.push(UnifiRule {
+            id: as_str(p, "_id"),
+            name: as_str(p, "name"),
+            action: as_str(p, "action"),
+            // Zone policies have no numbered ruleset; the pair of zones is the
+            // equivalent, and is what someone reading the map wants anyway.
+            ruleset: format!("{} → {}", endpoint(p, "source"), endpoint(p, "destination")),
+            index: p
+                .get("index")
+                .and_then(Value::as_i64)
+                .unwrap_or_else(|| i as i64),
+            enabled: p.get("enabled").map_or(true, |v| v.as_bool().unwrap_or(true)),
+            protocol: as_str(p, "protocol"),
+            dst_port: p
+                .get("destination")
+                .and_then(|d| d.get("port"))
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            src: endpoint(p, "source"),
+            dst: endpoint(p, "destination"),
+            logging: as_bool(p, "logging"),
+        });
+    }
+
+    log.push(LogEntry::ok(
+        SOURCE,
+        format!("GET {path} → {} zóna-szabály", policies.len()),
+    ));
+}
+
 pub async fn collect(
     client: &reqwest::Client,
     profile: &Profile,
@@ -568,6 +684,13 @@ pub async fn collect(
             SOURCE,
             format!("{e} — a zóna-alapú szabályok külön végponton élnek az újabb kiadásokban"),
         )),
+    }
+
+    // Newer releases moved the firewall to zones and answer the old endpoint
+    // with an empty list rather than an error, which reads as "no rules" when
+    // it means "not here any more".
+    if snap.firewall_rules.is_empty() {
+        collect_zone_policies(client, profile, secret, site, &mut snap, log).await;
     }
 
     match get(client, profile, secret, &format!("{api}/stat/sta")).await {
