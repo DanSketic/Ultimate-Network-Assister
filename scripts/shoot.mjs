@@ -21,7 +21,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, 'docs/media/screenshots');
 const URL_BASE = process.env.UNA_URL ?? 'http://localhost:1420';
-const THEME = process.env.UNA_THEME ?? 'dark';
+// Light by default: the images sit in a README that is read on a white page,
+// and a dark capture there reads as a hole rather than as a screenshot.
+const THEME = process.env.UNA_THEME ?? 'light';
 
 /** Each view, the size it is captured at, and any extra query it needs. */
 const SHOTS = [
