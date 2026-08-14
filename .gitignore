@@ -1,0 +1,36 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Surveys hold an estate's addresses, names and topology. The application keeps
+# them in the operating system's application data, never here — but a stray copy
+# must not be publishable by accident.
+*.db
+*.sqlite
+*.sqlite3
+*.env
+*.pem
+*.key
+*.pfx

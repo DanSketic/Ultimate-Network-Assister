@@ -1,0 +1,219 @@
+# Changelog
+
+Every notable change to Ultimate Network Assister, newest first.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
+project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
+
+The releases below 1.0.0 were reconstructed from the development history when the
+project was first published. They describe what the application could actually do
+at each stage rather than what was planned for it.
+
+---
+
+## [1.0.0] — 2026-08-14
+
+First public release, under the MIT licence.
+
+### Added
+
+- **Session restore.** The application reopens where it was left: the same view,
+  the selected device, the zoom and pan of the topology, the recommendation or
+  article that was open, and whether the surveyed or the sample estate was on
+  screen. Stored separately from preferences, because a session is a bookmark
+  rather than a decision, and it is discarded after 30 days — coming back after a
+  month to a half-finished view of an estate that has since changed is worse than
+  starting clean.
+- **Capacity diagnosis on the overview.** A Proxmox store that reports no size is
+  now listed as *not measured* instead of vanishing, and the panel explains why
+  the figures are missing. The usual cause is named: Proxmox filters
+  `/nodes/{node}/storage` per store by the caller's rights, so an API token
+  without `Datastore.Audit` on `/storage` is answered with an empty list rather
+  than an error, and only the capacity figures go missing while everything else
+  in the survey succeeds.
+- **The check suite ships with the project** (`npm test`). Nine measurements
+  covering topology crossings, tier ordering, fit-to-content, routing cost,
+  advice rules, capacity states, preset languages, dictionary completeness, and
+  controls that are wired to nothing.
+
+### Changed
+
+- **Cables no longer cross, and no longer touch.** Three things were wrong at
+  once. A cable spanning more than one tier took no part in the ordering, so
+  nothing held a lane open for it and it crossed everything between its two ends;
+  such cables now get a placeholder in each tier they pass through, and the
+  placeholder keeps its place through layout. Routing decided detours by
+  obstacle avoidance alone, so two cables could dodge the same card into each
+  other; routes are now settled in order of how little freedom each has, and
+  every later route counts a crossing — and a near miss — against a bow that
+  would run over an earlier one. Finally the detour was chosen from the middle of
+  a card while the curve is drawn from a fanned-out point, which was enough to
+  put a line back across its neighbour; routing now runs a second pass against
+  the endpoints the edge is actually drawn from. On a representative estate this
+  took crossings from four to none and the tightest gap between two cables from
+  0.1 px to 19.2 px.
+- **Advice is derived from the survey.** The recommendations were a fixed list
+  shown whatever had been measured, while the view claimed they were ranked by
+  the survey. Eight rules now read the snapshot: guests with no backup file,
+  backups nothing verifies, stores past 80 and 90 per cent, unreachable devices,
+  weak Wi-Fi encryption, disks reporting a SMART warning, a host bridge that
+  cannot tag on a network that does, and ports that negotiated below a gigabit
+  with a known device at the far end. Plans state honestly what is done and what
+  is not: the survey step is complete because it ran, a restore point is only
+  claimed when a recent backup was found, and execution is never reported as done
+  because the application does not perform it.
+- **Parameter values follow the interface language.** Presets are written per
+  language rather than translated, so a plan created in Hungarian kept Hungarian
+  wording in its form fields after switching to English. A value matching a
+  default in any language was never typed by anyone, so it now moves with the
+  interface — while anything typed in is left exactly as typed. The same rule
+  applies to household names and the plan's own title.
+- **The desktop icon reads at desktop size.** The container always held every
+  size up to 256 px; the problem was contrast. The plate's gradient darkened to a
+  blue that left the lower half of the mark barely 4:1 against it, and at 32 px
+  every edge is two pixels of blend. The gradient now ends on the application's
+  own accent, which holds the mark above 7:1 everywhere it is drawn, and the mark
+  is drawn larger with heavier arms.
+- Routing results are cached, so hovering a device restyles the lines without
+  re-solving their geometry: 557 ms at worst before, 1.08 ms after.
+
+### Fixed
+
+- **The application no longer opens dark on a light desktop.** The window
+  configuration pinned the webview to a dark theme, so `prefers-color-scheme:
+  light` never matched and *auto* could only ever resolve to dark. The window now
+  follows the operating system, the query is asked for both themes explicitly
+  rather than treating "not light" as dark, and a stored explicit choice is
+  applied before the first paint so the window no longer flashes the wrong way
+  round on start.
+- A Proxmox storage entry without a `content` field — as written by builds before
+  that field existed — no longer breaks the backup summary.
+
+---
+
+## [0.9.0] — Advice from measurements
+
+### Added
+
+- Advice view backed by an inference pass over the survey, with each finding
+  carrying its evidence and a change plan ending in how to undo it.
+- Change plans can be copied to the clipboard or exported as a Markdown
+  checklist, both produced by one writer so the pasted and the saved version
+  cannot disagree. Each carries where its content came from, so a checklist that
+  outlives the window is not mistaken for a statement about a real estate.
+
+---
+
+## [0.8.0] — A topology you can read
+
+### Added
+
+- Port chips on both ends of a cable, coloured by negotiated link speed, with a
+  leader line back to the exact point on the card.
+- Fit-to-content that frames the whole estate, solved from measured on-screen
+  positions rather than from a layout that a scroll container is free to shift.
+
+### Changed
+
+- Tier ordering by barycentre and median sweeps, keeping whichever arrangement
+  measures fewer crossings, finished by swapping neighbouring pairs.
+- Cables bow around the cards between their ends instead of running through them,
+  since a line disappearing into a box reads as ending there.
+- Device cards enlarged and the port strip laid out the way the hardware is:
+  one row where the switch has one, two rows where it has two, with unreported
+  ports left as gaps rather than closed up.
+
+---
+
+## [0.7.0] — Port-level detail
+
+### Added
+
+- Per-port collection from UniFi: state, negotiated speed, PoE, port profile and
+  tagged-VLAN handling, joined to the LLDP neighbour table by port index.
+- A device's own uplink report as a second measured source for the same fact,
+  which is often the only one — plenty of hardware never announces itself.
+- Port profiles read from the controller, so a dry run can offer to leave a
+  profile alone rather than only to create one.
+- Original device glyphs for gateways, switches, access points, hosts, guests,
+  storage, cameras and clients. Deliberately not vendor logos.
+
+---
+
+## [0.6.0] — Backup and recovery, as evidence
+
+### Added
+
+- Proxmox backup jobs and the files they actually left behind, collected
+  separately and compared: a scheduled job is not evidence that it runs.
+- Verdicts limited to what the data supports — verified, partial, stale, missing.
+  A restore test is reported as unprovable because Proxmox does not record one,
+  rather than shown as a number that would look like proof.
+
+---
+
+## [0.5.0] — SSH bound to a system
+
+### Added
+
+- SSH sessions attached to the saved Proxmox or UniFi system rather than kept as
+  a separate kind of profile: one machine is one entry, reachable both ways.
+- Host-key pinning on first use, with the probe aborting the handshake before
+  authentication so a key can be inspected without offering a credential.
+- A command policy enforced natively: read-only commands run freely, mutating
+  ones require the user to confirm that exact command text, and destructive
+  storage and availability commands are never run by the application at all. The
+  badge the user reads and the rule that runs are the same answer.
+
+---
+
+## [0.4.0] — Deployment planner
+
+### Added
+
+- Blueprints resolved into a plan and rendered as a guide, with modules,
+  parameters and per-port assignments.
+- An apply pipeline that compiles, dry-runs against a token, checks its gates,
+  journals what it did and can roll it back.
+- A write allowlist with exactly two endpoints. The application writes port
+  *profiles* and networks, never per-port overrides — a wrong override cuts the
+  controller's own uplink, with no way back from inside the application.
+
+---
+
+## [0.3.0] — Real surveys
+
+### Added
+
+- Read-only collectors for Proxmox VE and UniFi Network: nodes, storages, guests,
+  interfaces, disks, devices, networks, WLANs, firewall rules and clients.
+- Certificate pinning on first use, with credentials held in the Windows
+  Credential Manager and never written to the snapshot database.
+- A provenance model applied throughout: measured, inferred, unverified, and
+  unverifiable. A firewall rule read from configuration is not evidence that the
+  rule takes effect, and the interface says so.
+
+---
+
+## [0.2.0] — Two languages
+
+### Added
+
+- Full English alongside Hungarian, with the dictionary typed so a missing key
+  is a compile error rather than a blank on screen.
+- Presets written per language rather than machine-translated, so the wording in
+  a generated plan reads as though a person wrote it.
+
+---
+
+## [0.1.0] — First working shell
+
+### Added
+
+- Desktop application on Tauri with an undecorated window and an app-drawn title
+  bar.
+- Topology, policy, overview, survey, planner and knowledge views against a
+  sample estate.
+- Light and dark themes, and an accent that follows the theme.
+
+[1.0.0]: https://github.com/DanSketic/Ultimate-Network-Assister/releases/tag/v1.0.0

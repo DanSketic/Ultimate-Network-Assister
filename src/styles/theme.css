@@ -1,0 +1,138 @@
+/*
+ * Design tokens.
+ *
+ * `--accent` is re-written at runtime from the active palette (see
+ * src/lib/palette.ts), which is why it is declared here rather than baked
+ * into each rule.
+ */
+
+:root {
+  --app: #0a0d11;
+  --panel: #0f141a;
+  --panel2: #121820;
+  --elev: #1a222c;
+  --line: #26303b;
+  --line2: #36434f;
+  --text: #e7edf4;
+  --text2: #94a1b0;
+  --text3: #6b7686;
+  --accent: #3ea6ff;
+  --grid: rgba(255, 255, 255, 0.035);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+html[data-theme='light'] {
+  --app: #eaeef3;
+  --panel: #ffffff;
+  --panel2: #f6f8fb;
+  --elev: #eef2f7;
+  --line: #e2e7ee;
+  --line2: #c3cedb;
+  --text: #0f1720;
+  --text2: #5a6675;
+  --text3: #8a94a1;
+  --accent: #0b74d8;
+  --grid: rgba(15, 23, 32, 0.05);
+  --shadow: 0 10px 30px rgba(15, 23, 32, 0.1);
+}
+
+/*
+ * The moment before anything has chosen.
+ *
+ * Between parsing the document and the first script running, no theme is set
+ * yet, and the tokens above would paint a dark window on a light desktop for
+ * those few frames. Only the two colours that are actually visible while the
+ * page is empty need covering; the rest arrive with the attribute.
+ */
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) {
+    --app: #eaeef3;
+    --text: #0f1720;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--app);
+  overflow: hidden;
+}
+
+body {
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100vh;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--text);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line2);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes napPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Forward traffic: dashes travel from source to target. */
+@keyframes napFlowF {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* Return traffic: same dash pattern, opposite direction. */
+@keyframes napFlowR {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 24;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

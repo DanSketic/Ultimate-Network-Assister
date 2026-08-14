@@ -1,0 +1,803 @@
+/*
+ * Shared component styles.
+ *
+ * Layout that appears exactly once still lives in inline styles next to the
+ * markup it belongs to; anything repeated, and everything with a :hover or
+ * :focus state, lives here.
+ *
+ * Note on custom properties: several classes read their base colours from
+ * inline custom properties (`--tile-bg`, `--nav-bg`, ...) instead of a plain
+ * inline `background`. Inline declarations beat stylesheet rules, so a base
+ * colour written directly into the style attribute could never be overridden
+ * by the :hover rule below it. Going through a variable keeps both in the
+ * stylesheet, where normal cascade order applies.
+ */
+
+/* ---------------------------------------------------------------- surfaces */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.panel--r9 {
+  border-radius: 9px;
+}
+.panel--r10 {
+  border-radius: 10px;
+}
+.panel--r11 {
+  border-radius: 11px;
+}
+
+.soft {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.soft--link {
+  cursor: pointer;
+}
+
+.soft--link:hover {
+  border-color: var(--line2);
+}
+
+.row-hover:hover {
+  background: var(--panel2);
+}
+
+/* ------------------------------------------------------------------- text */
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.sect {
+  font-size: 9.5px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.col-head {
+  font-size: 9.5px;
+  color: var(--text3);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pretty {
+  text-wrap: pretty;
+}
+
+.ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.btn-primary {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 500;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-primary--lg {
+  padding: 8px 14px;
+  border-radius: 7px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-ghost {
+  padding: 6px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-ghost--lg {
+  padding: 8px 14px;
+  border-radius: 7px;
+}
+
+.btn-ghost:hover {
+  border-color: var(--line2);
+  color: var(--text);
+}
+
+.link {
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.link:hover {
+  filter: brightness(1.15);
+}
+
+/* Selectable card in a list column (advice, planner, knowledge base, SSH). */
+.tile {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 13px;
+  border: 1px solid var(--tile-bc, var(--line));
+  border-radius: 10px;
+  background: var(--tile-bg, transparent);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.tile:hover {
+  border-color: var(--line2);
+}
+
+.tile--tight {
+  padding: 11px 12px;
+  margin-bottom: 7px;
+}
+
+/* Small bordered status label; the colour is supplied per instance. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--pill, var(--line));
+  color: var(--pill, var(--text2));
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.pill--tight {
+  padding: 1px 5px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel2);
+}
+
+.chip--link {
+  cursor: pointer;
+}
+
+.chip--link:hover {
+  border-color: var(--line2);
+}
+
+.dot {
+  border-radius: 50%;
+  flex: none;
+}
+
+/* ------------------------------------------------------------------ meters */
+
+.meter {
+  height: 4px;
+  border-radius: 3px;
+  background: var(--elev);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* ------------------------------------------------------------------ chrome */
+
+.titlebar {
+  height: 46px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px 0 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Everything except the interactive controls drags the OS window. */
+.titlebar__drag {
+  flex: 1;
+  align-self: stretch;
+}
+
+.winbtn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.winbtn:hover {
+  background: var(--elev);
+}
+
+.winbtn--close:hover {
+  background: #e0483a;
+  color: #fff;
+}
+
+.navrail {
+  width: 88px;
+  flex: none;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 6px;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 3px 7px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--nav-bg, transparent);
+  color: var(--nav-fg, var(--text2));
+}
+
+.nav-item:hover {
+  background: var(--elev);
+}
+
+.nav-item__label {
+  font-size: 9.5px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.statusbar {
+  height: 26px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  color: var(--text3);
+}
+
+/* --------------------------------------------------------------- tab strips */
+
+.subtab {
+  padding: 5px 13px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  background: var(--tab-bg, transparent);
+  color: var(--tab-fg, var(--text2));
+}
+
+.tab-chip {
+  padding: 5px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--tab-bc, var(--line));
+  font-size: 10.5px;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--tab-bg, transparent);
+  color: var(--tab-fg, var(--text2));
+}
+
+/* ---------------------------------------------------------------- topology */
+
+.canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--app);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+  cursor: grab;
+}
+
+.canvas--panning {
+  cursor: grabbing;
+}
+
+/* Keep in step with NODE_W / NODE_H in lib/geometry.ts — the edge router
+   places the curve endpoints from those, so a mismatch detaches the lines. */
+.node {
+  position: absolute;
+  width: 176px;
+  height: 76px;
+  border-radius: 12px;
+  border: 1px solid var(--node-bc, var(--line));
+  background: var(--node-bg, var(--panel));
+  box-shadow: var(--node-sh, none);
+  padding: 11px 12px;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.node__code {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--elev);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.overlay-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 9px 13px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+.legend-toggle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--text3);
+  font-family: inherit;
+}
+
+.legend-toggle:hover {
+  color: var(--text2);
+}
+
+.zoom-btn {
+  min-width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 10.5px;
+  font-family: inherit;
+}
+
+.zoom-btn:hover {
+  background: var(--elev);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ toggles */
+
+.switch {
+  width: 34px;
+  height: 19px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.switch--on {
+  background: var(--accent);
+  justify-content: flex-end;
+}
+
+.switch--off {
+  background: var(--elev);
+  border: 1px solid var(--line2);
+}
+
+.switch__knob {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+}
+
+/* ------------------------------------------------------------- data tables */
+
+.dtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.dtable th {
+  text-align: left;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 500;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+
+.dtable td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.dtable tbody tr:hover td {
+  background: var(--panel2);
+}
+
+.dtable td.num {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------- forms */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.field__label {
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.field__help {
+  font-size: 10.5px;
+  color: var(--text3);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11.5px;
+}
+
+.input--mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.input:hover {
+  border-color: var(--line2);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input--invalid,
+.input--invalid:focus {
+  border-color: var(--bad-border, #f0655a);
+}
+
+select.input {
+  cursor: pointer;
+}
+
+/* Selection indicator on the module cards. */
+.check-box {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: 4px;
+  border: 1px solid var(--line2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.check-box--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* -------------------------------------------------------- segmented control */
+
+.seg {
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.seg__btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 140ms, color 140ms;
+}
+
+.seg__btn:hover {
+  color: var(--text2);
+}
+
+.seg__btn[aria-checked='true'] {
+  background: var(--elev);
+  color: var(--text);
+}
+
+.seg__label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------- popover */
+
+.popover-anchor {
+  position: relative;
+  display: flex;
+}
+
+/* Sits above the backdrop so the menu itself stays clickable. */
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 274px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+/* Catches the click that dismisses the menu. */
+.popover__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--elev);
+}
+
+.menu-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.menu-item[aria-current='true'] {
+  background: var(--elev);
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 6px 4px;
+}
+
+.menu-label {
+  padding: 8px 9px 5px;
+}
+
+/* ------------------------------------------------------------ module cards */
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+  gap: 10px;
+}
+
+.module-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--card-bc, var(--line));
+  border-radius: 11px;
+  background: var(--card-bg, transparent);
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.module-card:hover {
+  border-color: var(--line2);
+}
+
+/* Required modules cannot be turned off, so they must not look clickable. */
+.module-card--locked {
+  cursor: default;
+}
+
+.module-card--locked:hover {
+  border-color: var(--card-bc, var(--line));
+}
+
+/* Dimmed rather than hidden: a disabled module still says what it would add. */
+.module-card--off {
+  opacity: 0.58;
+}
+
+.module-card--off:hover {
+  opacity: 0.82;
+}
+
+/* Risk, as a hairline along the top edge. */
+.module-card__stripe {
+  height: 2px;
+  flex: none;
+  background: var(--stripe, var(--line));
+}
+
+.module-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 13px 0;
+}
+
+.module-card__glyph {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--glyph, var(--text3));
+}
+
+.module-card__body {
+  display: block;
+  padding: 9px 13px 0;
+}
+
+.module-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding: 10px 13px 11px;
+}
+
+/* Effort, as a four-segment bar rather than another number to read. */
+.effort {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.effort__tick {
+  width: 6px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--line2);
+}
+
+.effort__tick--on {
+  background: var(--accent);
+}
+
+/* ------------------------------------------------------------ accessibility */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}

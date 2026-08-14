@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{--app:#0a0d11;--panel:#0f141a;--panel2:#121820;--elev:#1a222c;--line:#26303b;--line2:#36434f;--text:#e7edf4;--text2:#94a1b0;--text3:#6b7686;--accent:#3ea6ff;--grid:rgba(255,255,255,.035);--shadow:0 10px 30px rgba(0,0,0,.45)}
+html[data-theme="light"]{--app:#eaeef3;--panel:#ffffff;--panel2:#f6f8fb;--elev:#eef2f7;--line:#e2e7ee;--line2:#c3cedb;--text:#0f1720;--text2:#5a6675;--text3:#8a94a1;--accent:#0b74d8;--grid:rgba(15,23,32,.05);--shadow:0 10px 30px rgba(15,23,32,.10)}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--app);overflow:hidden}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--text)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+@keyframes napPulse{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes napFlowF{from{stroke-dashoffset:0}to{stroke-dashoffset:-24}}
+@keyframes napFlowR{from{stroke-dashoffset:0}to{stroke-dashoffset:24}}
+</style>
+</helmet>
+
+<div style="height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--app);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased">
+
+  <div style="height:46px;flex:none;display:flex;align-items:center;gap:14px;padding:0 12px 0 14px;background:var(--panel);border-bottom:1px solid var(--line)">
+    <div style="display:flex;align-items:center;gap:9px">
+      <div style="width:22px;height:22px;border-radius:6px;background:var(--accent);display:flex;align-items:center;justify-content:center">
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--panel)"></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;letter-spacing:-.01em">Ultimate Network Assister</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);border:1px solid var(--line);border-radius:4px;padding:1px 5px">2.4.0</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);cursor:pointer" style-hover="border-color:var(--line2)">
+      <div style="width:6px;height:6px;border-radius:50%;background:{{ ok }}"></div>
+      <span style="font-size:11.5px">Otthon</span>
+      <span style="font-size:11px;color:var(--text3);font-family:'IBM Plex Mono',monospace">pve01 + UniFi site</span>
+      <span style="font-size:9px;color:var(--text3)">▼</span>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)">
+      <div style="width:5px;height:5px;border-radius:50%;background:{{ ok }}"></div>
+      <span style="font-size:10.5px;color:var(--text2);letter-spacing:.02em">Csak olvasás</span>
+    </div>
+    <div style="padding:6px 12px;border-radius:6px;background:var(--accent);color:#fff;font-size:11.5px;font-weight:500;cursor:pointer" style-hover="filter:brightness(1.1)">Felmérés futtatása</div>
+    <div onClick="{{ toggleTheme }}" style="padding:6px 11px;border-radius:6px;border:1px solid var(--line);font-size:11.5px;color:var(--text2);cursor:pointer" style-hover="border-color:var(--line2);color:var(--text)">{{ themeLabel }}</div>
+    <div style="display:flex;align-items:center;gap:2px;margin-left:6px;color:var(--text3)">
+      <div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:12px;cursor:default" style-hover="background:var(--elev)">–</div>
+      <div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:10px;cursor:default" style-hover="background:var(--elev)">▢</div>
+      <div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:12px;cursor:default" style-hover="background:#e0483a;color:#fff">✕</div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+
+    <div style="width:88px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:8px 6px;gap:2px;min-height:0;overflow-y:auto">
+      <div onClick="{{ go.overview }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.overview.bg }};color:{{ nv.overview.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="2.5" y="11.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="11.5" width="6" height="6" rx="1.2"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Áttekintés</span>
+      </div>
+      <div onClick="{{ go.topology }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.topology.bg }};color:{{ nv.topology.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="10" cy="4" r="2.1"/><circle cx="4" cy="16" r="2.1"/><circle cx="16" cy="16" r="2.1"/><path d="M10 6.1 4.6 13.9M10 6.1l5.4 7.8"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Topológia<br />&amp; policy</span>
+      </div>
+      <div onClick="{{ go.survey }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.survey.bg }};color:{{ nv.survey.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8.8" cy="8.8" r="5.3"/><path d="M12.8 12.8 17 17"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Felmérés</span>
+      </div>
+      <div onClick="{{ go.advice }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.advice.bg }};color:{{ nv.advice.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M10 2.6 17 6.4v7.2L10 17.4 3 13.6V6.4z"/><circle cx="10" cy="10" r="2.2"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Javaslatok</span>
+      </div>
+      <div onClick="{{ go.backup }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.backup.bg }};color:{{ nv.backup.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="10" cy="5" rx="6.4" ry="2.5"/><path d="M3.6 5v10c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5V5"/><path d="M3.6 10c0 1.4 2.9 2.5 6.4 2.5s6.4-1.1 6.4-2.5"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Mentés &amp;<br />recovery</span>
+      </div>
+      <div onClick="{{ go.planner }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.planner.bg }};color:{{ nv.planner.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.8" y="3" width="14.4" height="14" rx="1.6"/><path d="M2.8 7.6h14.4M7.4 7.6V17"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Telepítési<br />tervező</span>
+      </div>
+      <div onClick="{{ go.ssh }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.ssh.bg }};color:{{ nv.ssh.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="3.5" width="15" height="13" rx="1.6"/><path d="M5.8 8.2 8.6 10.6 5.8 13M10.6 13.4h4"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">SSH<br />műveletek</span>
+      </div>
+      <div onClick="{{ go.kb }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.kb.bg }};color:{{ nv.kb.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3.2 4.2h5.2c1 0 1.6.6 1.6 1.5v10c0-.9-.6-1.5-1.6-1.5H3.2z"/><path d="M16.8 4.2h-5.2c-1 0-1.6.6-1.6 1.5v10c0-.9.6-1.5 1.6-1.5h5.2z"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Tudástár</span>
+      </div>
+      <div onClick="{{ go.settings }}" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 3px 7px;border-radius:8px;cursor:pointer;background:{{ nv.settings.bg }};color:{{ nv.settings.fg }}" style-hover="background:var(--elev)">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.6v2.2M10 15.2v2.2M17.4 10h-2.2M4.8 10H2.6M15.2 4.8l-1.5 1.5M6.3 13.7l-1.5 1.5M15.2 15.2l-1.5-1.5M6.3 6.3 4.8 4.8"/></svg>
+        <span style="font-size:9.5px;text-align:center;line-height:1.2">Beállítások</span>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;min-width:0;min-height:0">
+
+      <sc-if value="{{ V.topology }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;min-width:0;min-height:0">
+          <div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--app)">
+
+            <div style="height:48px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel);overflow:hidden">
+              <div style="display:flex;flex:none;padding:3px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;gap:2px">
+                <div onClick="{{ goSubMap }}" style="padding:5px 13px;border-radius:6px;font-size:11.5px;cursor:pointer;white-space:nowrap;background:{{ subStyle.map.bg }};color:{{ subStyle.map.fg }}">Topológia</div>
+                <div onClick="{{ goSubPolicy }}" style="padding:5px 13px;border-radius:6px;font-size:11.5px;cursor:pointer;white-space:nowrap;background:{{ subStyle.policy.bg }};color:{{ subStyle.policy.fg }}">Policy &amp; tűzfal</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);flex:0 1 230px;min-width:0;overflow:hidden;color:var(--text3)">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" style="flex:none"><circle cx="8.8" cy="8.8" r="5.3"/><path d="M12.8 12.8 17 17"/></svg>
+                <span style="font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Eszköz, IP vagy szolgáltatás…</span>
+              </div>
+              <div style="flex:1;min-width:0"></div>
+            </div>
+
+            <sc-if value="{{ S.map }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background-color:var(--app);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:28px 28px;cursor:grab" onMouseDown="{{ startPan }}">
+                <div style="position:relative;width:1190px;height:620px;transform-origin:center center;transform:{{ canvasT }}">
+                  <svg width="1190" height="620" viewBox="0 0 1190 620" style="position:absolute;inset:0;overflow:visible">
+                    <sc-for list="{{ flows }}" as="f" hint-placeholder-count="22">
+                      <g>
+                        <path d="{{ f.d }}" fill="none" stroke="{{ f.base }}" stroke-width="{{ f.bw }}" stroke-linecap="round" opacity="{{ f.bo }}"></path>
+                        <path d="{{ f.d }}" fill="none" stroke="{{ f.color }}" stroke-width="{{ f.w }}" stroke-dasharray="{{ f.da }}" stroke-linecap="round" opacity="{{ f.o }}" style="animation:{{ f.anim }}"></path>
+                      </g>
+                    </sc-for>
+                    <sc-for list="{{ marks }}" as="m" hint-placeholder-count="6">
+                      <g transform="{{ m.tf }}">
+                        <circle r="{{ m.br }}" fill="{{ m.bg }}" stroke="{{ m.bs }}" stroke-width="1"></circle>
+                        <path d="{{ m.d }}" fill="{{ m.fill }}" stroke="{{ m.stroke }}" stroke-width="{{ m.sw }}" stroke-linecap="round"></path>
+                      </g>
+                    </sc-for>
+                    
+                    
+                    
+                    
+                  </svg>
+                  <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="12">
+                    <div onClick="{{ n.onSelect }}" onMouseEnter="{{ n.onEnter }}" onMouseLeave="{{ onLeave }}" style="position:absolute;width:138px;height:60px;border-radius:10px;border:1px solid;padding:9px 10px;cursor:pointer;transition:box-shadow .15s,border-color .15s;left:{{ n.left }};top:{{ n.top }};background:{{ n.bg }};border-color:{{ n.bc }};box-shadow:{{ n.sh }}">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <div style="width:24px;height:24px;flex:none;border-radius:6px;border:1px solid var(--line);background:var(--elev);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:8.5px;font-weight:500;letter-spacing:.02em;color:{{ n.codeColor }}">{{ n.code }}</div>
+                        <div style="flex:1;min-width:0;font-size:11.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.name }}</div>
+                        <div style="width:7px;height:7px;flex:none;border-radius:50%;background:{{ n.dot }}"></div>
+                      </div>
+                      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.sub }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <div style="position:absolute;left:16px;right:16px;bottom:14px;display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:10px 12px;pointer-events:none">
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:9px 13px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);pointer-events:auto">
+                  <div onClick="{{ toggleLegend }}" style="display:flex;flex:none;align-items:center;gap:6px;cursor:pointer;color:var(--text3)" style-hover="color:var(--text2)">
+                    <span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Jelmagyarázat</span>
+                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" style="flex:none;transform:{{ legendCaret }}"><path d="M2 3.5 L5 6.5 L8 3.5"></path></svg>
+                  </div>
+                  <sc-if value="{{ legendOpen }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;min-width:0">
+                      <div style="display:flex;flex:none;align-items:center;gap:7px"><div style="width:20px;border-top:2px solid {{ idle }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">Felmért</span></div>
+                      <div style="display:flex;flex:none;align-items:center;gap:7px"><div style="width:20px;border-top:2px dashed {{ warn }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">Becsült</span></div>
+                      <div style="display:flex;flex:none;align-items:center;gap:7px"><div style="width:20px;border-top:2px dotted {{ accent }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">Logikai</span></div>
+                      <div style="display:flex;flex:none;align-items:center;gap:7px"><div style="width:20px;border-top:2px dashed {{ bad }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">Megszakadt</span></div>
+                      <div style="width:1px;height:16px;background:var(--line2);flex:none"></div>
+                      <svg title="Kétirányú forgalom" width="22" height="12" viewBox="0 0 22 12" style="flex:none"><title>Kétirányú forgalom</title><path d="M1 3.5 H21" stroke="{{ idle }}" stroke-width="1.6" stroke-dasharray="4 4"></path><path d="M1 8.5 H21" stroke="{{ idle }}" stroke-width="1.6" stroke-dasharray="4 4"></path></svg>
+                      <svg title="Egyirányú forgalom" width="22" height="12" viewBox="0 0 22 12" style="flex:none"><title>Egyirányú forgalom</title><path d="M1 6 H21" stroke="{{ idle }}" stroke-width="1.6" stroke-dasharray="4 4"></path><path d="M12 2.5 L17.5 6 L12 9.5 Z" fill="{{ idle }}"></path></svg>
+                      <svg title="Nincs átjárás" width="22" height="12" viewBox="0 0 22 12" style="flex:none"><title>Nincs átjárás</title><path d="M1 6 H21" stroke="{{ bad }}" stroke-width="1.6" stroke-dasharray="4 4" opacity="0.5"></path><path d="M8 3 L14 9 M14 3 L8 9" stroke="{{ bad }}" stroke-width="1.6"></path></svg>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;padding:9px 13px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);pointer-events:auto">
+                  <span style="font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Állapot</span>
+                  <div style="display:flex;flex:none;align-items:center;gap:5px"><div style="width:7px;height:7px;border-radius:50%;background:{{ ok }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">21 online</span></div>
+                  <div style="display:flex;flex:none;align-items:center;gap:5px"><div style="width:7px;height:7px;border-radius:50%;background:{{ warn }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">6 figyelmeztetés</span></div>
+                  <div style="display:flex;flex:none;align-items:center;gap:5px"><div style="width:7px;height:7px;border-radius:50%;background:{{ bad }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">2 hiba</span></div>
+                  <div style="display:flex;flex:none;align-items:center;gap:5px"><div style="width:7px;height:7px;border-radius:50%;background:{{ idle }}"></div><span style="font-size:10.5px;color:var(--text2);white-space:nowrap">1 ismeretlen</span></div>
+                </div>
+                <div style="display:flex;align-items:center;flex:none;gap:2px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);pointer-events:auto">
+                  <div onClick="{{ zoomOut }}" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text2)" style-hover="background:var(--elev);color:var(--text)">−</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text2);width:42px;text-align:center">{{ zoomLabel }}</div>
+                  <div onClick="{{ zoomIn }}" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text2)" style-hover="background:var(--elev);color:var(--text)">+</div>
+                  <div style="width:1px;height:16px;background:var(--line);margin:0 3px"></div>
+                  <div onClick="{{ zoomFit }}" style="padding:0 9px;height:26px;display:flex;align-items:center;border-radius:6px;cursor:pointer;font-size:10.5px;color:var(--text2)" style-hover="background:var(--elev);color:var(--text)">Illesztés</div>
+                </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ S.policy }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;overflow:auto;padding:18px 20px 26px">
+                <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px">
+                  <div style="font-size:15px;font-weight:600">VLAN zónák és izoláció</div>
+                  <div style="font-size:11.5px;color:var(--text2)">6 zóna · 9 szabály · 3 állítás nem ellenőrizhető a jelenlegi hozzáféréssel</div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px">
+                  <sc-for list="{{ zones }}" as="z" hint-placeholder-count="6">
+                    <div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 13px 13px;position:relative;overflow:hidden">
+                      <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:{{ z.bar }}"></div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);letter-spacing:.04em">{{ z.vlan }}</div>
+                      <div style="font-size:13px;font-weight:500;margin-top:3px">{{ z.name }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text2);margin-top:7px">{{ z.net }}</div>
+                      <div style="display:flex;flex-direction:column;gap:4px;margin-top:9px;font-size:10.5px;color:var(--text2)">
+                        <div style="display:flex;justify-content:space-between"><span>SSID</span><span style="color:var(--text)">{{ z.ssid }}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span>Eszközök</span><span style="color:var(--text)">{{ z.dev }}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span>Izoláció</span><span style="color:var(--text)">{{ z.iso }}</span></div>
+                      </div>
+                      <div style="margin-top:10px;display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:5px;border:1px solid {{ z.color }};color:{{ z.color }};font-size:9.5px">{{ z.state }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <div style="display:grid;grid-template-columns:minmax(420px,0.9fr) 1.35fr;gap:16px;align-items:start">
+                  <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 17px">
+                    <div style="font-size:13px;font-weight:600">Zóna-mátrix</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:3px;margin-bottom:14px">Sor: forrás · oszlop: cél. A szaggatott cella nem ellenőrizhető felméréssel.</div>
+                    <div style="display:grid;grid-template-columns:96px repeat(6,1fr);gap:4px;align-items:center">
+                      <div></div>
+                      <sc-for list="{{ zoneHeads }}" as="h" hint-placeholder-count="6">
+                        <div style="font-size:9px;color:var(--text3);text-align:center;line-height:1.2">{{ h.vlan }}</div>
+                      </sc-for>
+                    </div>
+                    <sc-for list="{{ matrix }}" as="row" hint-placeholder-count="6">
+                      <div style="display:grid;grid-template-columns:96px repeat(6,1fr);gap:4px;align-items:center;margin-top:4px">
+                        <div style="font-size:10.5px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.name }}</div>
+                        <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="6">
+                          <div title="{{ c.label }}" style="height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;background:{{ c.color }};opacity:{{ c.solid }};border:{{ c.dashed }}"></div>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                    <div style="display:flex;gap:14px;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)">
+                      <div style="display:flex;align-items:center;gap:6px"><div style="width:11px;height:11px;border-radius:3px;background:{{ ok }}"></div><span style="font-size:10px;color:var(--text2)">Engedélyez</span></div>
+                      <div style="display:flex;align-items:center;gap:6px"><div style="width:11px;height:11px;border-radius:3px;background:{{ bad }};opacity:.35"></div><span style="font-size:10px;color:var(--text2)">Tilt</span></div>
+                      <div style="display:flex;align-items:center;gap:6px"><div style="width:11px;height:11px;border-radius:3px;background:{{ warn }};opacity:.35"></div><span style="font-size:10px;color:var(--text2)">Korlátozott</span></div>
+                      <div style="display:flex;align-items:center;gap:6px"><div style="width:11px;height:11px;border-radius:3px;border:1px dashed {{ idle }}"></div><span style="font-size:10px;color:var(--text2)">Nem ellenőrzött</span></div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;flex-direction:column;gap:16px">
+                    <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden">
+                      <div style="padding:14px 16px 11px;border-bottom:1px solid var(--line)">
+                        <div style="font-size:13px;font-weight:600">Tűzfalszabályok</div>
+                        <div style="font-size:11px;color:var(--text2);margin-top:3px">A „Felmért” állapot azt jelenti, hogy a szabály érvényesülését mérés igazolja.</div>
+                      </div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr 1.1fr .8fr 1fr .7fr;gap:8px;padding:9px 16px;font-size:9.5px;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--line)">
+                        <div>Forrás</div><div>Cél</div><div>Port</div><div>Művelet</div><div>Bizonyíték</div><div>Ellenőrizve</div>
+                      </div>
+                      <sc-for list="{{ rules }}" as="r" hint-placeholder-count="9">
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1.1fr .8fr 1fr .7fr;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:11.5px;align-items:center" style-hover="background:var(--panel2)">
+                          <div>{{ r.src }}</div>
+                          <div style="color:var(--text2)">{{ r.dst }}</div>
+                          <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text2)">{{ r.port }}</div>
+                          <div style="color:{{ r.actColor }};font-weight:500">{{ r.act }}</div>
+                          <div><span style="display:inline-flex;padding:2px 7px;border-radius:5px;border:1px solid {{ r.stColor }};color:{{ r.stColor }};font-size:9.5px">{{ r.state }}</span></div>
+                          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3)">{{ r.when }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+
+                    <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 8px">
+                      <div style="font-size:13px;font-weight:600;margin-bottom:11px">Biztonsági jelzések</div>
+                      <sc-for list="{{ signals }}" as="g" hint-placeholder-count="4">
+                        <div style="display:flex;gap:11px;padding:11px 0;border-top:1px solid var(--line)">
+                          <div style="width:3px;flex:none;border-radius:2px;background:{{ g.color }}"></div>
+                          <div style="flex:1">
+                            <div style="display:flex;align-items:center;gap:8px">
+                              <span style="font-size:12px;font-weight:500">{{ g.title }}</span>
+                              <span style="font-size:9.5px;color:{{ g.color }};border:1px solid {{ g.color }};border-radius:4px;padding:1px 5px">{{ g.sev }}</span>
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3)">{{ g.zone }}</span>
+                            </div>
+                            <div style="font-size:11.5px;color:var(--text2);margin-top:4px;line-height:1.5;text-wrap:pretty">{{ g.text }}</div>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <sc-if value="{{ S.map }}" hint-placeholder-val="{{ true }}">
+            <div style="width:398px;flex:none;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0">
+              <div style="padding:16px 18px 12px;border-bottom:1px solid var(--line)">
+                <div style="display:flex;align-items:flex-start;gap:11px">
+                  <div style="width:34px;height:34px;flex:none;border-radius:8px;border:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent)">{{ sel.code }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:15px;font-weight:600;letter-spacing:-.01em">{{ sel.name }}</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px">{{ sel.type }} · <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px">{{ sel.sub }}</span></div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;background:var(--panel2);border:1px solid var(--line)">
+                    <div style="width:6px;height:6px;border-radius:50%;background:{{ sel.statusColor }}"></div>
+                    <span style="font-size:10.5px;color:var(--text2)">{{ sel.status }}</span>
+                  </div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:13px">
+                  <div onClick="{{ goTab.overview }}" style="padding:5px 9px;border-radius:6px;border:1px solid;font-size:10.5px;cursor:pointer;background:{{ tabStyle.overview.bg }};color:{{ tabStyle.overview.fg }};border-color:{{ tabStyle.overview.bc }}">Áttekintés</div>
+                  <div onClick="{{ goTab.services }}" style="padding:5px 9px;border-radius:6px;border:1px solid;font-size:10.5px;cursor:pointer;background:{{ tabStyle.services.bg }};color:{{ tabStyle.services.fg }};border-color:{{ tabStyle.services.bc }}">Szolgáltatások</div>
+                  <div onClick="{{ goTab.conns }}" style="padding:5px 9px;border-radius:6px;border:1px solid;font-size:10.5px;cursor:pointer;background:{{ tabStyle.conns.bg }};color:{{ tabStyle.conns.fg }};border-color:{{ tabStyle.conns.bc }}">Kapcsolatok</div>
+                  <div onClick="{{ goTab.fw }}" style="padding:5px 9px;border-radius:6px;border:1px solid;font-size:10.5px;cursor:pointer;background:{{ tabStyle.fw.bg }};color:{{ tabStyle.fw.fg }};border-color:{{ tabStyle.fw.bc }}">Tűzfal &amp; policy</div>
+                  <div onClick="{{ goTab.kb }}" style="padding:5px 9px;border-radius:6px;border:1px solid;font-size:10.5px;cursor:pointer;background:{{ tabStyle.kb.bg }};color:{{ tabStyle.kb.fg }};border-color:{{ tabStyle.kb.bc }}">Tudás</div>
+                  <div onClick="{{ goTab.cfg }}" style="padding:5px 9px;border-radius:6px;border:1px solid;font-size:10.5px;cursor:pointer;background:{{ tabStyle.cfg.bg }};color:{{ tabStyle.cfg.fg }};border-color:{{ tabStyle.cfg.bc }}">Konfigurálás</div>
+                </div>
+              </div>
+
+              <div style="flex:1;overflow:auto;padding:16px 18px 22px">
+                <sc-if value="{{ T.overview }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:18px">
+                    <div>
+                      <div style="font-size:9.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:9px">Eszköz adatai</div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden">
+                        <sc-for list="{{ sel.facts }}" as="f" hint-placeholder-count="4">
+                          <div style="background:var(--panel);padding:10px 11px">
+                            <div style="font-size:10px;color:var(--text3)">{{ f.k }}</div>
+                            <div style="font-size:11.5px;margin-top:3px;line-height:1.35">{{ f.v }}</div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <div>
+                      <div style="font-size:9.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:11px">Terhelés</div>
+                      <div style="display:flex;flex-direction:column;gap:12px">
+                        <sc-for list="{{ sel.metrics }}" as="m" hint-placeholder-count="3">
+                          <div>
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                              <span style="font-size:11.5px;color:var(--text2)">{{ m.label }}</span>
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px">{{ m.value }}</span>
+                            </div>
+                            <div style="height:4px;border-radius:3px;background:var(--elev);overflow:hidden">
+                              <div style="height:100%;border-radius:3px;width:{{ m.w }};background:{{ m.color }}"></div>
+                            </div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <sc-if value="{{ sel.hasWarns }}" hint-placeholder-val="{{ true }}">
+                      <div>
+                        <div style="font-size:9.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:9px">Figyelmeztetések</div>
+                        <div style="display:flex;flex-direction:column;gap:8px">
+                          <sc-for list="{{ sel.warns }}" as="w" hint-placeholder-count="2">
+                            <div style="display:flex;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)">
+                              <div style="width:3px;flex:none;border-radius:2px;background:{{ w.color }}"></div>
+                              <div style="flex:1">
+                                <div style="font-size:9.5px;color:{{ w.color }};letter-spacing:.04em">{{ w.label }}</div>
+                                <div style="font-size:11.5px;line-height:1.5;margin-top:3px;color:var(--text2);text-wrap:pretty">{{ w.text }}</div>
+                              </div>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ T.services }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ sel.svcs }}" as="v" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)" style-hover="border-color:var(--line2)">
+                        <div style="width:7px;height:7px;flex:none;border-radius:50%;background:{{ v.dot }}"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:12px;font-weight:500">{{ v.name }}</div>
+                          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);margin-top:3px">{{ v.sub }}</div>
+                        </div>
+                        <div style="font-size:9.5px;color:{{ v.provColor }};border:1px solid {{ v.provColor }};border-radius:5px;padding:2px 6px">{{ v.prov }}</div>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ sel.noSvcs }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:26px 16px;border:1px dashed var(--line2);border-radius:10px;text-align:center;color:var(--text3);font-size:11.5px;line-height:1.6">Ehhez az eszközhöz nincs felmért szolgáltatás.<br />A felmérés csak olvasási API-hívásokat használ, ezért a helyi folyamatok nem láthatók.</div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ T.conns }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ sel.conns }}" as="c" hint-placeholder-count="4">
+                      <div onClick="{{ c.go }}" style="padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);cursor:pointer" style-hover="border-color:var(--line2)">
+                        <div style="display:flex;align-items:center;gap:9px">
+                          <div style="width:7px;height:7px;flex:none;border-radius:50%;background:{{ c.dot }}"></div>
+                          <div style="flex:1;font-size:12px;font-weight:500">{{ c.name }}</div>
+                          <div style="font-size:9.5px;color:{{ c.dirColor }};border:1px solid {{ c.dirColor }};border-radius:5px;padding:2px 6px;white-space:nowrap">{{ c.dirLabel }}</div>
+                          <div style="font-size:9.5px;color:{{ c.color }};border:1px solid {{ c.color }};border-radius:5px;padding:2px 6px">{{ c.prov }}</div>
+                        </div>
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);margin-top:6px">{{ c.meta }}</div>
+                        <div style="font-size:11px;color:var(--text2);margin-top:5px">{{ c.kind }}</div>
+                      </div>
+                    </sc-for>
+                    <div style="margin-top:6px;font-size:10.5px;color:var(--text3);line-height:1.6;text-wrap:pretty">A becsült kapcsolatok más adatokból következtetett összefüggések. Végrehajtás előtt az alkalmazás mérési lépést javasol.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ T.fw }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:16px">
+                    <div style="padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)">
+                      <div style="display:flex;justify-content:space-between;align-items:center">
+                        <div style="font-size:12.5px;font-weight:500">{{ sel.zoneName }}</div>
+                        <div style="font-size:9.5px;color:{{ sel.zoneStateColor }};border:1px solid {{ sel.zoneStateColor }};border-radius:5px;padding:2px 6px">{{ sel.zoneState }}</div>
+                      </div>
+                      <div style="display:flex;gap:18px;margin-top:10px">
+                        <div><div style="font-size:10px;color:var(--text3)">Tartomány</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-top:3px">{{ sel.zoneNet }}</div></div>
+                        <div><div style="font-size:10px;color:var(--text3)">Izoláció</div><div style="font-size:11px;margin-top:3px">{{ sel.zoneIso }}</div></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style="font-size:9.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:9px">Érintett szabályok</div>
+                      <div style="display:flex;flex-direction:column;gap:7px">
+                        <sc-for list="{{ sel.rules }}" as="r" hint-placeholder-count="3">
+                          <div style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)">
+                            <div style="display:flex;align-items:center;gap:8px;font-size:11.5px">
+                              <span>{{ r.src }}</span>
+                              <span style="color:var(--text3)">→</span>
+                              <span style="color:var(--text2)">{{ r.dst }}</span>
+                              <span style="flex:1"></span>
+                              <span style="color:{{ r.actColor }};font-weight:500">{{ r.act }}</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:9px;margin-top:7px">
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3)">{{ r.port }}</span>
+                              <span style="font-size:9.5px;color:{{ r.stColor }};border:1px solid {{ r.stColor }};border-radius:5px;padding:1px 6px">{{ r.state }}</span>
+                            </div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ T.kb }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <div style="font-size:10.5px;color:var(--text3);line-height:1.6;margin-bottom:3px;text-wrap:pretty">A kiválasztott eszköz felmért állapotához kapcsolódó útmutatók.</div>
+                    <sc-for list="{{ sel.kb }}" as="k" hint-placeholder-count="3">
+                      <div style="padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);cursor:pointer" style-hover="border-color:var(--line2)">
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <div style="font-size:9px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:1px 5px">{{ k.tag }}</div>
+                        </div>
+                        <div style="font-size:12.5px;font-weight:500;margin-top:8px;line-height:1.35">{{ k.title }}</div>
+                        <div style="font-size:11px;color:var(--text2);margin-top:5px;line-height:1.5;text-wrap:pretty">{{ k.sub }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ T.cfg }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:16px">
+                    <div style="display:flex;gap:10px;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)">
+                      <div style="width:3px;flex:none;border-radius:2px;background:{{ warn }}"></div>
+                      <div style="font-size:11.5px;line-height:1.55;color:var(--text2);text-wrap:pretty">{{ sel.cfgNote }}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:9.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:11px">Biztonságos sorrend</div>
+                      <div style="display:flex;flex-direction:column;gap:9px">
+                        <sc-for list="{{ sel.cfgSteps }}" as="s" hint-placeholder-count="4">
+                          <div style="display:flex;gap:10px;align-items:flex-start">
+                            <div style="width:19px;height:19px;flex:none;border-radius:50%;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text2)">{{ s.n }}</div>
+                            <div style="font-size:11.5px;line-height:1.5;padding-top:2px;text-wrap:pretty">{{ s.t }}</div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <div>
+                      <div style="font-size:9.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:9px">Referencia-parancsok</div>
+                      <div style="display:flex;flex-direction:column;gap:9px">
+                        <sc-for list="{{ sel.cfgCmds }}" as="c" hint-placeholder-count="2">
+                          <div style="border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--panel2)">
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 11px;border-bottom:1px solid var(--line)">
+                              <span style="font-size:11px;color:var(--text2)">{{ c.label }}</span>
+                              <span onClick="{{ c.copy }}" style="font-size:10px;color:var(--accent);cursor:pointer">{{ c.copyLabel }}</span>
+                            </div>
+                            <div style="padding:10px 11px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;line-height:1.6;color:var(--text);word-break:break-all">{{ c.cmd }}</div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.overview }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:20px 24px 28px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div style="font-size:17px;font-weight:600;letter-spacing:-.01em">Infrastruktúra áttekintés</div>
+              <div style="font-size:11.5px;color:var(--text2);margin-top:4px">Egyesített kép a Proxmox VE és a UniFi Network felméréséből · utolsó futás ma 08:14</div>
+            </div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text3)">read-only · 2 profil</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px">
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 15px">
+              <div style="font-size:10.5px;color:var(--text2)">Hálózati eszköz</div>
+              <div style="font-size:26px;font-weight:300;margin-top:6px;letter-spacing:-.02em">24</div>
+              <div style="font-size:10.5px;color:var(--text3);margin-top:4px">21 online · 2 hiba · 1 ismeretlen</div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 15px">
+              <div style="font-size:10.5px;color:var(--text2)">VM és LXC</div>
+              <div style="font-size:26px;font-weight:300;margin-top:6px;letter-spacing:-.02em">11</div>
+              <div style="font-size:10.5px;color:var(--text3);margin-top:4px">4 VM · 7 konténer</div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 15px">
+              <div style="font-size:10.5px;color:var(--text2)">Szolgáltatás</div>
+              <div style="font-size:26px;font-weight:300;margin-top:6px;letter-spacing:-.02em">14</div>
+              <div style="font-size:10.5px;color:var(--text3);margin-top:4px">11 felmért · 3 becsült</div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 15px">
+              <div style="font-size:10.5px;color:var(--text2)">Nyitott kockázat</div>
+              <div style="font-size:26px;font-weight:300;margin-top:6px;letter-spacing:-.02em;color:{{ warn }}">6</div>
+              <div style="font-size:10.5px;color:var(--text3);margin-top:4px">2 kritikus · 3 figyelem · 1 megjegyzés</div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 15px">
+              <div style="font-size:10.5px;color:var(--text2)">Mentési lefedettség</div>
+              <div style="font-size:26px;font-weight:300;margin-top:6px;letter-spacing:-.02em">72<span style="font-size:15px;color:var(--text3)">%</span></div>
+              <div style="font-size:10.5px;color:var(--text3);margin-top:4px">igazolt bizonyítékkal</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start">
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 8px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+                <div style="font-size:13px;font-weight:600">Eltérések és kockázatok</div>
+                <div style="font-size:11px;color:var(--accent);cursor:pointer">Javaslatok megnyitása</div>
+              </div>
+              <sc-for list="{{ risks }}" as="r" hint-placeholder-count="6">
+                <div style="display:flex;gap:11px;padding:12px 0;border-top:1px solid var(--line)">
+                  <div style="width:3px;flex:none;border-radius:2px;background:{{ r.color }}"></div>
+                  <div style="flex:1">
+                    <div style="display:flex;align-items:center;gap:9px">
+                      <span style="font-size:12.5px;font-weight:500">{{ r.title }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3)">{{ r.where }}</span>
+                    </div>
+                    <div style="font-size:11.5px;color:var(--text2);margin-top:4px;line-height:1.5;text-wrap:pretty">{{ r.text }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px">
+                <div style="font-size:13px;font-weight:600;margin-bottom:12px">Kapacitás</div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11.5px;color:var(--text2)">tank (ZFS)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px">6,9 / 8 TB</span></div>
+                    <div style="height:4px;border-radius:3px;background:var(--elev);overflow:hidden"><div style="height:100%;width:87%;border-radius:3px;background:{{ bad }}"></div></div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11.5px;color:var(--text2)">local-lvm (pve01)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px">78%</span></div>
+                    <div style="height:4px;border-radius:3px;background:var(--elev);overflow:hidden"><div style="height:100%;width:78%;border-radius:3px;background:{{ warn }}"></div></div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11.5px;color:var(--text2)">pve01 memória</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px">41 / 64 GB</span></div>
+                    <div style="height:4px;border-radius:3px;background:var(--elev);overflow:hidden"><div style="height:100%;width:64%;border-radius:3px;background:{{ accent }}"></div></div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11.5px;color:var(--text2)">WAN kihasználtság</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px">412 / 1000 Mb/s</span></div>
+                    <div style="height:4px;border-radius:3px;background:var(--elev);overflow:hidden"><div style="height:100%;width:41%;border-radius:3px;background:{{ accent }}"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 6px">
+                <div style="font-size:13px;font-weight:600;margin-bottom:4px">Felmérési források</div>
+                <sc-for list="{{ profiles }}" as="p" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line)">
+                    <div style="width:7px;height:7px;flex:none;border-radius:50%;background:{{ p.color }}"></div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:11.5px;font-weight:500">{{ p.name }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.url }}</div>
+                    </div>
+                    <div style="text-align:right">
+                      <div style="font-size:10px;color:var(--text2)">{{ p.mode }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);margin-top:3px">{{ p.when }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.survey }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:20px 24px 28px">
+          <div style="font-size:17px;font-weight:600;letter-spacing:-.01em">Felmérés</div>
+          <div style="font-size:11.5px;color:var(--text2);margin-top:4px;margin-bottom:18px">Mentett kapcsolati profilokon keresztül, kizárólag olvasási API-hívásokkal. Az alkalmazás nem módosít semmit a felmérés során.</div>
+          <div style="display:grid;grid-template-columns:1fr 1.25fr;gap:16px;align-items:start">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 6px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <div style="font-size:13px;font-weight:600">Kapcsolati profilok</div>
+                  <div style="font-size:11px;color:var(--accent);cursor:pointer">Profil hozzáadása</div>
+                </div>
+                <sc-for list="{{ profiles }}" as="p" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--line)">
+                    <div style="width:7px;height:7px;flex:none;border-radius:50%;background:{{ p.color }}"></div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:12px;font-weight:500">{{ p.name }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.url }}</div>
+                    </div>
+                    <div style="font-size:9.5px;color:{{ p.color }};border:1px solid {{ p.color }};border-radius:5px;padding:2px 6px">{{ p.mode }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 16px">
+                <div style="font-size:13px;font-weight:600;margin-bottom:11px">Felmérés hatóköre</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2)"><div style="width:14px;height:14px;border-radius:4px;background:{{ accent }}"></div>Hostok</div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2)"><div style="width:14px;height:14px;border-radius:4px;background:{{ accent }}"></div>Tárolók</div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2)"><div style="width:14px;height:14px;border-radius:4px;background:{{ accent }}"></div>VM és LXC</div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2)"><div style="width:14px;height:14px;border-radius:4px;background:{{ accent }}"></div>Hálózatok, VLAN</div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2)"><div style="width:14px;height:14px;border-radius:4px;background:{{ accent }}"></div>Wi-Fi és SSID</div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2)"><div style="width:14px;height:14px;border-radius:4px;background:{{ accent }}"></div>Tűzfalszabályok</div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2)"><div style="width:14px;height:14px;border-radius:4px;background:{{ accent }}"></div>Kliens eszközök</div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text3)"><div style="width:14px;height:14px;border-radius:4px;border:1px solid var(--line2)"></div>SSH konfigmentés</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:16px">
+                  <div style="padding:8px 14px;border-radius:7px;background:var(--accent);color:#fff;font-size:11.5px;font-weight:500;cursor:pointer" style-hover="filter:brightness(1.1)">Felmérés indítása</div>
+                  <div style="font-size:10.5px;color:var(--text3)">Becsült idő: 40 mp</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)">
+                <div style="font-size:13px;font-weight:600">Utolsó futás naplója</div>
+                <div style="display:flex;align-items:center;gap:7px"><div style="width:6px;height:6px;border-radius:50%;background:{{ ok }}"></div><span style="font-size:10.5px;color:var(--text2)">Sikeres · 08:14:19</span></div>
+              </div>
+              <div style="padding:12px 16px 16px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;line-height:1.9">
+                <sc-for list="{{ scanLog }}" as="l" hint-placeholder-count="8">
+                  <div style="display:flex;gap:12px">
+                    <span style="color:var(--text3);flex:none">{{ l.t }}</span>
+                    <span style="color:var(--accent);flex:none;width:64px">{{ l.src }}</span>
+                    <span style="color:var(--text2)">{{ l.msg }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="padding:14px 16px;border-top:1px solid var(--line);background:var(--panel2);font-size:11px;color:var(--text2);line-height:1.6;text-wrap:pretty">A felmérés 4 kapcsolatot nem tudott igazolni. Ezek becsültként jelennek meg a topológián, és nem használhatók automatikus döntés alapjául.</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.advice }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;min-width:0;min-height:0">
+          <div style="width:330px;flex:none;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column">
+            <div style="padding:16px 16px 12px;border-bottom:1px solid var(--line)">
+              <div style="font-size:14px;font-weight:600">Javaslatok</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:3px">5 nyitott · felmérés alapján rangsorolva</div>
+            </div>
+            <div style="flex:1;overflow:auto;padding:10px">
+              <sc-for list="{{ recs }}" as="r" hint-placeholder-count="5">
+                <div onClick="{{ r.pick }}" style="padding:12px 13px;border:1px solid;border-radius:10px;cursor:pointer;margin-bottom:8px;background:{{ r.bg }};border-color:{{ r.bc }}" style-hover="border-color:var(--line2)">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="width:6px;height:6px;border-radius:50%;background:{{ r.color }}"></div>
+                    <div style="font-size:12px;font-weight:500;line-height:1.35">{{ r.title }}</div>
+                  </div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);margin-top:7px;padding-left:14px">{{ r.where }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;overflow:auto;padding:20px 24px 28px;min-width:0">
+            <div style="font-size:17px;font-weight:600;letter-spacing:-.01em;text-wrap:pretty">{{ rec.title }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3);margin-top:6px">{{ rec.where }}</div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+              <div style="flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+                <div style="font-size:10px;color:var(--text3)">Várható hatás</div>
+                <div style="font-size:12px;margin-top:5px;line-height:1.4">{{ rec.impact }}</div>
+              </div>
+              <div style="width:150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+                <div style="font-size:10px;color:var(--text3)">Kockázat</div>
+                <div style="font-size:12px;margin-top:5px;color:{{ rec.riskColor }}">{{ rec.risk }}</div>
+              </div>
+              <div style="width:150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+                <div style="font-size:10px;color:var(--text3)">Időigény</div>
+                <div style="font-size:12px;margin-top:5px">{{ rec.dur }}</div>
+              </div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px;margin-top:16px">
+              <div style="font-size:12.5px;font-weight:600;margin-bottom:7px">Miért javasolt</div>
+              <div style="font-size:12px;color:var(--text2);line-height:1.65;text-wrap:pretty">{{ rec.why }}</div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 18px;margin-top:16px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+                <div style="font-size:12.5px;font-weight:600">Változtatási terv</div>
+                <div style="font-size:10.5px;color:var(--text3)">Egyik lépés sem fut le automatikusan</div>
+              </div>
+              <sc-for list="{{ rec.steps }}" as="s" hint-placeholder-count="6">
+                <div style="display:flex;gap:13px;padding-bottom:16px">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex:none">
+                    <div style="width:20px;height:20px;border-radius:50%;border:1.5px solid {{ s.color }};background:{{ s.fill }};display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--panel)">{{ s.n }}</div>
+                    <div style="flex:1;width:1px;background:var(--line);margin-top:4px"></div>
+                  </div>
+                  <div style="flex:1;padding-top:1px">
+                    <div style="display:flex;align-items:center;gap:9px">
+                      <span style="font-size:12px;font-weight:500">{{ s.name }}</span>
+                      <span style="font-size:9.5px;color:{{ s.color }};border:1px solid {{ s.color }};border-radius:4px;padding:1px 6px">{{ s.state }}</span>
+                    </div>
+                    <div style="font-size:11.5px;color:var(--text2);margin-top:5px;line-height:1.5;text-wrap:pretty">{{ s.text }}</div>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display:flex;gap:10px;padding-top:4px">
+                <div style="padding:8px 14px;border-radius:7px;background:var(--accent);color:#fff;font-size:11.5px;font-weight:500;cursor:pointer" style-hover="filter:brightness(1.1)">Terv előkészítése</div>
+                <div style="padding:8px 14px;border-radius:7px;border:1px solid var(--line);font-size:11.5px;color:var(--text2);cursor:pointer" style-hover="border-color:var(--line2);color:var(--text)">Ellenőrzőlista exportálása</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.backup }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:20px 24px 28px">
+          <div style="font-size:17px;font-weight:600;letter-spacing:-.01em">Mentés és recovery</div>
+          <div style="font-size:11.5px;color:var(--text2);margin-top:4px;margin-bottom:18px">A lefedettség csak akkor számít igazoltnak, ha az utolsó visszaállítási próba naplózva van.</div>
+          <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.3fr 1.3fr .9fr .8fr .8fr .8fr;gap:10px;padding:11px 16px;font-size:9.5px;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--line)">
+              <div>Mentési feladat</div><div>Cél</div><div>Ütemezés</div><div>Utolsó futás</div><div>Megőrzés</div><div>Bizonyíték</div>
+            </div>
+            <sc-for list="{{ backups }}" as="b" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:1.3fr 1.3fr .9fr .8fr .8fr .8fr;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);font-size:11.5px;align-items:center" style-hover="background:var(--panel2)">
+                <div style="font-weight:500">{{ b.name }}</div>
+                <div style="color:var(--text2);font-family:'IBM Plex Mono',monospace;font-size:10.5px">{{ b.target }}</div>
+                <div style="color:var(--text2)">{{ b.sched }}</div>
+                <div style="color:var(--text2)">{{ b.last }}</div>
+                <div style="color:var(--text2)">{{ b.keep }}</div>
+                <div><span style="display:inline-flex;padding:2px 7px;border-radius:5px;border:1px solid {{ b.color }};color:{{ b.color }};font-size:9.5px">{{ b.ev }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px">
+              <div style="font-size:12.5px;font-weight:600">Visszaállítási próba</div>
+              <div style="font-size:26px;font-weight:300;margin-top:8px;letter-spacing:-.02em">41 <span style="font-size:14px;color:var(--text3)">napja</span></div>
+              <div style="font-size:11.5px;color:var(--text2);margin-top:6px;line-height:1.55;text-wrap:pretty">Az utolsó igazolt visszatöltés a Home Assistant VM-en történt. A GitLab kötetekre nincs próba.</div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px">
+              <div style="font-size:12.5px;font-weight:600">Checkpointok</div>
+              <div style="display:flex;flex-direction:column;gap:9px;margin-top:11px;font-size:11.5px">
+                <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">VM 202 · pre-change</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px">ma 08:20</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">LXC 101 · pre-upgrade</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px">3 napja</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Site backup · manuális</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px">3 napja</span></div>
+              </div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px">
+              <div style="font-size:12.5px;font-weight:600">Recovery feltételek</div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:11px;font-size:11.5px;color:var(--text2);line-height:1.5">
+                <div>Helyi konzol elérés igazolva: <span style="color:{{ warn }}">nem</span></div>
+                <div>Offsite másolat frissessége: <span style="color:{{ bad }}">5 nap</span></div>
+                <div>Konfigurációs mentés: <span style="color:{{ ok }}">naprakész</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.planner }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;min-width:0;min-height:0">
+          <div style="width:300px;flex:none;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column">
+            <div style="padding:16px 16px 12px;border-bottom:1px solid var(--line)">
+              <div style="font-size:14px;font-weight:600">Telepítési tervező</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:3px">Előkészített infrastruktúra-sablonok</div>
+            </div>
+            <div style="flex:1;overflow:auto;padding:10px">
+              <sc-for list="{{ tpls }}" as="t" hint-placeholder-count="5">
+                <div onClick="{{ t.pick }}" style="padding:12px 13px;border:1px solid;border-radius:10px;cursor:pointer;margin-bottom:8px;background:{{ t.bg }};border-color:{{ t.bc }}" style-hover="border-color:var(--line2)">
+                  <div style="font-size:12.5px;font-weight:500">{{ t.name }}</div>
+                  <div style="font-size:10.5px;color:var(--text3);margin-top:5px">{{ t.sub }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;overflow:auto;padding:20px 24px 28px;min-width:0">
+            <div style="font-size:17px;font-weight:600;letter-spacing:-.01em">{{ tpl.name }}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:7px;line-height:1.6;max-width:760px;text-wrap:pretty">{{ tpl.desc }}</div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:18px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:600">Javasolt VLAN kiosztás</div>
+              <sc-for list="{{ tpl.vlans }}" as="v" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:90px 150px 150px 1fr;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:11.5px;align-items:center">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--accent)">{{ v.vlan }}</div>
+                  <div style="font-weight:500">{{ v.name }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text2)">{{ v.net }}</div>
+                  <div style="color:var(--text2)">{{ v.use }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 16px">
+                <div style="font-size:12.5px;font-weight:600;margin-bottom:11px">Wi-Fi hálózatok</div>
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <sc-for list="{{ tpl.ssids }}" as="s" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)">
+                      <span style="font-size:12px;font-weight:500">{{ s.name }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text2)">{{ s.meta }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 16px">
+                <div style="font-size:12.5px;font-weight:600;margin-bottom:11px">Szolgáltatások</div>
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <sc-for list="{{ tpl.svcs }}" as="s" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--text2)">
+                      <div style="width:5px;height:5px;border-radius:50%;background:{{ accent }}"></div>{{ s.name }}
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px;margin-top:16px">
+              <div style="font-size:12.5px;font-weight:600;margin-bottom:11px">Telepítési mód</div>
+              <div style="display:flex;gap:10px">
+                <div style="flex:1;padding:12px 14px;border:1px solid var(--accent);border-radius:10px;background:var(--panel2);cursor:pointer">
+                  <div style="font-size:12px;font-weight:500;color:var(--accent)">Manuális</div>
+                  <div style="font-size:10.5px;color:var(--text2);margin-top:5px;line-height:1.5">Lépésenkénti ellenőrzőlista, minden változtatást te hajtasz végre.</div>
+                </div>
+                <div style="flex:1;padding:12px 14px;border:1px solid var(--line);border-radius:10px;cursor:pointer" style-hover="border-color:var(--line2)">
+                  <div style="font-size:12px;font-weight:500">Félautomata</div>
+                  <div style="font-size:10.5px;color:var(--text2);margin-top:5px;line-height:1.5">Az app előkészíti a parancsokat és a mentést, a jóváhagyás nálad marad.</div>
+                </div>
+                <div style="flex:1;padding:12px 14px;border:1px dashed var(--line2);border-radius:10px;opacity:.6">
+                  <div style="font-size:12px;font-weight:500">Automatizált</div>
+                  <div style="font-size:10.5px;color:var(--text2);margin-top:5px;line-height:1.5">Későbbi verzióban, csak igazolt mentés és recovery-terv mellett.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.ssh }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:20px 24px 28px">
+          <div style="font-size:17px;font-weight:600;letter-spacing:-.01em">SSH műveletek</div>
+          <div style="font-size:11.5px;color:var(--text2);margin-top:4px;margin-bottom:16px">Mentett profilhoz kötött, hitelesített parancsok. A titkok a Windows Credential Managerben maradnak.</div>
+          <div style="display:flex;gap:10px;align-items:center;padding:12px 15px;border:1px solid var(--line);border-radius:11px;background:var(--panel);margin-bottom:16px">
+            <div style="width:3px;height:32px;border-radius:2px;background:{{ ok }}"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:500">Host-kulcs ellenőrizve · pve01</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);margin-top:4px">SHA256:9c2f…a41d · először látva 2026-04-12 · változatlan</div>
+            </div>
+            <div style="font-size:10.5px;color:var(--text2);border:1px solid var(--line);border-radius:6px;padding:5px 10px">Ujjlenyomat megtekintése</div>
+          </div>
+          <div style="display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start">
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px">
+              <div style="font-size:12.5px;font-weight:600;padding:3px 4px 10px">Csak olvasási parancsok</div>
+              <sc-for list="{{ sshCmds }}" as="c" hint-placeholder-count="6">
+                <div onClick="{{ c.pick }}" style="padding:11px 12px;border:1px solid;border-radius:9px;cursor:pointer;margin-bottom:7px;background:{{ c.bg }};border-color:{{ c.bc }}" style-hover="border-color:var(--line2)">
+                  <div style="font-size:11.5px;font-weight:500">{{ c.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text3);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.cmd }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)">
+                  <div style="font-size:12px;font-weight:500">{{ cmdSel.label }}</div>
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3)">{{ cmdSel.host }}</span>
+                    <span onClick="{{ copyCmd }}" style="font-size:10.5px;color:var(--accent);cursor:pointer">{{ copyCmdLabel }}</span>
+                  </div>
+                </div>
+                <div style="padding:13px 16px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:var(--panel2);color:var(--text)">$ {{ cmdSel.cmd }}</div>
+                <div style="padding:13px 16px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;line-height:1.85;color:var(--text2)">
+                  <div>proxmox-ve: 8.2.0 (running kernel: 6.8.12-2-pve)</div>
+                  <div>pve-manager: 8.2.4 (running version: 8.2.4/faa83925c9641325)</div>
+                  <div>ceph-fuse: residual config</div>
+                  <div>zfsutils-linux: 2.2.4-pve1</div>
+                  <div style="color:var(--text3);margin-top:8px">— a kimenet mentve: reports/pve01-2026-08-06.txt</div>
+                </div>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px 16px">
+                <div style="font-size:12.5px;font-weight:600;margin-bottom:11px">Biztonsági szabályok</div>
+                <div style="display:flex;flex-direction:column;gap:9px;font-size:11.5px;color:var(--text2);line-height:1.55">
+                  <div style="display:flex;gap:9px"><div style="width:5px;height:5px;border-radius:50%;background:{{ ok }};margin-top:6px;flex:none"></div>A host-kulcs ellenőrzése kötelező; eltérés esetén a kapcsolat megszakad.</div>
+                  <div style="display:flex;gap:9px"><div style="width:5px;height:5px;border-radius:50%;background:{{ ok }};margin-top:6px;flex:none"></div>A jelszavak és kulcsok a Windows Credential Managerben maradnak, az app nem tárolja őket.</div>
+                  <div style="display:flex;gap:9px"><div style="width:5px;height:5px;border-radius:50%;background:{{ warn }};margin-top:6px;flex:none"></div>Módosító parancs csak mentés vagy checkpoint után, kifejezett jóváhagyással futtatható.</div>
+                  <div style="display:flex;gap:9px"><div style="width:5px;height:5px;border-radius:50%;background:{{ warn }};margin-top:6px;flex:none"></div>Hálózati konfiguráció módosítása előtt az app helyi konzol elérést kér igazolni.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.kb }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;min-width:0;min-height:0">
+          <div style="width:320px;flex:none;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column">
+            <div style="padding:16px 16px 12px;border-bottom:1px solid var(--line)">
+              <div style="font-size:14px;font-weight:600">Tudástár</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:3px">A felmért állapothoz kapcsolt útmutatók</div>
+            </div>
+            <div style="flex:1;overflow:auto;padding:10px">
+              <sc-for list="{{ articles }}" as="a" hint-placeholder-count="6">
+                <div onClick="{{ a.pick }}" style="padding:12px 13px;border:1px solid;border-radius:10px;cursor:pointer;margin-bottom:8px;background:{{ a.bg }};border-color:{{ a.bc }}" style-hover="border-color:var(--line2)">
+                  <div style="font-size:9px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:1px 5px;display:inline-block">{{ a.tag }}</div>
+                  <div style="font-size:12px;font-weight:500;margin-top:8px;line-height:1.35">{{ a.t }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;overflow:auto;padding:24px 30px 32px;min-width:0">
+            <div style="max-width:760px">
+              <div style="font-size:9.5px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase">{{ art.tag }}</div>
+              <div style="font-size:21px;font-weight:600;letter-spacing:-.015em;margin-top:9px;line-height:1.25;text-wrap:pretty">{{ art.t }}</div>
+              <div style="display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel)">
+                <div style="width:5px;height:5px;border-radius:50%;background:{{ accent }}"></div>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text2)">{{ art.rel }}</span>
+              </div>
+              <div style="font-size:13.5px;line-height:1.7;color:var(--text2);margin-top:18px;text-wrap:pretty">{{ art.lead }}</div>
+              <sc-for list="{{ art.secs }}" as="s" hint-placeholder-count="3">
+                <div style="margin-top:22px">
+                  <div style="font-size:13px;font-weight:600">{{ s.h }}</div>
+                  <div style="font-size:12.5px;line-height:1.75;color:var(--text2);margin-top:7px;text-wrap:pretty">{{ s.b }}</div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ art.hasCmds }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:24px">
+                  <div style="font-size:9.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Referencia-parancsok</div>
+                  <div style="display:flex;flex-direction:column;gap:9px">
+                    <sc-for list="{{ art.cmds }}" as="c" hint-placeholder-count="2">
+                      <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--line)">
+                          <span style="font-size:11px;color:var(--text2)">{{ c.label }}</span>
+                          <span onClick="{{ c.copy }}" style="font-size:10px;color:var(--accent);cursor:pointer">{{ c.copyLabel }}</span>
+                        </div>
+                        <div style="padding:11px 13px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.6;word-break:break-all">{{ c.cmd }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ V.settings }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:24px 30px 32px">
+          <div style="max-width:720px">
+            <div style="font-size:17px;font-weight:600;letter-spacing:-.01em">Beállítások</div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:18px;overflow:hidden">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:600">Megjelenés</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)">
+                <div><div style="font-size:12px">Színséma</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px">Sötét és világos mód, a rendszerbeállítástól függetlenül</div></div>
+                <div onClick="{{ toggleTheme }}" style="padding:6px 12px;border:1px solid var(--line);border-radius:7px;font-size:11px;color:var(--text2);cursor:pointer" style-hover="border-color:var(--line2);color:var(--text)">{{ themeLabel }}</div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px">
+                <div><div style="font-size:12px">Nyelv</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px">A felület és a tudástár nyelve</div></div>
+                <div style="font-size:11px;color:var(--text2);border:1px solid var(--line);border-radius:7px;padding:6px 12px">Magyar</div>
+              </div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:16px;overflow:hidden">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:600">Biztonság</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)">
+                <div><div style="font-size:12px">Csak olvasási mód kényszerítése</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px">Módosító hívás csak kifejezett jóváhagyással</div></div>
+                <div style="width:34px;height:19px;border-radius:11px;background:{{ accent }};display:flex;align-items:center;justify-content:flex-end;padding:2px"><div style="width:15px;height:15px;border-radius:50%;background:#fff"></div></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)">
+                <div><div style="font-size:12px">Host-kulcs ellenőrzés kötelező</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px">Eltérés esetén az SSH kapcsolat megszakad</div></div>
+                <div style="width:34px;height:19px;border-radius:11px;background:{{ accent }};display:flex;align-items:center;justify-content:flex-end;padding:2px"><div style="width:15px;height:15px;border-radius:50%;background:#fff"></div></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px">
+                <div><div style="font-size:12px">Titkok tárolása</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px">Az alkalmazás nem tárol jelszót a saját adatbázisában</div></div>
+                <div style="font-size:11px;color:var(--text2);border:1px solid var(--line);border-radius:7px;padding:6px 12px">Windows Credential Manager</div>
+              </div>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:16px;overflow:hidden">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:600">Adatkezelés</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)">
+                <div><div style="font-size:12px">Telemetria</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px">Nincs kimenő adatküldés</div></div>
+                <div style="width:34px;height:19px;border-radius:11px;background:var(--elev);border:1px solid var(--line2);display:flex;align-items:center;padding:2px"><div style="width:15px;height:15px;border-radius:50%;background:var(--text3)"></div></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px">
+                <div><div style="font-size:12px">Felmérési adatok tárolása</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px">Helyi adatbázis, titkosított profilhivatkozásokkal</div></div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text2)">%LOCALAPPDATA%\NetworkAssister</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <div style="height:26px;flex:none;display:flex;align-items:center;gap:16px;padding:0 14px;background:var(--panel);border-top:1px solid var(--line);font-size:10.5px;color:var(--text3)">
+    <div style="display:flex;align-items:center;gap:6px"><div style="width:5px;height:5px;border-radius:50%;background:{{ ok }}"></div>Read-only munkamenet</div>
+    <div>Host-kulcs ellenőrizve · pve01</div>
+    <div style="flex:1"></div>
+    <div>Utolsó felmérés: ma 08:14 · 6 nyitott kockázat</div>
+    <div style="font-family:'IBM Plex Mono',monospace">Titkok: Windows Credential Manager</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;initialTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'&quot;,&quot;section&quot;:&quot;Megjelenés&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#3ea6ff&quot;,&quot;#4ec9b0&quot;,&quot;#7c8cf8&quot;,&quot;#e0883a&quot;],&quot;default&quot;:&quot;#3ea6ff&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Megjelenés&quot;},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;topology&quot;,&quot;survey&quot;,&quot;advice&quot;,&quot;backup&quot;,&quot;planner&quot;,&quot;ssh&quot;,&quot;kb&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;topology&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Nézet&quot;},&quot;showLogicalLinks&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Topológia&quot;},&quot;showEstimated&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Topológia&quot;},&quot;animateTraffic&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Topológia&quot;}}">
+const NW = 138, NH = 60;
+
+const C = {
+  dark:  { ok:'#3ecf8e', warn:'#f2b544', bad:'#f0655a', idle:'#5f6b79', line:'#26303b', line2:'#36434f', txt3:'#6b7686', card:'#141a21', cardSel:'#18222d', accent:'#3ea6ff' },
+  light: { ok:'#12925e', warn:'#b57708', bad:'#cf3b2d', idle:'#98a3b0', line:'#e2e7ee', line2:'#c3cedb', txt3:'#8a94a1', card:'#ffffff', cardSel:'#f0f7ff', accent:'#0b74d8' }
+};
+
+const TYPE = {
+  cloud:{code:'IN', label:'Uplink'}, gateway:{code:'GW', label:'Átjáró'}, switch:{code:'SW', label:'Switch'},
+  ap:{code:'AP', label:'Access Point'}, clients:{code:'CL', label:'Kliens csoport'}, host:{code:'PVE', label:'Proxmox host'},
+  storage:{code:'ZFS', label:'Tároló'}, ct:{code:'CT', label:'LXC konténer'}, vm:{code:'VM', label:'Virtuális gép'}, svc:{code:'SVC', label:'Szolgáltatás'}
+};
+
+const ST = { ok:'Online', warn:'Figyelmeztetés', bad:'Hiba', idle:'Ismeretlen' };
+
+const NODES = [
+  { id:'wan', ty:'cloud', name:'Internet', sub:'Fiber · 1000/300', st:'ok', x:520, y:24, z:'WAN',
+    facts:[['Szolgáltató','Fiber uplink · SFP+'],['Publikus IP','92.249.14.86'],['Elérhetőség (30 nap)','99,97%'],['Failover','Nincs konfigurálva']],
+    metrics:[['Letöltés','412 / 1000 Mb/s',41],['Feltöltés','88 / 300 Mb/s',29]],
+    svcs:[], warns:[['info','Egyetlen uplink: a vonal kiesése teljes szolgáltatáskiesést okoz.']] },
+
+  { id:'gw', ty:'gateway', name:'Gateway', sub:'10.0.1.1 · trunk', st:'ok', x:520, y:138, z:'Mgmt',
+    facts:[['Firmware','4.0.21 · elérhető 4.1.13'],['Hálózatok','5 (VLAN 1/10/20/30/40)'],['Aktív kliensek','38'],['Uptime','61 nap']],
+    metrics:[['CPU','18%',18],['Memória','2,1 / 4 GB',52],['Áteresztés','486 Mb/s',48]],
+    svcs:[['DHCP szerver','5 hálózaton · statikus foglalás 12','ok','Felmért'],['DNS forward','10.0.40.12 (AdGuard)','ok','Felmért'],['IDS / IPS','Kikapcsolva','idle','Felmért'],['WireGuard VPN','2 aktív peer · 10.0.99.0/24','ok','Felmért']],
+    warns:[['warn','Firmware frissítés elérhető – karbantartási ablak és mentés szükséges.'],['info','A WAN failover hiánya egyszeres hibaponttá teszi az átjárót.']] },
+
+  { id:'sw', ty:'switch', name:'Core switch', sub:'10.0.1.2 · 24 PoE', st:'ok', x:250, y:262, z:'Mgmt',
+    facts:[['Portok','24 × 1 Gb + 2 SFP'],['Uplink','LAG 2 × 1 Gb → gateway'],['PoE terhelés','42 / 95 W'],['STP','RSTP · root: gateway']],
+    metrics:[['Backplane','12%',12],['PoE terhelés','44%',44],['Aktív portok','14 / 24',58]],
+    svcs:[['Port profilok','4 profil · 14 hozzárendelés','ok','Felmért'],['LLDP felderítés','9 szomszéd','ok','Felmért']],
+    warns:[['info','3 aktív port címkézetlen – a felmérés nem tudja azonosítani a végpontot.']] },
+
+  { id:'ap1', ty:'ap', name:'AP – Nappali', sub:'10.0.1.21 · U6 Pro', st:'ok', x:60, y:388, z:'Mgmt',
+    facts:[['Csatorna','36 (5 GHz) / 6 (2,4 GHz)'],['Adóteljesítmény','Közepes'],['Kliensek','16'],['Uptime','41 nap']],
+    metrics:[['Csatorna kihasználtság','24%',24],['Kliensek','16 / 60',27],['Újraküldés','3,1%',12]],
+    svcs:[['Otthon','VLAN 10 · WPA3','ok','Felmért'],['Otthon-IoT','VLAN 20 · WPA2','ok','Felmért'],['Vendég','VLAN 30 · portál','ok','Felmért']],
+    warns:[] },
+
+  { id:'ap2', ty:'ap', name:'AP – Emelet', sub:'10.0.1.22 · U6 Lite', st:'warn', x:210, y:388, z:'Mgmt',
+    facts:[['Csatorna','149 (5 GHz) / 11 (2,4 GHz)'],['Adóteljesítmény','Magas'],['Kliensek','9'],['Uptime','6 nap']],
+    metrics:[['Csatorna kihasználtság','68%',68],['Kliensek','9 / 60',15],['Újraküldés','11,4%',46]],
+    svcs:[['Otthon','VLAN 10 · WPA3','ok','Felmért'],['Otthon-IoT','VLAN 20 · WPA2','ok','Felmért'],['Vendég','VLAN 30 · portál','ok','Felmért']],
+    warns:[['warn','Magas csatorna-interferencia (68%) – fix csatorna beállítása javasolt.'],['warn','6 napja újraindult: PoE vagy tápellátási hiba gyanúja.']] },
+
+  { id:'ap3', ty:'ap', name:'AP – Garázs', sub:'10.0.1.23 · offline', st:'bad', x:360, y:388, z:'Mgmt',
+    facts:[['Utoljára látott','2 napja, 21:47'],['PoE port','SW1 / 12'],['Modell','U6 Mesh'],['Érintett kliensek','4 (becsült)']],
+    metrics:[['Elérhetőség','Offline · 2 nap',0]],
+    svcs:[], warns:[['bad','2 napja offline – a garázs IoT eszközei felügyelet nélkül vannak.'],['info','A PoE port állapota nem ellenőrizhető távolról, helyszíni vizsgálat szükséges.']] },
+
+  { id:'clients', ty:'clients', name:'Kliensek · 38', sub:'becsült besorolás', st:'idle', x:210, y:512, z:'IoT',
+    facts:[['Trusted (VLAN 10)','14'],['IoT (VLAN 20)','24'],['Vendég (VLAN 30)','6 · időszakos'],['Nem azonosított','3']],
+    metrics:[['Wi-Fi kliens','31',52],['Vezetékes','7',12]],
+    svcs:[], warns:[['warn','3 eszköz gyártója nem azonosítható – a VLAN besorolás becsült érték.']] },
+
+  { id:'pve', ty:'host', name:'pve01', sub:'10.0.1.10 · PVE 8.2', st:'warn', x:760, y:262, z:'Mgmt',
+    facts:[['Verzió','Proxmox VE 8.2.4'],['CPU','8 mag / 16 szál'],['Fürt','Egycsomópontos'],['Bridge','vmbr0 · trunk 1,10,20,40']],
+    metrics:[['CPU','34%',34],['Memória','41 / 64 GB',64],['local-lvm','78%',78],['Swap','0,4 / 8 GB',5]],
+    svcs:[['UniFi Network Controller','LXC 101','ok','Felmért'],['Home Assistant OS','VM 201','ok','Felmért'],['Docker host','VM 202','warn','Felmért'],['ZFS replikáció','tank → offsite','warn','Becsült']],
+    warns:[['warn','A vmbr0 módosítása helyi recovery-konzolt igényel: a távoli SSH megszakadhat.'],['warn','local-lvm 78% – snapshot előtt kapacitásellenőrzés kell.'],['info','Egycsomópontos fürt: nincs élő migráció, karbantartás csak leállással.']] },
+
+  { id:'nas', ty:'storage', name:'ZFS tank', sub:'RAIDZ1 · 4 × 4 TB', st:'warn', x:1030, y:262, z:'Servers',
+    facts:[['Pool','tank · RAIDZ1'],['Utolsó scrub','19 napja · hibátlan'],['Snapshotok','142'],['Offsite replikáció','5 napja']],
+    metrics:[['Kapacitás','6,9 / 8 TB',87],['Fragmentáció','18%',18],['Írási átvitel','62 MB/s',22]],
+    svcs:[['NFS export','pve01 · /tank/vmdata','ok','Felmért'],['SMB megosztás','3 megosztás','ok','Becsült']],
+    warns:[['warn','87%-os telítettség – 90% felett a ZFS írási teljesítménye jelentősen romlik.'],['bad','Az offsite replikáció 5 napja nem futott le sikeresen.']] },
+
+  { id:'lxc-unifi', ty:'ct', name:'UniFi Controller', sub:'LXC 101 · 10.0.1.12', st:'ok', x:600, y:388, z:'Mgmt',
+    facts:[['Verzió','Network 9.0.108'],['Site','Otthon'],['Kezelt eszköz','5'],['Site backup','naponta 03:00 · 7 nap']],
+    metrics:[['CPU','6%',6],['Memória','1,4 / 2 GB',70],['Lemez','8,2 / 16 GB',51]],
+    svcs:[['Web felület','443/tcp · VLAN 1','ok','Felmért'],['Device inform','8080/tcp','ok','Felmért'],['Site backup','naponta · helyi + tank','ok','Felmért']],
+    warns:[['info','A controller a felügyelt hálózaton belül fut: kiesésekor a Wi-Fi működik, a kezelés nem.']] },
+
+  { id:'vm-ha', ty:'vm', name:'Home Assistant', sub:'VM 201 · 10.0.20.10', st:'ok', x:748, y:388, z:'IoT',
+    facts:[['Verzió','2026.7.3'],['Integrációk','34'],['Entitások','412'],['Mentés','heti · 4 megőrzés']],
+    metrics:[['CPU','12%',12],['Memória','2,8 / 4 GB',70],['Lemez','24 / 64 GB',38]],
+    svcs:[['Web felület','8123/tcp · VLAN 20','ok','Felmért'],['MQTT bróker','1883/tcp','ok','Becsült'],['Zigbee koordinátor','USB passthrough','ok','Felmért']],
+    warns:[['warn','VLAN 20-ban fut, de a Trusted zónából is elérhető – a szabály nem ellenőrzött.']] },
+
+  { id:'vm-docker', ty:'vm', name:'Docker host', sub:'VM 202 · 10.0.40.12', st:'warn', x:896, y:388, z:'Servers',
+    facts:[['OS','Debian 12'],['Konténerek','9 futó / 11'],['Compose stackek','4'],['Mentés','vzdump heti · 2 megőrzés']],
+    metrics:[['CPU','46%',46],['Memória','9,2 / 12 GB',77],['Lemez','88 / 200 GB',44]],
+    svcs:[['AdGuard Home','53/udp · DNS','ok','Felmért'],['Nextcloud','443/tcp · publikus','warn','Felmért'],['GitLab CE','8443/tcp','warn','Felmért'],['GitLab runner','ciklikus újraindulás','bad','Felmért']],
+    warns:[['warn','2 konténer ciklikusan újraindul (gitlab-runner).'],['bad','A GitLab köteteihez nincs mentési bizonyíték.']] },
+
+  { id:'svc-adguard', ty:'svc', name:'AdGuard Home', sub:'DNS · :53', st:'ok', x:760, y:512, z:'Servers',
+    facts:[['Upstream','DoT · 1.1.1.1'],['Szűrőlisták','6'],['Kliens azonosítás','VLAN alapú'],['Konfiguráció mentése','heti']],
+    metrics:[['Kérés / perc','412',41],['Blokkolt arány','18,4%',18],['Átlagos válasz','12 ms',12]],
+    svcs:[['DNS feloldás','53/udp · minden VLAN','ok','Felmért'],['Admin felület','3000/tcp','ok','Becsült']],
+    warns:[['info','A gateway DNS-e ide mutat: kiesése az egész hálózat névfeloldását érinti.']] },
+
+  { id:'svc-nextcloud', ty:'svc', name:'Nextcloud', sub:'Fájl · :443', st:'warn', x:898, y:512, z:'Servers',
+    facts:[['Verzió','30.0.2'],['Felhasználók','6'],['Adatmennyiség','1,2 TB (tank)'],['Külső elérés','Reverse proxy · WAF nincs']],
+    metrics:[['CPU','9%',9],['Adat','1,2 / 2 TB',60],['Napi feltöltés','24 GB',35]],
+    svcs:[['HTTPS','443/tcp · publikus','warn','Felmért'],['WebDAV','443/tcp','ok','Becsült']],
+    warns:[['warn','Publikusan elérhető alkalmazásréteg-védelem nélkül.']] },
+
+  { id:'svc-gitlab', ty:'svc', name:'GitLab', sub:'DevOps · :8443', st:'bad', x:1036, y:512, z:'Servers',
+    facts:[['Verzió','17.4 CE'],['Projektek','23'],['Runnerek','2 (1 hibás)'],['Mentés','Nincs bizonyíték']],
+    metrics:[['CPU','22%',22],['Memória','4,1 / 6 GB',68],['Repo tárhely','96 GB',48]],
+    svcs:[['HTTPS','8443/tcp · belső','ok','Felmért'],['Registry','5050/tcp','warn','Becsült'],['CI runner','shell executor','bad','Felmért']],
+    warns:[['bad','Nincs ellenőrzött mentés a repókról – közvetlen adatvesztési kockázat.'],['warn','A runner 14× indult újra 24 óra alatt.']] }
+];
+
+const EDGES = [
+  ['wan','gw','v','ba'], ['gw','sw','v','both'], ['gw','pve','v','both'],
+  ['sw','ap1','v','both'], ['sw','ap2','v','both'], ['sw','ap3','x','none'],
+  ['ap1','clients','e','both'], ['ap2','clients','e','both'],
+  ['pve','nas','v','both'], ['pve','lxc-unifi','v','both'], ['pve','vm-ha','v','both'], ['pve','vm-docker','v','both'],
+  ['vm-docker','svc-adguard','v','both'], ['vm-docker','svc-nextcloud','v','both'], ['vm-docker','svc-gitlab','v','ab'],
+  ['lxc-unifi','gw','l','ab'], ['lxc-unifi','sw','l','ab'], ['lxc-unifi','ap2','l','ab'], ['svc-adguard','gw','l','ba']
+];
+
+const FLOW = {
+  v: { w:1.5, da:'5 7', dur:2.4, op:0.9,  bo:0.30 },
+  e: { w:1.4, da:'5 7', dur:3.0, op:0.8,  bo:0.26 },
+  l: { w:1.3, da:'2 6', dur:3.4, op:0.72, bo:0.22 },
+  x: { w:1.5, da:'4 6', dur:0,   op:0.8,  bo:0.26 }
+};
+
+const KIND = {
+  v:{label:'Fizikai kapcsolat', prov:'Felmért', tone:'ok'},
+  e:{label:'Vezeték nélküli asszociáció', prov:'Becsült', tone:'warn'},
+  l:{label:'Logikai kapcsolat (kezelés)', prov:'Felmért', tone:'accent'},
+  x:{label:'Megszakadt kapcsolat', prov:'Nem ellenőrizhető', tone:'bad'}
+};
+
+const ZONES = [
+  { vlan:'1', name:'Management', net:'10.0.1.0/24', ssid:'—', dev:9, iso:'Teljes hozzáférés', state:'Felmért' },
+  { vlan:'10', name:'Trusted LAN', net:'10.0.10.0/24', ssid:'Otthon', dev:14, iso:'Részleges', state:'Felmért' },
+  { vlan:'20', name:'IoT', net:'10.0.20.0/24', ssid:'Otthon-IoT', dev:24, iso:'Izolált', state:'Nem ellenőrzött' },
+  { vlan:'30', name:'Guest', net:'10.0.30.0/24', ssid:'Vendég', dev:6, iso:'Teljes izoláció', state:'Felmért' },
+  { vlan:'40', name:'Servers', net:'10.0.40.0/24', ssid:'—', dev:11, iso:'Szabályozott', state:'Felmért' },
+  { vlan:'50', name:'Cameras', net:'10.0.50.0/24', ssid:'—', dev:4, iso:'Izolált', state:'Nem ellenőrzött' }
+];
+
+const MATRIX = [
+  ['a','a','a','a','a','a'],
+  ['b','a','l','b','l','u'],
+  ['b','b','a','b','u','b'],
+  ['b','b','b','a','b','b'],
+  ['b','l','l','b','a','l'],
+  ['b','b','b','b','u','a']
+];
+
+const RULES = [
+  ['Mgmt','Minden zóna','minden','Engedélyez','Felmért','ma 08:14'],
+  ['Trusted','Servers','443, 8443, 8123','Engedélyez','Felmért','ma 08:14'],
+  ['Trusted','IoT','minden','Engedélyez','Felmért','ma 08:14'],
+  ['IoT','Trusted','minden','Tilt','Felmért','ma 08:14'],
+  ['IoT','Servers','8123, 1883','Engedélyez','Nem ellenőrzött','—'],
+  ['IoT','Internet','443, 123','Engedélyez','Felmért','ma 08:14'],
+  ['Guest','Minden belső','minden','Tilt','Felmért','ma 08:14'],
+  ['Servers','IoT','53','Engedélyez','Becsült','—'],
+  ['Cameras','Internet','minden','Tilt','Nem ellenőrzött','—']
+];
+
+const SIGNALS = [
+  ['bad','IoT → Servers szabály nem ellenőrzött','A Home Assistant elérhető a Trusted zónából is, de a szabály tényleges érvényesülése nem igazolt felméréssel.','IoT'],
+  ['warn','Kamera zóna kimenő forgalma nem igazolt','Nincs bizonyíték arra, hogy a kamerák valóban nem érik el az internetet.','Cameras'],
+  ['warn','Nextcloud publikus, WAF nélkül','A 443/tcp kívülről elérhető, alkalmazásréteg-védelem nincs a láncban.','Servers'],
+  ['info','IDS/IPS kikapcsolva az átjárón','Bekapcsolása CPU-terhelést növel; teszteld karbantartási ablakban.','WAN']
+];
+
+const RISKS = [
+  ['bad','GitLab kötetekhez nincs mentési bizonyíték','Servers · VM 202','A vzdump csak a VM lemezt menti, a kötet-szintű visszaállítás nem tesztelt.'],
+  ['bad','AP – Garázs 2 napja offline','Mgmt · 10.0.1.23','A PoE port állapota távolról nem ellenőrizhető, helyszíni vizsgálat kell.'],
+  ['warn','ZFS tank 87%-on','Servers · tank','90% felett az írási teljesítmény romlik, snapshotok elakadhatnak.'],
+  ['warn','IoT izoláció nem ellenőrzött','IoT · VLAN 20','A szabály létezik, de az érvényesülése nincs felméréssel igazolva.'],
+  ['warn','local-lvm 78%-on a pve01-en','Mgmt · pve01','Snapshot előtt kapacitásellenőrzés szükséges.'],
+  ['info','Proxmox bridge módosítás előkészítés alatt','Mgmt · vmbr0','A változtatáshoz helyi recovery-konzol és visszaállítási terv kell.']
+];
+
+const RECS = [
+  { id:'r1', sev:'bad', title:'GitLab kötet-szintű mentés bevezetése', where:'VM 202 · Docker host', impact:'Adatvesztés kockázatának megszüntetése', risk:'Alacsony', dur:'~40 perc',
+    why:'A jelenlegi vzdump a VM lemezképét menti, de a konténerkötetekről nincs ellenőrzött visszaállítás. Egy sérült kötet esetén a 23 projekt nem állítható helyre bizonyíthatóan.',
+    steps:[['Felmérés','A GitLab kötetek és méretük listázása a Docker hoston.','kész'],['Előellenőrzés','Szabad kapacitás a tank poolon (min. 120 GB).','kész'],['Mentés / checkpoint','VM 202 snapshot a művelet előtt.','folyamatban'],['Végrehajtás','Napi gitlab-backup job + kötet-szintű archiválás a tankra.','vár'],['Ellenőrzés','Visszaállítási próba izolált konténerbe.','vár'],['Visszaállítás','Snapshot visszatöltése, ha a job terhelést okoz.','vár']] },
+  { id:'r2', sev:'warn', title:'IoT izoláció igazolása aktív ellenőrzéssel', where:'VLAN 20 · Gateway', impact:'A szegmentáció bizonyított állapotba kerül', risk:'Alacsony', dur:'~15 perc',
+    why:'A tűzfalszabály létezik a konfigurációban, de a felmérés nem tudja igazolni, hogy a forgalom ténylegesen elakad. A Home Assistant a Trusted zónából is válaszol.',
+    steps:[['Felmérés','IoT zóna aktuális szabálysorrendjének kiolvasása.','kész'],['Előellenőrzés','Érintett eszközök és szolgáltatások listája (24 eszköz).','kész'],['Mentés / checkpoint','Site backup letöltése helyi gépre.','vár'],['Végrehajtás','Ellenőrző kliens ideiglenes elhelyezése a VLAN 20-ban.','vár'],['Ellenőrzés','Elérési teszt a Trusted zóna felé, naplóval.','vár'],['Visszaállítás','Ideiglenes kliens és szabály eltávolítása.','vár']] },
+  { id:'r3', sev:'warn', title:'ZFS kapacitás felszabadítása 80% alá', where:'tank · RAIDZ1', impact:'Stabil írási teljesítmény, működő snapshotok', risk:'Közepes', dur:'~30 perc',
+    why:'6,9 TB használt a 8 TB-ból. A régi snapshotok 640 GB-ot foglalnak, a megőrzési szabály nincs beállítva.',
+    steps:[['Felmérés','Snapshot lista és foglalt méret pooltípusonként.','kész'],['Előellenőrzés','Replikációtól függő snapshotok kizárása.','folyamatban'],['Mentés / checkpoint','Offsite replikáció sikeres lefutása a törlés előtt.','vár'],['Végrehajtás','30 napnál régebbi, nem hivatkozott snapshotok törlése.','vár'],['Ellenőrzés','Pool állapot és szabad kapacitás újramérése.','vár'],['Visszaállítás','Nem szükséges: a törlés csak igazolt snapshotokra vonatkozik.','vár']] },
+  { id:'r4', sev:'warn', title:'AP – Emelet fix csatorna beállítása', where:'10.0.1.22 · U6 Lite', impact:'Alacsonyabb újraküldés, stabilabb Wi-Fi', risk:'Alacsony', dur:'~10 perc',
+    why:'68%-os csatorna-kihasználtság és 11,4% újraküldési arány. A szomszédos hálózatok a 149-es csatornát használják.',
+    steps:[['Felmérés','Csatornafoglaltság mérése 24 órán át.','folyamatban'],['Előellenőrzés','Érintett kliensek (9) és roaming beállítás.','vár'],['Mentés / checkpoint','Site backup.','vár'],['Végrehajtás','Fix csatorna: 44, teljesítmény közepes.','vár'],['Ellenőrzés','Újraküldési arány 24 óra után.','vár'],['Visszaállítás','Automatikus csatornaválasztás visszakapcsolása.','vár']] },
+  { id:'r5', sev:'info', title:'Proxmox bridge átalakítás VLAN-tudatosra', where:'pve01 · vmbr0', impact:'VM-enkénti VLAN tagelés a hoston', risk:'Magas', dur:'Ablak: 45 perc',
+    why:'A bridge jelenleg nem VLAN-tudatos, a tagelés a switch oldalán történik. Az átalakítás megszakítja a host hálózatát, ezért helyi konzol kötelező.',
+    steps:[['Felmérés','Aktuális /etc/network/interfaces mentése.','kész'],['Előellenőrzés','Helyi konzol vagy IPMI elérés igazolása.','vár'],['Mentés / checkpoint','Konfigurációs mentés + VM leállítási sorrend.','vár'],['Végrehajtás','vmbr0 VLAN-aware kapcsoló, egy lépésben.','vár'],['Ellenőrzés','Host és VM elérés minden VLAN-ban.','vár'],['Visszaállítás','Az eredeti interfaces fájl visszamásolása konzolról.','vár']] }
+];
+
+const KB_TYPE = {
+  gateway:[['VLAN trunk ellenőrzése átjáró és switch között','Tagged uplink, natív VLAN és a leggyakoribb konfigurációs hibák','Hálózat'],['Tűzfalszabályok sorrendje és állapotkövetés','Miért nem érvényesül a szabály a várt módon','Biztonság'],['Firmware frissítés szolgáltatáskiesés nélkül','Ablak, előellenőrzés és visszaállítási terv','Üzemeltetés']],
+  switch:[['PoE port diagnosztika','Túlterhelés, ciklikus újraindulás és kábelhiba elkülönítése','Hardver'],['Port profil és VLAN hozzárendelés','Access és trunk port helyes beállítása','Hálózat']],
+  ap:[['Csatorna-interferencia csökkentése','Mérés, fix csatorna és adóteljesítmény összefüggései','Wi-Fi'],['SSID → VLAN leképezés igazolása','Hogyan bizonyítod, hogy az IoT SSID valóban izolált','Wi-Fi']],
+  host:[['Proxmox bridge módosítása biztonságosan','Miért kell helyi konzol és visszaállítási terv','Proxmox'],['Snapshot és checkpoint stratégia','Mikor elég a snapshot és mikor kell teljes mentés','Mentés'],['Tárolókapacitás és thin provisioning','A 80%-os küszöb és a következményei','Tárolás']],
+  vm:[['VM mentés és visszaállítási próba','vzdump, megőrzés és az ellenőrzött visszatöltés','Mentés'],['Vendéghálózat és VLAN tag a VM-en','Bridge, tag és tűzfal a Proxmox oldalán','Hálózat']],
+  ct:[['LXC és VM közötti választás','Erőforrás, izoláció és mentési különbségek','Proxmox'],['Controller kiesés hatása','Mi működik tovább és mi nem','Üzemeltetés']],
+  storage:[['ZFS pool egészség és scrub','Mit jelent a degraded állapot és mi a teendő','Tárolás'],['Offsite replikáció ellenőrzése','A 3-2-1 szabály a gyakorlatban','Mentés']],
+  svc:[['Szolgáltatás kitettségének ellenőrzése','Publikus elérés, reverse proxy és védelmi rétegek','Biztonság'],['Kötet-szintű mentés konténereknél','Miért nem elég a lemezkép mentése','Mentés']],
+  cloud:[['Uplink redundancia','Failover, SLA és a valós kiesések kezelése','Hálózat']],
+  clients:[['Ismeretlen eszközök besorolása','MAC, DHCP fingerprint és a becslés határai','Hálózat']]
+};
+
+const CFG_TYPE = {
+  gateway:{ note:'Az átjáró módosítása megszakíthatja a távoli elérést. Az alkalmazás nem hajt végre automatikus változtatást.',
+    steps:['Felmérés: aktuális tűzfal- és hálózati konfiguráció exportálása','Előellenőrzés: érintett VLAN-ok, kliensek és szolgáltatások listája','Mentés: site backup letöltése helyi gépre','Végrehajtás: egy változtatás egy ciklusban','Ellenőrzés: kliensek elérése és naplók 10 percen át','Visszaállítás: site backup visszatöltése'],
+    cmds:[['Aktív szabályok listája','ssh admin@10.0.1.1 "show firewall statistics"'],['Konfiguráció mentése','ssh admin@10.0.1.1 "show configuration commands" > gw-backup.cfg']] },
+  switch:{ note:'A port profil módosítása leválaszthatja az adott porton lévő eszközt.',
+    steps:['Felmérés: port–eszköz hozzárendelés kiolvasása LLDP alapján','Előellenőrzés: uplink és PoE terhelés ellenőrzése','Mentés: site backup','Ellenőrzés: link állapot és VLAN tagság a módosítás után'],
+    cmds:[['Port állapot','ssh admin@10.0.1.2 "swctrl port show"'],['PoE státusz','ssh admin@10.0.1.2 "swctrl poe show"']] },
+  ap:{ note:'A rádióbeállítások módosítása rövid, néhány másodperces asszociációvesztést okoz.',
+    steps:['Felmérés: csatornafoglaltság mérése legalább 24 órán át','Előellenőrzés: érintett kliensek és roaming beállítás','Mentés: site backup','Ellenőrzés: újraküldési arány és kliensszám 24 óra múlva'],
+    cmds:[['Rádió állapot','ssh admin@10.0.1.22 "iwconfig"'],['Kliensek','ssh admin@10.0.1.22 "wstalist | head -40"']] },
+  host:{ note:'Hálózati változtatás a Proxmox hoston helyi recovery-konzolt igényel. Az SSH megszakadhat.',
+    steps:['Felmérés: /etc/network/interfaces és tárolóállapot mentése','Előellenőrzés: helyi konzol vagy IPMI elérés igazolása','Mentés: konfigurációs mentés és VM snapshotok','Végrehajtás: egy változtatás, majd azonnali ellenőrzés','Ellenőrzés: host és VM elérés minden VLAN-ban','Visszaállítás: az eredeti interfaces fájl visszamásolása konzolról'],
+    cmds:[['Hálózati konfiguráció','cat /etc/network/interfaces'],['Tárolók állapota','pvesm status'],['VM és LXC lista','qm list; pct list']] },
+  vm:{ note:'A vendéggép hálózati beállításának módosítása előtt készíts snapshotot.',
+    steps:['Felmérés: vendég hálózati interfész és VLAN tag kiolvasása','Előellenőrzés: mentés érvényessége és szabad kapacitás','Mentés: snapshot a művelet előtt','Ellenőrzés: szolgáltatás elérés a módosítás után'],
+    cmds:[['VM konfiguráció','qm config 202'],['Snapshot készítése','qm snapshot 202 pre-change --description "Network Assister"']] },
+  ct:{ note:'A konténer újraindítása megszakítja a hozzá kötött szolgáltatásokat.',
+    steps:['Felmérés: konténer konfiguráció és erőforrások','Előellenőrzés: függő szolgáltatások azonosítása','Mentés: vzdump vagy snapshot','Ellenőrzés: szolgáltatás elérése és naplók'],
+    cmds:[['Konténer konfiguráció','pct config 101'],['Mentés','vzdump 101 --mode snapshot --storage tank']] },
+  storage:{ note:'A pool műveletek hosszú ideig futhatnak és terhelik a lemezeket.',
+    steps:['Felmérés: pool állapot, snapshotok és foglaltság','Előellenőrzés: replikációtól függő snapshotok kizárása','Mentés: offsite replikáció sikeres lefutása','Ellenőrzés: szabad kapacitás és pool egészség'],
+    cmds:[['Pool állapot','zpool status tank'],['Foglaltság','zfs list -o name,used,avail,refer -t all']] },
+  svc:{ note:'A szolgáltatás konfigurációjának módosítása előtt mentsd a konfigurációs köteteket.',
+    steps:['Felmérés: futó konténer, portok és kötetek listája','Előellenőrzés: külső elérés és függőségek','Mentés: kötet-szintű archiválás','Ellenőrzés: szolgáltatás elérése és naplók'],
+    cmds:[['Konténerek','docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"'],['Kötetek','docker volume ls']] },
+  cloud:{ note:'Az uplink paramétereit a szolgáltató oldalán kell módosítani.',
+    steps:['Felmérés: WAN sebesség és késleltetés mérése','Előellenőrzés: szerződéses sávszélesség','Ellenőrzés: mérés ismétlése terhelés alatt'],
+    cmds:[['Útvonal','mtr -r -c 20 1.1.1.1']] },
+  clients:{ note:'A kliens besorolás becsült adat, módosítás előtt igazold a tényleges eszközt.',
+    steps:['Felmérés: DHCP foglalások és fingerprint adatok','Előellenőrzés: nem azonosított eszközök manuális azonosítása','Ellenőrzés: VLAN besorolás igazolása forgalmi mintával'],
+    cmds:[['DHCP foglalások','ssh admin@10.0.1.1 "show dhcp leases"']] }
+};
+
+const PROFILES = [
+  ['Proxmox VE · pve01','https://10.0.1.10:8006 · API token','Csak olvasás','ok','ma 08:14'],
+  ['UniFi Network · Otthon','https://10.0.1.12 · site "otthon"','Csak olvasás','ok','ma 08:14'],
+  ['SSH · pve01','root@10.0.1.10 · kulcs alapú','Host-kulcs ellenőrizve','ok','ma 07:52'],
+  ['SSH · gateway','admin@10.0.1.1 · kulcs alapú','Host-kulcs nem ellenőrzött','warn','—']
+];
+
+const SCAN_LOG = [
+  ['08:14:02','proxmox','GET /nodes → 1 csomópont (pve01)'],
+  ['08:14:03','proxmox','GET /nodes/pve01/storage → 3 tároló (local, local-lvm, tank)'],
+  ['08:14:05','proxmox','GET /cluster/resources → 4 VM, 7 LXC'],
+  ['08:14:09','unifi','GET /stat/device → 5 eszköz (1 offline)'],
+  ['08:14:11','unifi','GET /rest/networkconf → 5 hálózat, 6 VLAN'],
+  ['08:14:13','unifi','GET /rest/firewallrule → 9 szabály'],
+  ['08:14:16','unifi','GET /stat/sta → 38 kliens (3 nem azonosított)'],
+  ['08:14:19','elemzés','6 eltérés és kockázat azonosítva, 4 kapcsolat becsült marad']
+];
+
+const BACKUPS = [
+  ['UniFi site backup','LXC 101 → tank + helyi','naponta 03:00','ma 03:00','7 nap','Igazolt'],
+  ['pve01 konfiguráció','SSH mentés → helyi','naponta 04:00','ma 04:00','14 nap','Igazolt'],
+  ['VM 201 · Home Assistant','vzdump → tank','heti vasárnap','4 napja','4 példány','Igazolt'],
+  ['VM 202 · Docker host','vzdump → tank','heti vasárnap','4 napja','2 példány','Részleges'],
+  ['GitLab kötetek','—','Nincs ütemezve','—','—','Hiányzik'],
+  ['tank → offsite','ZFS send/recv','naponta 02:00','5 napja','30 nap','Elavult']
+];
+
+const TPLS = [
+  { id:'home', name:'Otthoni alap', sub:'3 VLAN · 3 SSID · 4 szolgáltatás', desc:'Egyszerű, jól szegmentált otthoni hálózat: megbízható eszközök, IoT és vendég szétválasztása, alap szolgáltatásokkal.',
+    vlans:[['1','Management','10.0.1.0/24','Hálózati eszközök, Proxmox felület'],['10','Trusted','10.0.10.0/24','Munkaállomások, telefonok'],['20','IoT','10.0.20.0/24','Okoseszközök, izolálva'],['30','Guest','10.0.30.0/24','Vendég portál, csak internet']],
+    ssids:[['Otthon','VLAN 10 · WPA3'],['Otthon-IoT','VLAN 20 · WPA2 · csak 2,4 GHz'],['Vendég','VLAN 30 · portál · sávszélesség-limit']],
+    svcs:['AdGuard Home (DNS szűrés)','Home Assistant (automatizálás)','Fájlmegosztás (SMB)','Mentési job (vzdump + offsite)'] },
+  { id:'media', name:'Média és transzkód', sub:'GPU passthrough · 2 VLAN · 5 szolgáltatás', desc:'Média könyvtár és transzkódolás dedikált VM-ben, GPU átadással és külön tárolóhálózattal.',
+    vlans:[['1','Management','10.0.1.0/24','Hálózati eszközök'],['10','Trusted','10.0.10.0/24','Lejátszó kliensek'],['40','Servers','10.0.40.0/24','Média és tároló szolgáltatások']],
+    ssids:[['Otthon','VLAN 10 · WPA3'],['Otthon-IoT','VLAN 20 · WPA2']],
+    svcs:['Média szerver (GPU transzkód)','Metaadat-kezelő','Letöltés-kezelő izolált hálózaton','NFS megosztás a poolról','Mentés: konfiguráció naponta'] },
+  { id:'iot', name:'IoT szegmentáció', sub:'4 VLAN · szigorú izoláció', desc:'IoT és kamera eszközök szigorú elkülönítése, ellenőrzött kivételekkel az automatizáláshoz.',
+    vlans:[['20','IoT','10.0.20.0/24','Okoseszközök, kimenő internet korlátozva'],['21','IoT-kritikus','10.0.21.0/24','Riasztó, zárak'],['50','Cameras','10.0.50.0/24','Kamerák, nincs internet'],['40','Servers','10.0.40.0/24','Automatizálási szolgáltatások']],
+    ssids:[['Otthon-IoT','VLAN 20 · WPA2 · kliens izoláció'],['Otthon-IoT-kritikus','VLAN 21 · WPA3 · rejtett']],
+    svcs:['Home Assistant (kivételszabályokkal)','MQTT bróker','Kamera rögzítő (NVR)','Zóna-ellenőrző riportok'] },
+  { id:'dev', name:'Fejlesztői környezet', sub:'CI/CD · registry · 2 VLAN', desc:'Fejlesztői és CI szolgáltatások külön zónában, ellenőrzött kifelé irányuló hozzáféréssel.',
+    vlans:[['40','Servers','10.0.40.0/24','GitLab, registry, runner'],['41','CI','10.0.41.0/24','Buildek, izolált kimenő forgalom']],
+    ssids:[['Otthon','VLAN 10 · WPA3']],
+    svcs:['GitLab CE + runner','Konténer registry','Objektumtár a buildekhez','Kötet-szintű mentés naponta'] },
+  { id:'smb', name:'Kisvállalati alap', sub:'5 VLAN · vendég portál · mentési rend', desc:'Kisvállalati hálózat munkaállomásokkal, vendéghálózattal, nyomtatókkal és dokumentált mentési renddel.',
+    vlans:[['1','Management','10.0.1.0/24','Hálózati eszközök'],['10','Staff','10.0.10.0/24','Munkaállomások'],['15','Printers','10.0.15.0/24','Nyomtatók, szkennerek'],['30','Guest','10.0.30.0/24','Vendég portál'],['40','Servers','10.0.40.0/24','Fájl, könyvelés, mentés']],
+    ssids:[['Iroda','VLAN 10 · WPA3 · Enterprise'],['Iroda-Vendég','VLAN 30 · portál · napi jelszó']],
+    svcs:['Fájlszerver kvótákkal','Könyvelési alkalmazás','Napi mentés + heti offsite','Naplógyűjtés'] }
+];
+
+const SSH_CMDS = [
+  ['Proxmox verzió és csomagok','pveversion -v','pve01'],
+  ['Tárolók állapota','pvesm status','pve01'],
+  ['VM és LXC lista','qm list; pct list','pve01'],
+  ['Hálózati interfészek','ip -br a; cat /etc/network/interfaces','pve01'],
+  ['ZFS pool egészség','zpool status tank; zfs list -t snapshot | tail -20','pve01'],
+  ['Tűzfal állapot a hoston','pve-firewall status; iptables -S | head -40','pve01']
+];
+
+const ARTICLES = [
+  { t:'Proxmox bridge módosítása biztonságosan', tag:'Proxmox', rel:'pve01 · vmbr0 · érintett: 4 VM',
+    lead:'A vmbr0 átalakítása VLAN-tudatos bridge-re megszakítja a host hálózati kapcsolatát. Ez a leggyakoribb oka annak, hogy egy távoli munkamenet után a Proxmox felület elérhetetlenné válik.',
+    secs:[['Mit jelent','A VLAN-aware bridge a tagelést a hostra hozza, így VM-enként adható meg a VLAN. Cserébe a bridge újraépül, és az aktív kapcsolatok megszakadnak.'],['Miért kockázat','Ha a switch oldali port nem trunk, vagy a natív VLAN eltér, a host a módosítás után nem lesz elérhető. Távoli SSH-ból ez nem javítható.'],['Ellenőrzési pontok','Helyi konzol vagy IPMI elérés igazolása · switch port trunk módban · /etc/network/interfaces mentése · VM-enkénti VLAN tag terve · visszaállítási parancs előkészítve']],
+    cmds:[['Konfiguráció mentése','cp /etc/network/interfaces /root/interfaces.bak.$(date +%F)'],['Változtatás ellenőrzése alkalmazás előtt','ifreload -a -s'],['Visszaállítás konzolról','cp /root/interfaces.bak.* /etc/network/interfaces && ifreload -a']] },
+  { t:'Az IoT izoláció igazolása', tag:'Biztonság', rel:'VLAN 20 · 24 eszköz · szabály nem ellenőrzött',
+    lead:'A tűzfalszabály megléte nem bizonyíték. Az Ultimate Network Assister addig „nem ellenőrzött” állapotban tartja a szegmentációt, amíg a tényleges forgalom el nem akad egy mérésben.',
+    secs:[['Mit jelent','A felmérés a konfigurációt olvassa, nem a forgalmat. Egy korábbi engedélyező szabály felülírhatja a tiltást a lánc elején.'],['Miért kockázat','Egy kompromittált IoT eszköz oldalirányban elérheti a munkaállomásokat, ha a szabály sorrendje hibás.'],['Ellenőrzési pontok','Szabálysorrend kiolvasása · ellenőrző kliens a VLAN 20-ban · elérési teszt a Trusted zóna felé · naplóbejegyzés a tiltásról · ideiglenes eszköz eltávolítása']],
+    cmds:[['Szabálysorrend','ssh admin@10.0.1.1 "show firewall name LAN_IN statistics"'],['Elérési teszt','nc -zvw2 10.0.10.24 445']] },
+  { t:'Mentési bizonyíték kontra mentési job', tag:'Mentés', rel:'GitLab kötetek · bizonyíték hiányzik',
+    lead:'Egy futó job önmagában nem bizonyíték. Bizonyíték az ellenőrzött visszaállítás, amelyről napló és időbélyeg készült.',
+    secs:[['Mit jelent','A vzdump a lemezképet menti. A konténerkötetek konzisztenciája ettől még nem garantált, ha az alkalmazás írás közben volt.'],['Miért kockázat','A visszaállítás pillanatában derül ki, hogy az adat használhatatlan – ekkor már nincs alternatíva.'],['Ellenőrzési pontok','Kötetek listája és mérete · alkalmazás-konzisztens mentési mód · visszaállítási próba izolált környezetben · a próba naplózása · megőrzési szabály rögzítése']],
+    cmds:[['Kötetek listája','docker volume ls -q | xargs docker volume inspect --format "{{.Name}} {{.Mountpoint}}"'],['Mentés','vzdump 202 --mode snapshot --storage tank --compress zstd']] },
+  { t:'ZFS kapacitás és a 80%-os küszöb', tag:'Tárolás', rel:'tank · 87% használt',
+    lead:'A ZFS copy-on-write működése miatt a szabad hely fogyásával a fragmentáció és a késleltetés nő. 80% felett ez már mérhető, 90% felett kritikus.',
+    secs:[['Mit jelent','Az írás új blokkokat foglal, a régi adat csak akkor szabadul fel, ha nincs rá hivatkozó snapshot.'],['Miért kockázat','A snapshotok és a replikáció elakadhatnak, a VM-ek írási hibát kaphatnak.'],['Ellenőrzési pontok','Snapshotok által foglalt méret · replikációtól függő snapshotok · megőrzési szabály · scrub eredménye · szabad kapacitás a törlés után']],
+    cmds:[['Snapshot foglaltság','zfs list -o name,used,refer -t snapshot -s used | tail -20'],['Pool egészség','zpool status -v tank']] },
+  { t:'Wi-Fi csatorna-interferencia kezelése', tag:'Wi-Fi', rel:'AP – Emelet · 68% kihasználtság',
+    lead:'A magas újraküldési arány szinte mindig csatornaütközésre vezethető vissza, nem a lefedettségre. A teljesítmény növelése ilyenkor ront a helyzeten.',
+    secs:[['Mit jelent','A kihasználtság a levegő foglaltságát méri, beleértve a szomszédos hálózatokat is.'],['Miért kockázat','Az újraküldés csökkenti az effektív sávszélességet és megnöveli a késleltetést a teljes cellában.'],['Ellenőrzési pontok','24 órás csatornamérés · szomszédos hálózatok csatornái · fix csatorna kiosztás · adóteljesítmény közepesre · újraküldés újramérése']],
+    cmds:[['Csatornafoglaltság','ssh admin@10.0.1.22 "mca-dump | grep -A3 channel"']] },
+  { t:'Felmért, becsült és nem ellenőrizhető adatok', tag:'Módszertan', rel:'A teljes felmérésre vonatkozik',
+    lead:'Az alkalmazás minden megjelenített összefüggéshez megőrzi a forrását. Ez határozza meg, hogy egy javaslat végrehajtható-e, vagy előbb mérés szükséges.',
+    secs:[['Felmért','Közvetlenül olvasott API- vagy SSH-adat, időbélyeggel. Ezek az adatok döntés alapját képezhetik.'],['Becsült','Következtetés más adatokból: például kliens–AP asszociáció vagy port alapján azonosított szolgáltatás. Jelölése szaggatott vonal és sárga jelzés.'],['Nem ellenőrizhető','A rendszer jelenlegi hozzáférésével nem igazolható állítás, például egy tűzfalszabály tényleges érvényesülése. Ezekre az alkalmazás mérési lépést javasol, nem módosítást.']],
+    cmds:[] }
+];
+
+const VIEWS = ['overview','topology','survey','advice','backup','planner','ssh','kb','settings'];
+
+class Component extends DCLogic {
+  state = {
+    theme: (this.props && this.props.initialTheme) || 'dark',
+    view: (this.props && this.props.startView) || 'topology',
+    sub: 'map', tab: 'overview', sel: 'pve', hover: null,
+    zoom: 0.9, panX: 0, panY: 0, rec: 'r1', tpl: 'home', art: 0, cmd: 0, copied: null, legend: true
+  };
+
+  componentDidMount() {
+    this.applyTheme();
+    this._mm = e => {
+      if (!this._drag) return;
+      this.setState({ panX: this._drag.px + (e.clientX - this._drag.x), panY: this._drag.py + (e.clientY - this._drag.y) });
+    };
+    this._mu = () => { this._drag = null; };
+    window.addEventListener('mousemove', this._mm);
+    window.addEventListener('mouseup', this._mu);
+  }
+  componentDidUpdate(pp) {
+    if (pp && pp.accent !== this.props.accent) this.applyTheme();
+  }
+  componentWillUnmount() {
+    window.removeEventListener('mousemove', this._mm);
+    window.removeEventListener('mouseup', this._mu);
+  }
+  applyTheme() {
+    try {
+      document.documentElement.setAttribute('data-theme', this.state.theme);
+      document.documentElement.style.setProperty('--accent', this.accent());
+    } catch (e) {}
+  }
+  accent() {
+    const a = this.props.accent;
+    if (a && a !== '#3ea6ff') return a;
+    return C[this.state.theme].accent;
+  }
+  node(id) { return NODES.find(n => n.id === id) || NODES[0]; }
+  geo(a, b, off) {
+    const A = { x: a.x + NW / 2, y: a.y + NH / 2 }, B = { x: b.x + NW / 2, y: b.y + NH / 2 };
+    let p, nx, ny;
+    if (Math.abs(B.y - A.y) > 40) {
+      const d = B.y > A.y ? 1 : -1, y1 = A.y + d * NH / 2, y2 = B.y - d * NH / 2, c = Math.abs(y2 - y1) * 0.45;
+      p = [{ x: A.x, y: y1 }, { x: A.x, y: y1 + d * c }, { x: B.x, y: y2 - d * c }, { x: B.x, y: y2 }];
+      nx = 1; ny = 0;
+    } else {
+      const d = B.x > A.x ? 1 : -1, x1 = A.x + d * NW / 2, x2 = B.x - d * NW / 2, c = Math.abs(x2 - x1) * 0.5;
+      p = [{ x: x1, y: A.y }, { x: x1 + d * c, y: A.y }, { x: x2 - d * c, y: B.y }, { x: x2, y: B.y }];
+      nx = 0; ny = 1;
+    }
+    const o = off || 0, r = n => Math.round(n * 100) / 100;
+    const q = p.map(v => ({ x: r(v.x + nx * o), y: r(v.y + ny * o) }));
+    const tx = 0.25 * (q[1].x - q[0].x) + 0.5 * (q[2].x - q[1].x) + 0.25 * (q[3].x - q[2].x);
+    const ty = 0.25 * (q[1].y - q[0].y) + 0.5 * (q[2].y - q[1].y) + 0.25 * (q[3].y - q[2].y);
+    return {
+      d: 'M' + q[0].x + ' ' + q[0].y + ' C ' + q[1].x + ' ' + q[1].y + ' ' + q[2].x + ' ' + q[2].y + ' ' + q[3].x + ' ' + q[3].y,
+      mx: r((q[0].x + q[3].x) / 2), my: r((q[0].y + q[3].y) / 2),
+      ang: r(Math.atan2(ty, tx) * 180 / Math.PI)
+    };
+  }
+  copy(text, key) {
+    try { navigator.clipboard.writeText(text); } catch (e) {}
+    this.setState({ copied: key });
+    clearTimeout(this._ct);
+    this._ct = setTimeout(() => this.setState({ copied: null }), 1400);
+  }
+
+  renderVals() {
+    const s = this.state, P = C[s.theme], A = this.accent();
+    const focus = s.hover || s.sel;
+    const showL = this.props.showLogicalLinks !== false;
+    const showE = this.props.showEstimated !== false;
+
+    const moving = this.props.animateTraffic !== false;
+    const flows = [], marks = [];
+    EDGES.forEach(([a, b, k, dir]) => {
+      if (k === 'l' && !showL) return;
+      if (k === 'e' && !showE) return;
+      const hot = a === focus || b === focus, f = FLOW[k];
+      const col = hot ? A : (k === 'l' ? A : P[k === 'v' ? 'idle' : (k === 'e' ? 'warn' : 'bad')]);
+      const dead = dir === 'none' || k === 'x';
+      const dur = (hot ? f.dur * 0.55 : f.dur) + 's';
+      const lane = (off, rev) => {
+        const g = this.geo(this.node(a), this.node(b), off);
+        flows.push({
+          d: g.d, base: col, bw: hot ? 1.5 : 1.1, bo: hot ? 0.55 : f.bo,
+          color: col, w: hot ? f.w + 0.6 : f.w, da: f.da, o: hot ? 1 : f.op,
+          anim: (dead || !moving) ? 'none' : 'napFlow' + (rev ? 'R' : 'F') + ' ' + dur + ' linear infinite'
+        });
+        return g;
+      };
+      if (dir === 'both') { lane(-2.6, false); lane(2.6, true); return; }
+      const g = lane(0, dir === 'ba');
+      if (dead) {
+        marks.push({
+          tf: 'translate(' + g.mx + ',' + g.my + ')', br: 7.5, bg: P.card, bs: P.line,
+          d: 'M-3.1 -3.1 L3.1 3.1 M3.1 -3.1 L-3.1 3.1', fill: 'none', stroke: P.bad, sw: 1.5
+        });
+      } else {
+        marks.push({
+          tf: 'translate(' + g.mx + ',' + g.my + ') rotate(' + (dir === 'ba' ? g.ang + 180 : g.ang) + ')', br: 6.5, bg: P.card, bs: P.line,
+          d: 'M-2.2 -3.3 L3.3 0 L-2.2 3.3 Z', fill: col, stroke: 'none', sw: 0
+        });
+      }
+    });
+
+    const nodes = NODES.map(n => {
+      const on = n.id === s.sel, hv = n.id === s.hover;
+      return {
+        id: n.id, name: n.name, sub: n.sub, code: TYPE[n.ty].code, dot: P[n.st],
+        left: n.x + 'px', top: n.y + 'px',
+        bg: on ? P.cardSel : P.card,
+        bc: on ? A : (hv ? P.line2 : P.line),
+        sh: on ? '0 0 0 3px ' + A + '22, 0 10px 24px rgba(0,0,0,.22)' : '0 1px 2px rgba(0,0,0,.14)',
+        codeColor: on ? A : P.txt3,
+        onSelect: () => this.setState({ sel: n.id }),
+        onEnter: () => this.setState({ hover: n.id })
+      };
+    });
+
+    const n = this.node(s.sel);
+    const kb = KB_TYPE[n.ty] || [];
+    const cfg = CFG_TYPE[n.ty] || CFG_TYPE.svc;
+    const conns = EDGES.filter(e => e[0] === n.id || e[1] === n.id).map(e => {
+      const other = this.node(e[0] === n.id ? e[1] : e[0]), k = KIND[e[2]], dir = e[3];
+      const out = (dir === 'ab' && e[0] === n.id) || (dir === 'ba' && e[1] === n.id);
+      const dirLabel = dir === 'both' ? 'Oda-vissza' : (dir === 'none' ? 'Zárt' : (out ? 'Csak kimenő' : 'Csak bejövő'));
+      return {
+        name: other.name, meta: TYPE[other.ty].label + ' · ' + other.sub, kind: k.label, prov: k.prov,
+        dirLabel, dirColor: dir === 'both' ? P.ok : (dir === 'none' ? P.bad : P.idle),
+        color: k.tone === 'accent' ? A : P[k.tone], dot: P[other.st],
+        go: () => this.setState({ sel: other.id })
+      };
+    });
+    const rules = RULES.filter(r => r[0] === n.z || r[1] === n.z || r[0] === 'Mgmt' && n.z === 'Mgmt').map(r => ({
+      src: r[0], dst: r[1], port: r[2], act: r[3], state: r[4],
+      actColor: r[3] === 'Tilt' ? P.bad : P.ok,
+      stColor: r[4] === 'Felmért' ? P.ok : (r[4] === 'Becsült' ? P.warn : P.bad)
+    }));
+    const zone = ZONES.find(z => z.name.indexOf(n.z) === 0 || z.name === n.z) || null;
+
+    const sel = {
+      name: n.name, sub: n.sub, type: TYPE[n.ty].label, code: TYPE[n.ty].code,
+      status: ST[n.st], statusColor: P[n.st], zone: n.z,
+      facts: n.facts.map(f => ({ k: f[0], v: f[1] })),
+      metrics: n.metrics.map(m => ({ label: m[0], value: m[1], w: m[2] + '%', color: m[2] >= 85 ? P.bad : (m[2] >= 70 ? P.warn : A) })),
+      svcs: n.svcs.map(v => ({ name: v[0], sub: v[1], dot: P[v[2]], prov: v[3], provColor: v[3] === 'Felmért' ? P.ok : P.warn })),
+      warns: n.warns.map(w => ({ text: w[1], color: P[w[0]], label: w[0] === 'bad' ? 'Kritikus' : (w[0] === 'warn' ? 'Figyelem' : 'Megjegyzés') })),
+      conns, rules,
+      hasSvcs: n.svcs.length > 0, noSvcs: n.svcs.length === 0,
+      hasWarns: n.warns.length > 0, noWarns: n.warns.length === 0,
+      zoneName: zone ? 'VLAN ' + zone.vlan + ' · ' + zone.name : 'WAN zóna',
+      zoneNet: zone ? zone.net : 'publikus uplink',
+      zoneIso: zone ? zone.iso : 'Kifelé irányuló',
+      zoneState: zone ? zone.state : 'Felmért',
+      zoneStateColor: zone && zone.state !== 'Felmért' ? P.bad : P.ok,
+      kb: kb.map(k => ({ title: k[0], sub: k[1], tag: k[2] })),
+      cfgNote: cfg.note,
+      cfgSteps: cfg.steps.map((t, i) => ({ n: i + 1, t })),
+      cfgCmds: cfg.cmds.map((c, i) => ({ label: c[0], cmd: c[1], copyLabel: s.copied === 'cfg' + i ? 'Másolva' : 'Másolás', copy: () => this.copy(c[1], 'cfg' + i) }))
+    };
+
+    const nv = {}; const go = {};
+    VIEWS.forEach(v => {
+      nv[v] = { bg: s.view === v ? A + '1f' : 'transparent', fg: s.view === v ? A : 'var(--text2)' };
+      go[v] = () => this.setState({ view: v });
+    });
+    const V = {}; VIEWS.forEach(v => V[v] = s.view === v);
+
+    const T = {}, goTab = {}, tabStyle = {};
+    ['overview', 'services', 'conns', 'fw', 'kb', 'cfg'].forEach(t => {
+      T[t] = s.tab === t; goTab[t] = () => this.setState({ tab: t });
+      tabStyle[t] = { bg: s.tab === t ? A + '1c' : 'transparent', fg: s.tab === t ? A : 'var(--text2)', bc: s.tab === t ? A + '55' : 'var(--line)' };
+    });
+
+    const S = { map: s.sub === 'map', policy: s.sub === 'policy' };
+    const subStyle = {
+      map: { bg: s.sub === 'map' ? 'var(--panel)' : 'transparent', fg: s.sub === 'map' ? 'var(--text)' : 'var(--text2)' },
+      policy: { bg: s.sub === 'policy' ? 'var(--panel)' : 'transparent', fg: s.sub === 'policy' ? 'var(--text)' : 'var(--text2)' }
+    };
+
+    const rec = RECS.find(r => r.id === s.rec) || RECS[0];
+    const tpl = TPLS.find(t => t.id === s.tpl) || TPLS[0];
+    const art = ARTICLES[s.art] || ARTICLES[0];
+    const cmdSel = SSH_CMDS[s.cmd] || SSH_CMDS[0];
+
+    const mcolor = { a: P.ok, b: P.bad, l: P.warn, u: P.idle };
+    const mlabel = { a: 'Engedélyez', b: 'Tilt', l: 'Korlátozott', u: 'Nem ellenőrzött' };
+
+    return {
+      themeLabel: s.theme === 'dark' ? 'Világos mód' : 'Sötét mód',
+      toggleTheme: () => this.setState({ theme: s.theme === 'dark' ? 'light' : 'dark' }, () => this.applyTheme()),
+      goSubMap: () => this.setState({ sub: 'map' }),
+      goSubPolicy: () => this.setState({ sub: 'policy' }),
+      accent: A, ok: P.ok, warn: P.warn, bad: P.bad, idle: P.idle,
+      legendOpen: s.legend, legendCaret: s.legend ? 'rotate(180deg)' : 'none',
+      toggleLegend: () => this.setState({ legend: !s.legend }),
+      nv, go, V, T, goTab, tabStyle, S, subStyle,
+      flows, marks,
+      nodes, sel,
+      canvasT: 'translate(' + s.panX + 'px,' + s.panY + 'px) scale(' + s.zoom + ')',
+      zoomLabel: Math.round(s.zoom * 100) + '%',
+      zoomIn: () => this.setState({ zoom: Math.min(1.4, s.zoom + 0.1) }),
+      zoomOut: () => this.setState({ zoom: Math.max(0.5, s.zoom - 0.1) }),
+      zoomFit: () => this.setState({ zoom: 0.9, panX: 0, panY: 0 }),
+      startPan: e => { this._drag = { x: e.clientX, y: e.clientY, px: s.panX, py: s.panY }; },
+      onLeave: () => this.setState({ hover: null }),
+
+      zones: ZONES.map(z => ({
+        vlan: 'VLAN ' + z.vlan, name: z.name, net: z.net, ssid: z.ssid, dev: z.dev + ' eszköz', iso: z.iso,
+        state: z.state, color: z.state === 'Felmért' ? P.ok : P.bad,
+        bar: z.state === 'Felmért' ? P.ok : P.bad
+      })),
+      matrix: MATRIX.map((row, i) => ({
+        name: ZONES[i].name, vlan: ZONES[i].vlan,
+        cells: row.map((c, k) => ({ color: mcolor[c], label: mlabel[c], to: ZONES[k].name, solid: c === 'a' ? 1 : 0.18, dashed: c === 'u' ? '1px dashed ' + P.idle : '1px solid transparent' }))
+      })),
+      zoneHeads: ZONES.map(z => ({ name: z.name, vlan: z.vlan })),
+      rules: RULES.map(r => ({
+        src: r[0], dst: r[1], port: r[2], act: r[3], state: r[4], when: r[5],
+        actColor: r[3] === 'Tilt' ? P.bad : P.ok,
+        stColor: r[4] === 'Felmért' ? P.ok : (r[4] === 'Becsült' ? P.warn : P.bad)
+      })),
+      signals: SIGNALS.map(g => ({ sev: g[0] === 'bad' ? 'Kritikus' : (g[0] === 'warn' ? 'Figyelem' : 'Megjegyzés'), color: P[g[0]], title: g[1], text: g[2], zone: g[3] })),
+
+      risks: RISKS.map(r => ({ color: P[r[0]], title: r[1], where: r[2], text: r[3] })),
+      profiles: PROFILES.map(p => ({ name: p[0], url: p[1], mode: p[2], color: P[p[3]], when: p[4] })),
+      scanLog: SCAN_LOG.map(l => ({ t: l[0], src: l[1], msg: l[2] })),
+      backups: BACKUPS.map(b => ({
+        name: b[0], target: b[1], sched: b[2], last: b[3], keep: b[4], ev: b[5],
+        color: b[5] === 'Igazolt' ? P.ok : (b[5] === 'Hiányzik' ? P.bad : P.warn)
+      })),
+
+      recs: RECS.map(r => ({
+        id: r.id, title: r.title, where: r.where, color: P[r.sev],
+        bg: s.rec === r.id ? A + '14' : 'transparent',
+        bc: s.rec === r.id ? A + '66' : 'var(--line)',
+        pick: () => this.setState({ rec: r.id })
+      })),
+      rec: {
+        title: rec.title, where: rec.where, why: rec.why, impact: rec.impact, risk: rec.risk, dur: rec.dur,
+        riskColor: rec.risk === 'Magas' ? P.bad : (rec.risk === 'Közepes' ? P.warn : P.ok),
+        steps: rec.steps.map((st, i) => ({
+          n: i + 1, name: st[0], text: st[1], state: st[2],
+          color: st[2] === 'kész' ? P.ok : (st[2] === 'folyamatban' ? A : P.idle),
+          fill: st[2] === 'kész' ? P.ok : (st[2] === 'folyamatban' ? A : 'transparent')
+        }))
+      },
+      tpls: TPLS.map(t => ({
+        id: t.id, name: t.name, sub: t.sub,
+        bg: s.tpl === t.id ? A + '14' : 'transparent', bc: s.tpl === t.id ? A + '66' : 'var(--line)',
+        pick: () => this.setState({ tpl: t.id })
+      })),
+      tpl: {
+        name: tpl.name, desc: tpl.desc,
+        vlans: tpl.vlans.map(v => ({ vlan: 'VLAN ' + v[0], name: v[1], net: v[2], use: v[3] })),
+        ssids: tpl.ssids.map(v => ({ name: v[0], meta: v[1] })),
+        svcs: tpl.svcs.map(v => ({ name: v }))
+      },
+      sshCmds: SSH_CMDS.map((c, i) => ({
+        label: c[0], cmd: c[1], host: c[2],
+        bg: s.cmd === i ? A + '14' : 'transparent', bc: s.cmd === i ? A + '66' : 'var(--line)',
+        pick: () => this.setState({ cmd: i })
+      })),
+      cmdSel: { label: cmdSel[0], cmd: cmdSel[1], host: cmdSel[2] },
+      copyCmd: () => this.copy(cmdSel[1], 'ssh'),
+      copyCmdLabel: s.copied === 'ssh' ? 'Másolva' : 'Parancs másolása',
+      articles: ARTICLES.map((a, i) => ({
+        t: a.t, tag: a.tag,
+        bg: s.art === i ? A + '14' : 'transparent', bc: s.art === i ? A + '66' : 'var(--line)',
+        pick: () => this.setState({ art: i })
+      })),
+      art: {
+        t: art.t, tag: art.tag, rel: art.rel, lead: art.lead,
+        secs: art.secs.map(x => ({ h: x[0], b: x[1] })),
+        cmds: art.cmds.map((c, i) => ({ label: c[0], cmd: c[1], copyLabel: s.copied === 'art' + i ? 'Másolva' : 'Másolás', copy: () => this.copy(c[1], 'art' + i) })),
+        hasCmds: art.cmds.length > 0
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

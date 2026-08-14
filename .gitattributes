@@ -1,0 +1,8 @@
+# Text is stored with LF and checked out however the platform prefers, so a
+# Windows checkout and a Linux one produce the same diffs.
+* text=auto eol=lf
+
+# Binary, and must not be touched.
+*.png binary
+*.ico binary
+*.icns binary
