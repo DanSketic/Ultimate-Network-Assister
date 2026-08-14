@@ -173,10 +173,12 @@ but which rules speak on your network is something your first survey will show.
 
 ## Screenshots
 
-The images in `docs/media/screenshots/` are captured from the running desktop
-application. If the directory is empty, they have not been added to this
-checkout yet — the topology preview above is generated from source and always
-current.
+Captures of the running desktop application live in
+[`docs/media/screenshots/`](docs/media/screenshots/), which also says which
+views are worth capturing and what to check before committing one. Everything
+else in the documentation is generated from source — `npm run icons` for the
+application icon, `npm run preview:media` for the topology view above — so it
+cannot drift from what the code actually draws.
 
 ## Licence
 
