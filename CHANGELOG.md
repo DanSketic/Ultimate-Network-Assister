@@ -11,6 +11,176 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.6.0] — 2026-08-14
+
+### Added
+
+- **Zone isolation is now measured rather than assumed.** The policy matrix had
+  every off-diagonal cell unverified, and correctly so: reading a controller's
+  configuration establishes what someone intended, never what the gateway
+  enforces. A survey of a UniFi profile with SSH access now also reads
+  `iptables-save` from the gateway and parses the loaded ruleset. Each ordered
+  zone pair has its own chain whose final rule carries no match and is therefore
+  the default for that pair, so "guest cannot reach the LAN" stops being a claim
+  about configuration and becomes one about what is in force. Rules found in the
+  loaded ruleset are marked measured, and the zone table reports isolation from
+  the same source, so the three cannot disagree.
+
+  What it refuses to conclude is the more important half. A chain whose last
+  rule is conditional yields nothing, because a chain that can be fallen out of
+  answers a question about a different chain. A network whose bridge the ruleset
+  never mentioned stays unverified — such a network is not thereby open and not
+  thereby closed. A configured rule absent from the ruleset stays unverified
+  rather than being reported as missing: the gateway names a rule's id only on
+  the log line beside it, logging is per-rule, and a rule with logging off leaves
+  no trace to find. The matrix note says how many cells were decided, and says
+  the reading is IPv4 — the IPv6 table is separate and is not included.
+
+  The raw dump is kept in the snapshot verbatim rather than only its conclusions,
+  so a later build can read more out of surveys already taken, and so what the
+  interface claims can always be checked against what the gateway said.
+
+- **IPv6 is read too, and compared against IPv4.** A rule that stops traffic
+  over IPv4 while the same traffic passes over IPv6 is a separation the estate
+  believes it has and does not, and it is invisible from either table alone —
+  the controller will report the rule as configured, loaded and working. The
+  survey now reads `ip6tables-save` as well and reports the disagreement as a
+  finding, naming both networks.
+
+  The comparison turns on a fact that had to be measured rather than assumed. An
+  IPv6 table carrying no zone rules means one of two opposite things: the family
+  is not filtered, or the family is not carried. The first makes an IPv4 block
+  no block at all; the second makes the IPv4 verdict the whole truth. Nothing in
+  a firewall dump separates them, so the survey also reads `ip -br addr` and
+  looks for a routable IPv6 address on both ends. Link-local addresses do not
+  count — `fe80::/10` never crosses between networks, and counting it would
+  report a leak on every estate running no IPv6 at all. With no addresses read,
+  no leak is claimed. With no IPv6 table read, the matrix shows IPv4 and the
+  note says that is what it is showing.
+
+### Fixed
+
+- **SSH discarded the exit status of every command it ran.** The channel loop
+  stopped listening at `Eof`, which the server sends when it has finished
+  sending output — one message before it says how the command ended. The status
+  was therefore usually absent, and only usually, because a server is free to
+  send it first: a race rather than a consistent absence, which is why it
+  presented as two commands failing and a third succeeding on a gateway that had
+  run all three. Nothing depended on the status until the survey's live reads
+  did, at which point a hundred kilobytes of ruleset was recorded as unreadable.
+  The loop now reads to the close. No output was ever truncated by this — `Eof`
+  means the data is complete — so only the status was lost.
+
+  The live reads also no longer require a status to accept output. A status that
+  was never reported is not a failure; a reported non-zero one still is.
+
+- **A failed live read said "empty output" whatever had happened.** A command
+  that printed nothing, one that timed out, and one that exited non-zero all
+  reported the same phrase, and each needs something different done about it.
+  The log now names which.
+
+- **The live reads were skipped when SSH lived on its own profile.** One machine
+  reached over two protocols is one profile in this model, but nothing stops a
+  separate SSH entry for the same gateway, and that is a reasonable way to have
+  set it up. The survey only looked for SSH on the UniFi profile itself, so an
+  estate with the credentials filed separately got "nothing verified" while
+  holding everything needed to verify it. A selected SSH profile marked as a
+  UniFi host is now used as well. The profile's own access is preferred, since
+  it is the one certain to be the same machine, and which profile was read is
+  logged either way — attributing one gateway's ruleset to another site would be
+  a wrong answer rather than a missing one.
+
+- **"0 confirmed" did not say why it was zero.** Nothing read and nothing
+  matched look identical in a count and call for opposite remedies: the first is
+  a question of access, the second of what the gateway logs. The panel now says
+  which it is.
+
+- **A firewall table holding only its chain policies read as unread.** The
+  parser returned early on a dump with no rule lines, which is wrong in the one
+  place it matters most: an IPv6 table with nothing but `:FORWARD ACCEPT` is a
+  real and readable answer — the zone system is absent and the family's default
+  decides. Treating it as "could not be read" made exactly the gateways that
+  forward IPv6 unfiltered look like the ones whose IPv6 could not be examined.
+  Found by the check written alongside it.
+
+- **The command area shows what was actually sent.** Commands go out with a
+  `PATH` assignment that reaches the administrative binaries, which meant the
+  interface displayed one string while the machine ran another. A
+  "command not found" is not diagnosable under that arrangement — there is no
+  way to tell a missing program from a wrong path, or a build carrying the
+  prefix from one that predates it. The executed line is now shown whenever it
+  differs from the typed one.
+
+- **Four more read-only commands: IPv6 rules, address sets, neighbours, and an
+  inventory.** `ip6tables-save`, because a rule set that stops traffic over IPv4
+  and passes the same traffic over IPv6 is a common way to be wrong and reading
+  one table cannot show it. `ipset list`, because a zone rule names the set it
+  matches and never its members. `lldpcli show neighbors`, which is a fourth
+  source for what is on a port and the only one that does not require the far
+  end to be managed equipment — a stock Proxmox install is neither managed nor
+  announcing itself, which is why its port has been an inference. And a plain
+  directory listing for when none of the firewall tools are present, which
+  answers "then what does this machine use" rather than repeating that they are
+  missing.
+
+### Changed
+
+- **The firewall rules are grouped by source zone.** A hundred and fifty rows in
+  one list is not a list anyone reads; grouped, it is one heading per zone,
+  collapsed, each carrying its rule count, how many destinations it touches, how
+  many of its rules block, and how many are confirmed in the loaded ruleset.
+  Grouping by source rather than by zone pair because the two differ by an order
+  of magnitude — that many rules span most of the ordered pairs but only as many
+  sources as there are zones — and because "what may this network reach" is the
+  question people arrive with. Finding one specific pair is what the filter is
+  for, and a filter now opens the groups it matched: left collapsed, a search
+  would answer with headings and hide the rows it was asked to find.
+
+  The arrangement is not invented for the display. The gateway dispatches on
+  exactly this, one chain per source, before it reaches the per-pair chains, so
+  a group here is a chain there.
+
+  The source column went with it — the heading is the source, and repeating it
+  down every row of its own group spent one column of six saying nothing.
+
+- **The survey's result panel sits above the button that starts a run.** Once a
+  survey exists, its counts are what someone opens the view to read; the button
+  is what they came for the first time only.
+
+- **`iptables-save` is offered before `nft`, and is not a fallback.** A UniFi
+  gateway was measured carrying `iptables-nft` and `xtables-nft-multi` with no
+  `nft` installed at all: the kernel holds the ruleset in nftables and the only
+  tool present to print it speaks iptables syntax. Same rules, different words
+  for them. Both remain available everywhere, because which one a machine has
+  is not knowable in advance — only by asking it.
+
+- **`lldpcli show` is allowed; bare `lldpcli` is not.** `lldpctl` and `lldpcli`
+  are one program under two names and share a command set, so an allowance for
+  the neighbour table would have carried `configure` in behind `show`.
+
+### Fixed
+
+- **Zone policies were listed by identifier.** The rules came through, and read
+  `6a3fd548f46cd67f56c41d14 → 6a423bf0f46cd67f56c4c475` — which is no more use
+  than not having them. Names are now resolved from the networks already
+  collected as well as from the zone endpoint, which is tried under each name
+  the API has carried, so a controller that will not list its zones still
+  produces a readable table. Where an end has no name, what the policy says it
+  matches — `ANY`, `INTERNET`, an address — is shown in preference to a
+  24-character identifier.
+
+### Changed
+
+- **The policy view is four panels rather than one column.** Tolerable at a
+  dozen rules and unusable at a hundred and fifty: the security signals — the
+  part worth reading first — sat below a table nobody reads top to bottom.
+  Zones, matrix, rules and signals are now separate, the counts are on the tabs
+  so nothing is hidden by being unselected, and only the chosen one scrolls.
+  The rules table has a filter, because with that many the question is never
+  "what are they all" but "what touches this zone".
+
+---
+
 ## [1.5.1] — 2026-08-14
 
 ### Fixed

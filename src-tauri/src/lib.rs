@@ -242,6 +242,24 @@ mod profile_tests {
         assert_eq!(out.ssh_secret_key(), "p1:ssh");
     }
 
+    /// A gateway printed a hundred kilobytes of ruleset and the survey recorded
+    /// it as unreadable, because the exit status had not arrived by the time the
+    /// channel loop stopped listening. Output is the evidence; an unreported
+    /// status is not a failure, and a reported non-zero one still is.
+    #[test]
+    fn a_missing_exit_status_does_not_discard_the_output() {
+        assert!(live_read_kept(None, "*filter\n:FORWARD DROP\nCOMMIT\n"), "no status, real output");
+        assert!(live_read_kept(Some(0), "-A INPUT -j ACCEPT\n"), "clean exit");
+
+        assert!(!live_read_kept(None, ""), "no status and nothing said");
+        assert!(!live_read_kept(None, "  \n \t "), "whitespace is nothing said");
+        assert!(!live_read_kept(Some(127), ""), "command not found");
+        assert!(
+            !live_read_kept(Some(1), "partial output"),
+            "a reported failure is still a failure"
+        );
+    }
+
     #[test]
     fn ssh_needs_a_username_and_a_bare_host() {
         let mut p = api_profile();
@@ -456,18 +474,7 @@ async fn run_ssh_command(
         .clone()
         .ok_or("a gazdagép kulcsa nincs elfogadva, a parancs nem indul")?;
 
-    let key = profile.ssh_secret_key();
-    let secret = secrets::read(&key)?;
-    let auth = if profile.ssh_auth_method == "key" {
-        // The passphrase, when there is one, is stored on its own entry so the
-        // key material and the passphrase never share a single secret blob.
-        ssh::SshAuth::Key {
-            pem: secret,
-            passphrase: secrets::read(&format!("{key}:passphrase")).ok(),
-        }
-    } else {
-        ssh::SshAuth::Password(secret)
-    };
+    let auth = ssh_auth_for(&profile)?;
 
     ssh::run_command(
         &profile.ssh_host,
@@ -481,7 +488,133 @@ async fn run_ssh_command(
     .await
 }
 
+/// Assembles the credential for an ssh session from the profile's secrets.
+fn ssh_auth_for(profile: &Profile) -> Result<ssh::SshAuth, String> {
+    let key = profile.ssh_secret_key();
+    let secret = secrets::read(&key)?;
+    Ok(if profile.ssh_auth_method == "key" {
+        // The passphrase, when there is one, is stored on its own entry so the
+        // key material and the passphrase never share a single secret blob.
+        ssh::SshAuth::Key {
+            pem: secret,
+            passphrase: secrets::read(&format!("{key}:passphrase")).ok(),
+        }
+    } else {
+        ssh::SshAuth::Password(secret)
+    })
+}
+
 /* ----------------------------------------------------------------- survey */
+
+/// What a survey reads off a gateway, beyond what the controller will tell it.
+///
+/// `iptables-save` rather than `nft list ruleset`, because a UniFi gateway was
+/// measured carrying `iptables-nft` and no `nft` at all: the kernel holds the
+/// ruleset in nftables and the only tool installed to print it speaks iptables
+/// syntax. Same ruleset, different words for it.
+///
+/// The IPv6 table is separate and is read separately — a rule set that stops
+/// traffic over IPv4 while the same traffic passes over IPv6 is a common way to
+/// be wrong, and reading one table cannot show it. The addresses come along
+/// because an IPv6 table with no zone rules means either "not filtered" or "not
+/// carried", and only a routable address on the interface tells them apart.
+const LIVE_READS: [(&str, &str); 3] = [
+    ("iptables-save", "IPv4 tűzfal"),
+    ("ip6tables-save", "IPv6 tűzfal"),
+    ("ip -br addr", "címek"),
+];
+
+/// Whether a finished command yielded something worth keeping.
+///
+/// A status of `None` means the far end did not report one, which is not the
+/// same as failing. Requiring `Some(0)` read three commands as failures on a
+/// gateway that had run all three: the client was breaking out of the channel
+/// at `Eof`, one message before the status arrived, so the status was usually
+/// absent and — because a server may send it first — only usually.
+///
+/// That is fixed in `ssh::run_command`, and this stays lenient anyway. The
+/// output is the evidence; the status is corroboration, and a missing one is no
+/// reason to discard a ruleset the gateway plainly printed.
+fn live_read_kept(exit_status: Option<u32>, stdout: &str) -> bool {
+    exit_status.unwrap_or(0) == 0 && !stdout.trim().is_empty()
+}
+
+/// Reads the loaded firewall from a gateway, when the profile can reach one.
+///
+/// Every reason this can come back empty is ordinary rather than a failure: no
+/// ssh configured, no accepted host key, a gateway without the tool, a refused
+/// login. None of them are worth aborting a survey over, and none are worth
+/// reporting as an error — an empty result simply leaves the policy view saying
+/// the rules were not verified, which is exactly what is then true. Each read
+/// is independent, so a gateway that answers two of the three still yields what
+/// those two establish.
+///
+/// None of them can write. All three only print, and all three go through the
+/// same policy gate as every other command, so a later edit that tried to make
+/// this collect something destructive would be refused there rather than here.
+async fn collect_live_reads(profile: &Profile, log: &mut Vec<LogEntry>) -> [String; 3] {
+    let empty = || [String::new(), String::new(), String::new()];
+
+    if !profile.ssh_enabled {
+        return empty();
+    }
+    let Some(pinned) = profile.ssh_fingerprint.clone() else {
+        log.push(LogEntry::fail("unifi", "az élő tűzfal kihagyva: a gazdagép kulcsa nincs elfogadva"));
+        return empty();
+    };
+
+    let mut out = empty();
+    for (slot, (command, what)) in LIVE_READS.iter().enumerate() {
+        // Re-read per command: a session is not held open across the survey, and
+        // the credential is not kept in memory longer than one command needs it.
+        let Ok(auth) = ssh_auth_for(profile) else {
+            log.push(LogEntry::fail("unifi", "az élő tűzfal kihagyva: nincs elérhető SSH hitelesítő"));
+            return out;
+        };
+
+        match ssh::run_command(
+            &profile.ssh_host,
+            profile.ssh_port_or_default(),
+            &profile.ssh_username,
+            &pinned,
+            auth,
+            command,
+            false,
+        )
+        .await
+        {
+            /*
+             * Output decides, not the exit status.
+             *
+             * A status of None means the far end did not report one, which is
+             * not the same as failing — requiring `Some(0)` read three commands
+             * as failures on a gateway that had run all three. A non-zero status
+             * is still a failure; an absent one with output is not.
+             */
+            Ok(res) if live_read_kept(res.exit_status, &res.stdout) => {
+                log.push(LogEntry::ok("unifi", format!("{what} beolvasva ({} bájt)", res.stdout.len())));
+                out[slot] = res.stdout;
+            }
+            /*
+             * Says which of the ways it failed, because they need different
+             * things done about them and "empty output" named none of them.
+             */
+            Ok(res) => {
+                let why = match (res.exit_status, res.stderr.lines().next()) {
+                    (_, Some(line)) if !line.trim().is_empty() => line.trim().to_string(),
+                    (Some(code), _) if code != 0 => format!("kilépési kód {code}, kimenet nélkül"),
+                    _ if res.truncated => "a parancs túllépte az időkorlátot".to_string(),
+                    _ => "a parancs lefutott, de semmit nem írt ki".to_string(),
+                };
+                log.push(LogEntry::fail("unifi", format!("a(z) {what} nem olvasható: {why}")));
+            }
+            Err(e) => {
+                log.push(LogEntry::fail("unifi", format!("a(z) {what} nem olvasható: {e}")));
+            }
+        }
+    }
+    out
+}
 
 /// Runs a read-only survey across the given profiles.
 ///
@@ -509,8 +642,14 @@ async fn run_survey(db: State<'_, Db>, profile_ids: Vec<String>) -> Result<Surve
         ..Default::default()
     };
 
-    for profile in selected {
+    for profile in &selected {
         let label = profile.label.clone();
+
+        // An ssh-only profile has no certificate to pin and no API to read; it
+        // is here for the live reads below, which run after the API half.
+        if profile.kind == "ssh" {
+            continue;
+        }
 
         if profile.fingerprint.is_none() {
             errors.push(format!(
@@ -538,7 +677,7 @@ async fn run_survey(db: State<'_, Db>, profile_ids: Vec<String>) -> Result<Surve
         };
 
         match profile.kind.as_str() {
-            "proxmox" => match collect::proxmox::collect(&client, &profile, &secret, &mut log).await {
+            "proxmox" => match collect::proxmox::collect(&client, profile, &secret, &mut log).await {
                 Ok(s) => snapshot.proxmox = Some(s),
                 Err(e) => {
                     errors.push(format!("{label}: {e}"));
@@ -547,8 +686,8 @@ async fn run_survey(db: State<'_, Db>, profile_ids: Vec<String>) -> Result<Surve
             },
             "unifi" => {
                 let outcome = async {
-                    collect::unifi::login(&client, &profile, &secret, &mut log).await?;
-                    collect::unifi::collect(&client, &profile, &secret, &mut log).await
+                    collect::unifi::login(&client, profile, &secret, &mut log).await?;
+                    collect::unifi::collect(&client, profile, &secret, &mut log).await
                 }
                 .await;
                 match outcome {
@@ -560,6 +699,51 @@ async fn run_survey(db: State<'_, Db>, profile_ids: Vec<String>) -> Result<Surve
                 }
             }
             other => errors.push(format!("{label}: ismeretlen profiltípus ({other})")),
+        }
+    }
+
+    /*
+     * The live reads, once the API half is done.
+     *
+     * Deliberately not tied to the UniFi profile carrying its own ssh access.
+     * One machine reached over two protocols is one profile in this model, but
+     * nothing stops a separate ssh entry for the same gateway, and that is a
+     * perfectly reasonable way to have set it up — a survey that silently
+     * skipped the live reads because the access was filed under a second
+     * profile would report "nothing verified" while holding the credentials to
+     * verify it.
+     *
+     * The profile's own ssh is preferred, because it is the one certain to be
+     * the same machine. A separate entry is used only when it says it is a
+     * UniFi host, and which profile was read is logged either way: attributing
+     * one gateway's ruleset to another site would be a wrong answer rather
+     * than a missing one.
+     */
+    if let Some(unifi) = snapshot.unifi.as_mut() {
+        let reader = selected
+            .iter()
+            .find(|p| p.kind == "unifi" && p.ssh_enabled)
+            .or_else(|| {
+                selected
+                    .iter()
+                    .find(|p| p.kind == "ssh" && p.flavour == "unifi" && p.ssh_enabled)
+            });
+
+        match reader {
+            Some(p) => {
+                log.push(LogEntry::ok(
+                    "unifi",
+                    format!("élő szabálykészlet olvasása a(z) „{}” profilról", p.label),
+                ));
+                let [v4, v6, addrs] = collect_live_reads(p, &mut log).await;
+                unifi.live_firewall = v4;
+                unifi.live_firewall_v6 = v6;
+                unifi.live_addresses = addrs;
+            }
+            None => log.push(LogEntry::fail(
+                "unifi",
+                "az élő szabálykészlet kimaradt: a kiválasztott profilok közt nincs SSH elérés az átjáróhoz",
+            )),
         }
     }
 

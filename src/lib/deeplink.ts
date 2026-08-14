@@ -15,6 +15,8 @@ import { THEME_PREFS, type ThemePref } from './palette';
  */
 export interface DeepLink {
   view?: ViewId;
+  /** Which half of the topology view: the map, or policy and firewall. */
+  sub?: 'map' | 'policy';
   lang?: LangPref;
   theme?: ThemePref;
   /** Frame the whole estate on the topology, as the fit button does. */
@@ -30,6 +32,8 @@ export function deepLink(search = typeof window === 'undefined' ? '' : window.lo
 
   const view = one(VIEWS, q.get('view'));
   if (view) link.view = view;
+  const sub = one(['map', 'policy'] as const, q.get('sub'));
+  if (sub) link.sub = sub;
   const lang = one(LANGS, q.get('lang'));
   if (lang) link.lang = lang;
   const theme = one(THEME_PREFS, q.get('theme'));

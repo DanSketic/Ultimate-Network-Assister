@@ -217,15 +217,37 @@ export const en: Dict = {
 
   policy: {
     heading: 'VLAN zones and isolation',
-    summary: (zones: number, rules: number, unverified: number) =>
-      `${zones} zones · ${rules} rules · ${unverified} claims cannot be verified with the current access`,
+    summary: (zones: number, rules: number, verified: number) =>
+      `${zones} zones · ${rules} rules · ${verified} confirmed in the loaded ruleset`,
+    summaryNoLive: (zones: number, rules: number) =>
+      `${zones} zones · ${rules} rules · the gateway's loaded ruleset could not be read, so none are confirmed`,
+    tabZones: 'Zones',
+    tabMatrix: 'Matrix',
+    filter: 'Filter by zone, port…',
+    noMatch: 'No rule matches the filter.',
+    noSignals: 'The survey found no security signals.',
     matrix: 'Zone matrix',
     matrixNoteDemo:
       'Row: source · column: destination. A dashed cell (unverified) cannot be confirmed by a survey.',
     matrixNoteLive:
       'The survey reads configuration, not traffic. Reachability between zones therefore stays “unverified” until a measurement proves it.',
+    matrixNoteMeasured: (decided: number, bothFamilies: boolean) =>
+      `${decided} cells are decided by the ruleset actually loaded on the gateway, not by the controller's configuration. ${
+        bothFamilies
+          ? 'Both the IPv4 and the IPv6 table were read and compared: where the two differ, the cell is limited.'
+          : 'IPv4 only — the IPv6 table could not be read, so traffic passing over it is not shown here.'
+      } A dashed cell is a network the ruleset never placed in a zone.`,
+    isolatedFully: 'Fully isolated',
+    isolatedPartly: 'Partial',
+    isolatedNone: 'Unrestricted',
     rules: 'Firewall rules',
-    rulesNote: '“Measured” means a measurement confirms the rule actually takes effect.',
+    rulesNote:
+      'Grouped by source zone — the gateway dispatches on this too, one chain per source. “Measured” means the rule was found in the loaded ruleset.',
+    groupSummary: (rules: number, targets: number, blocked: number) =>
+      `${rules} rules · ${targets} targets · ${blocked} block`,
+    groupVerified: (n: number) => `${n} confirmed`,
+    expandAll: 'Expand all',
+    collapseAll: 'Collapse all',
     signals: 'Security signals',
     colSource: 'Source',
     colTarget: 'Destination',
@@ -735,6 +757,7 @@ export const en: Dict = {
     output: 'Output',
     stderr: 'Error output',
     exitStatus: 'Exit code',
+    executed: 'Actually executed',
     duration: 'Duration',
     truncatedNote: 'Output truncated: it hit the size or time limit.',
     noOutput: 'The command printed nothing.',
@@ -1359,6 +1382,9 @@ export const en: Dict = {
       'The stores were listed, but without sizes. That happens when a store is not mounted, or when the token can see the store but may not read its usage.',
     anyPort: 'any',
     anyTarget: 'any',
+    signalV6Leak: (from: string, to: string) => `${from} → ${to}: reachable over IPv6`,
+    signalV6LeakText:
+      'The IPv4 ruleset separates these two networks and the IPv6 one does not, and both ends carry a routable IPv6 address. The block therefore holds for one address family only. Both rulesets and the addresses were read from the gateway.',
     signalOffline: (name: string) => `${name} is unreachable`,
     signalOfflineText:
       'The device is not checking in with the controller, so neither its state nor the traffic through it can be verified.',
@@ -1402,6 +1428,7 @@ export const en: Dict = {
       `${critical} critical · ${other} attention`,
     statVerifiedRules: 'Proven rules',
     statVerifiedRulesHint: 'the survey does not measure traffic',
+    statVerifiedRulesLive: 'found in the ruleset loaded on the gateway',
     memoryOf: (node: string) => `${node} memory`,
   },
 

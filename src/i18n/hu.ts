@@ -225,15 +225,51 @@ export const hu = {
 
   policy: {
     heading: 'VLAN zónák és izoláció',
-    summary: (zones: number, rules: number, unverified: number) =>
-      `${zones} zóna · ${rules} szabály · ${unverified} állítás nem ellenőrizhető a jelenlegi hozzáféréssel`,
+    /*
+     * Counts what was confirmed, not what was not.
+     *
+     * The earlier wording said the remainder was "not verifiable with the
+     * current access", which stopped being true the moment any of it became
+     * verifiable: what limits the rest is now per-rule logging on the gateway,
+     * not the access. Naming the confirmed count is true in both states.
+     */
+    summary: (zones: number, rules: number, verified: number) =>
+      `${zones} zóna · ${rules} szabály · ${verified} igazolva a betöltött szabálykészletben`,
+    /*
+     * A count of zero has two causes with opposite remedies — nothing was read,
+     * or something was read and matched nothing — and "0 igazolva" says neither.
+     * The first is a matter of access, and the panel says so rather than
+     * leaving the reader to work out which they are looking at.
+     */
+    summaryNoLive: (zones: number, rules: number) =>
+      `${zones} zóna · ${rules} szabály · az átjáró betöltött szabálykészlete nem volt olvasható, így egyik sincs igazolva`,
+    tabZones: 'Zónák',
+    tabMatrix: 'Mátrix',
+    filter: 'Szűrés zónára, portra…',
+    noMatch: 'Nincs a szűrésre illeszkedő szabály.',
+    noSignals: 'A felmérés nem talált biztonsági jelzést.',
     matrix: 'Zóna-mátrix',
     matrixNoteDemo:
       'Sor: forrás · oszlop: cél. A szaggatott cella (nem ellenőrzött) nem ellenőrizhető felméréssel.',
     matrixNoteLive:
       'A felmérés a konfigurációt olvassa, nem a forgalmat. A zónák közötti átjárás ezért mindaddig „nem ellenőrzött”, amíg egy mérés nem igazolja.',
+    matrixNoteMeasured: (decided: number, bothFamilies: boolean) =>
+      `${decided} cellát az átjárón ténylegesen betöltött szabálykészlet dönt el, nem a vezérlő beállítása. ${
+        bothFamilies
+          ? 'Az IPv4 és az IPv6 tábla is beolvasva és összevetve: ahol a kettő eltér, a cella korlátozott.'
+          : 'Csak az IPv4 tábla — az IPv6-ot nem sikerült beolvasni, így az azon átmenő forgalom itt nem látszik.'
+      } A szaggatott cellákhoz a szabálykészlet nem rendelt hálózatot.`,
+    isolatedFully: 'Teljes izoláció',
+    isolatedPartly: 'Részleges',
+    isolatedNone: 'Nincs korlátozás',
     rules: 'Tűzfalszabályok',
-    rulesNote: 'A „Felmért” állapot azt jelenti, hogy a szabály érvényesülését mérés igazolja.',
+    rulesNote:
+      'Forrászóna szerint csoportosítva — az átjáró is így osztja szét őket, forrásonként egy lánc. A „Felmért” állapot azt jelenti, hogy a szabályt megtaláltuk a betöltött szabálykészletben.',
+    groupSummary: (rules: number, targets: number, blocked: number) =>
+      `${rules} szabály · ${targets} cél · ${blocked} tilt`,
+    groupVerified: (n: number) => `${n} igazolva`,
+    expandAll: 'Mind kinyit',
+    collapseAll: 'Mind becsuk',
     signals: 'Biztonsági jelzések',
     colSource: 'Forrás',
     colTarget: 'Cél',
@@ -742,6 +778,7 @@ export const hu = {
     output: 'Kimenet',
     stderr: 'Hibakimenet',
     exitStatus: 'Kilépési kód',
+    executed: 'Ténylegesen futtatva',
     duration: 'Futásidő',
     truncatedNote: 'A kimenet levágva: elérte a méret- vagy időkorlátot.',
     noOutput: 'A parancs nem írt semmit.',
@@ -1399,6 +1436,9 @@ export const hu = {
       'A tárolók felsorolása megérkezett, de méret nélkül. Ez akkor fordul elő, ha a tároló nincs csatolva, vagy ha a token látja a tárolót, de a foglaltságát nem olvashatja.',
     anyPort: 'minden',
     anyTarget: 'bármely',
+    signalV6Leak: (from: string, to: string) => `${from} → ${to}: IPv6-on átjár`,
+    signalV6LeakText:
+      'Az IPv4 szabálykészlet elválasztja ezt a két hálózatot, az IPv6 viszont nem, és mindkét végponton van útvonalképes IPv6 cím. A tiltás így csak az egyik címcsaládra érvényes. Mindkét szabálykészletet és a címeket is az átjáróról olvastuk ki.',
     signalOffline: (name: string) => `${name} nem elérhető`,
     signalOfflineText:
       'Az eszköz nem jelentkezik be a vezérlőbe, így sem az állapota, sem a rajta áthaladó forgalom nem ellenőrizhető.',
@@ -1441,6 +1481,7 @@ export const hu = {
     statRisksHint: (critical: number, other: number) => `${critical} kritikus · ${other} figyelem`,
     statVerifiedRules: 'Igazolt szabály',
     statVerifiedRulesHint: 'a felmérés nem mér forgalmat',
+    statVerifiedRulesLive: 'az átjáró betöltött szabálykészletében megtalálva',
     memoryOf: (node: string) => `${node} memória`,
   },
 

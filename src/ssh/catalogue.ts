@@ -58,6 +58,92 @@ const SHAPES: Shape[] = [
   },
   { id: 'listen', command: 'ss -tulnp', flavours: ['proxmox', 'unifi', 'other'], group: 'network' },
   { id: 'routes', command: 'ip -br route', flavours: ['proxmox', 'unifi', 'other'], group: 'network' },
+  {
+    /*
+     * Who is on which port, asked of the machine rather than the controller.
+     *
+     * The controller reports an uplink only for equipment it manages, and LLDP
+     * only for equipment that announces itself; a stock Proxmox install is
+     * neither, which is why its port has been an inference rather than a
+     * measurement. The gateway's own neighbour table is a fourth source, and
+     * unlike the others it does not require the far end to be a UniFi device.
+     *
+     * `lldpcli show`, not bare `lldpctl`: the two share a command set, and the
+     * bare form would accept `configure` just as readily as `show`.
+     */
+    id: 'lldpNeighbours',
+    command: 'lldpcli show neighbors',
+    flavours: ['proxmox', 'unifi', 'other'],
+    group: 'network',
+  },
+
+  /*
+   * The firewall as it is actually loaded.
+   *
+   * The survey reads rules from a controller's configuration, which is not
+   * evidence that they take effect. These read the ruleset in force, which is.
+   *
+   * `iptables-save` leads, and it is not the fallback the ordering once made it
+   * look like. A UniFi gateway was measured carrying `iptables-nft`,
+   * `xtables-nft-multi` and no `nft` at all: the kernel keeps the ruleset in
+   * nftables, and the only installed tool that prints it speaks iptables
+   * syntax. Same rules, different words for them. `nft` stays below for hosts
+   * that do ship it, and both are offered everywhere because which one a given
+   * machine has is not knowable in advance — only by asking it.
+   */
+  {
+    id: 'firewallIptables',
+    command: 'iptables-save',
+    flavours: ['proxmox', 'unifi', 'other'],
+    group: 'network',
+  },
+  {
+    /*
+     * IPv6 separately, because it is a separate table. A rule set that stops
+     * traffic over v4 and lets the same traffic through over v6 is a common way
+     * to be wrong, and reading only one of them cannot show it.
+     */
+    id: 'firewallIp6tables',
+    command: 'ip6tables-save',
+    flavours: ['proxmox', 'unifi', 'other'],
+    group: 'network',
+  },
+  {
+    id: 'firewallNft',
+    command: 'nft list ruleset',
+    flavours: ['proxmox', 'unifi', 'other'],
+    group: 'network',
+  },
+  {
+    /*
+     * The address sets the rules match on.
+     *
+     * A zone rule reads `match set UBIOS_..._ADDRv4` and stops there; the
+     * members live in the set, not in the rule. Without this the ruleset says
+     * which zones are separated but never which addresses are in them.
+     */
+    id: 'firewallSets',
+    command: 'ipset list',
+    flavours: ['proxmox', 'unifi', 'other'],
+    group: 'network',
+  },
+  {
+    /*
+     * Lists the directories rather than the four paths a firewall tool might
+     * live at. Naming the paths only tells you they are all missing, which is
+     * where this started; listing what is actually installed is the answer to
+     * "then what does this box use".
+     *
+     * No redirection and no second command: `2>&1` reads as writing a file to
+     * the policy, and `iptables --version` is not one of the forms it knows
+     * only reads. Both would have demanded confirmation for a directory
+     * listing.
+     */
+    id: 'firewallWhich',
+    command: 'ls /sbin /usr/sbin',
+    flavours: ['proxmox', 'unifi', 'other'],
+    group: 'network',
+  },
 
   // --------------------------------------------------------------- storage
   {
@@ -140,6 +226,36 @@ const HU: Text = {
   interfaces: { label: 'Hálózati konfiguráció', detail: 'Az /etc/network/interfaces tartalma.' },
   listen: { label: 'Nyitott portok', detail: 'Mi figyel, és melyik folyamat.' },
   routes: { label: 'Útválasztási tábla', detail: 'Merre megy a forgalom.' },
+  lldpNeighbours: {
+    label: 'Szomszédok portonként',
+    detail:
+      'Mi van az egyes portokon, magától a géptől kérdezve. Olyan eszközt is megmutat, amit a vezérlő nem kezel.',
+  },
+  firewallIptables: {
+    label: 'Élő tűzfal (IPv4)',
+    detail:
+      'A ténylegesen betöltött szabályrendszer. A felmérés a konfigurációt olvassa — ez azt, ami tényleg érvényben van. UniFi átjárón ez a működő parancs, akkor is, ha a kernel alatta nftables-t használ.',
+  },
+  firewallIp6tables: {
+    label: 'Élő tűzfal (IPv6)',
+    detail:
+      'Külön tábla, külön szabályok. Ami IPv4-en tiltva van, IPv6-on még simán átmehet — ez csak innen derül ki.',
+  },
+  firewallNft: {
+    label: 'Élő tűzfal (nft)',
+    detail:
+      'Ugyanez az újabb eszközzel, ahol telepítve van. UniFi OS-en általában nincs, ilyenkor az IPv4-es változat a jó.',
+  },
+  firewallSets: {
+    label: 'Címhalmazok',
+    detail:
+      'Amire a zónaszabályok hivatkoznak. A szabály csak a halmaz nevét mondja meg, azt nem, hogy mely címek vannak benne.',
+  },
+  firewallWhich: {
+    label: 'Mi van fent egyáltalán?',
+    detail:
+      'Kilistázza az adminisztratív parancsokat. Ha egyik tűzfal-parancs sem fut le, ebből derül ki, mit használ a gép helyettük.',
+  },
 
   disks: { label: 'Lemezleltár', detail: 'Modell, sorozatszám, méret, csatolási pont.' },
   diskFree: { label: 'Szabad hely', detail: 'Fájlrendszerenként.' },
@@ -184,6 +300,36 @@ const EN: Text = {
   interfaces: { label: 'Network configuration', detail: 'The contents of /etc/network/interfaces.' },
   listen: { label: 'Listening ports', detail: 'What is listening, and which process.' },
   routes: { label: 'Routing table', detail: 'Where traffic goes.' },
+  lldpNeighbours: {
+    label: 'Neighbours per port',
+    detail:
+      'What is on each port, asked of the machine itself. Shows equipment the controller does not manage.',
+  },
+  firewallIptables: {
+    label: 'Live firewall (IPv4)',
+    detail:
+      'The ruleset actually loaded. The survey reads configuration — this reads what is in force. On a UniFi gateway this is the command that works, even when the kernel keeps the rules in nftables underneath.',
+  },
+  firewallIp6tables: {
+    label: 'Live firewall (IPv6)',
+    detail:
+      'A separate table with separate rules. What is blocked over IPv4 can still pass over IPv6, and only this shows it.',
+  },
+  firewallNft: {
+    label: 'Live firewall (nft)',
+    detail:
+      'The same with the newer tool, where it is installed. UniFi OS usually does not ship it; there the IPv4 form is the one to use.',
+  },
+  firewallSets: {
+    label: 'Address sets',
+    detail:
+      'What the zone rules match on. A rule names the set but not the addresses in it.',
+  },
+  firewallWhich: {
+    label: 'What is installed at all?',
+    detail:
+      'Lists the administrative commands. When no firewall command runs, this is what tells you what the machine uses instead.',
+  },
 
   disks: { label: 'Disk inventory', detail: 'Model, serial, size, mount point.' },
   diskFree: { label: 'Free space', detail: 'Per filesystem.' },

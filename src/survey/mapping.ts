@@ -17,6 +17,13 @@ import type {
 } from '@/data/model';
 import type { Dict } from '@/i18n';
 import { recommendationsFromSnapshot } from './advice';
+import {
+  combinedReachability,
+  readLiveEstate,
+  type LiveEstate,
+  type LiveFirewall,
+  type LiveVerdict,
+} from './liveFirewall';
 import { CANVAS_W, NODE_W } from '@/lib/geometry';
 import type { Tone } from '@/lib/palette';
 import {
@@ -48,6 +55,15 @@ export interface Estate {
   matrix: MatrixCell[][];
   /** Explains why the matrix looks the way it does. */
   matrixNote: string;
+  /**
+   * Whether the gateway's loaded ruleset was read at all.
+   *
+   * Distinguishes the two ways nothing gets verified, which look identical in a
+   * count and call for opposite actions: no ruleset was read, or one was read
+   * and matched nothing. The first is a matter of access, the second of what
+   * the gateway logs.
+   */
+  liveRead: boolean;
   rules: FirewallRule[];
   signals: SecuritySignal[];
   risks: Risk[];
@@ -1006,46 +1022,92 @@ function buildLinks(
 
 /* ------------------------------------------------------------------ policy */
 
-function buildZones(unifi: UnifiSnapshot, t: Dict): Zone[] {
-  return unifi.networks
-    .filter((n) => n.enabled)
-    .map((n) => {
-      const ssids = unifi.wlans.filter((w) => w.networkId === n.id).map((w) => w.name);
-      const clients = unifi.clients.filter((c) =>
-        n.vlan != null ? c.vlan === n.vlan : c.network === n.name,
-      ).length;
+function buildZones(unifi: UnifiSnapshot, live: LiveEstate, t: Dict): Zone[] {
+  const nets = unifi.networks.filter((n) => n.enabled);
 
+  return nets.map((n) => {
+    const ssids = unifi.wlans.filter((w) => w.networkId === n.id).map((w) => w.name);
+    const clients = unifi.clients.filter((c) =>
+      n.vlan != null ? c.vlan === n.vlan : c.network === n.name,
+    ).length;
+
+    /*
+     * Isolation is a claim about traffic, so it is only made where traffic was
+     * decided by a ruleset we read. Where the gateway's own bridge for this
+     * network never appeared, the zone stays unmeasured — a network the loaded
+     * ruleset never mentions is not thereby open, and not thereby closed.
+     */
+    const verdicts = nets
+      .filter((other) => other !== n)
+      .map((other) => combinedReachability(live, n.vlan, other.vlan)?.verdict)
+      .filter((v): v is LiveVerdict => v !== undefined);
+
+    if (verdicts.length === 0) {
       return {
         vlan: n.vlan != null ? String(n.vlan) : '—',
         name: n.name,
         net: n.subnet || '—',
         ssid: ssids.length > 0 ? ssids.join(', ') : '—',
         devices: clients,
-        // Isolation is a claim about traffic, and traffic was not measured.
         isolation: t.findings.notMeasured,
         state: 'Nem ellenőrzött' as const,
       };
-    });
+    }
+
+    const open = verdicts.filter((v) => v === 'allow').length;
+    const shut = verdicts.filter((v) => v === 'block').length;
+
+    return {
+      vlan: n.vlan != null ? String(n.vlan) : '—',
+      name: n.name,
+      net: n.subnet || '—',
+      ssid: ssids.length > 0 ? ssids.join(', ') : '—',
+      devices: clients,
+      isolation:
+        shut === verdicts.length
+          ? t.policy.isolatedFully
+          : open === verdicts.length
+            ? t.policy.isolatedNone
+            : t.policy.isolatedPartly,
+      state: 'Felmért' as const,
+    };
+  });
 }
 
-function buildRules(unifi: UnifiSnapshot, t: Dict): FirewallRule[] {
+function buildRules(
+  unifi: UnifiSnapshot,
+  live: LiveFirewall,
+  checkedAt: string,
+  t: Dict,
+): FirewallRule[] {
   const nameById = new Map(unifi.networks.map((n) => [n.id, n.name]));
   const resolve = (id: string) => (id ? (nameById.get(id) ?? id) : t.findings.anyTarget);
 
   return unifi.firewallRules
     .filter((r) => r.enabled)
     .sort((a, b) => a.index - b.index)
-    .map((r) => ({
-      src: resolve(r.src),
-      dst: resolve(r.dst),
-      port: r.dstPort ? `${r.protocol || 'any'} ${r.dstPort}` : r.protocol || t.findings.anyPort,
-      action: (r.action === 'drop' || r.action === 'reject' ? 'Tilt' : 'Engedélyez') as
-        | 'Tilt'
-        | 'Engedélyez',
-      // Read from configuration, not proven against traffic.
-      state: 'Nem ellenőrzött' as const,
-      checkedAt: '—',
-    }));
+    .map((r) => {
+      /*
+       * Found in the loaded ruleset, so this rule is not merely configured.
+       *
+       * Not finding it proves nothing and is treated that way: the gateway
+       * names a rule's id only on the log line that accompanies it, logging is
+       * per-rule, and a rule with logging switched off leaves no id behind.
+       * Absence here is ignorance, so the state stays what it was.
+       */
+      const loaded = r.id !== '' && live.ruleIds.has(r.id);
+
+      return {
+        src: resolve(r.src),
+        dst: resolve(r.dst),
+        port: r.dstPort ? `${r.protocol || 'any'} ${r.dstPort}` : r.protocol || t.findings.anyPort,
+        action: (r.action === 'drop' || r.action === 'reject' ? 'Tilt' : 'Engedélyez') as
+          | 'Tilt'
+          | 'Engedélyez',
+        state: loaded ? ('Felmért' as const) : ('Nem ellenőrzött' as const),
+        checkedAt: loaded ? checkedAt : '—',
+      };
+    });
 }
 
 /* ---------------------------------------------------------------- findings */
@@ -1053,10 +1115,25 @@ function buildRules(unifi: UnifiSnapshot, t: Dict): FirewallRule[] {
 function buildSignals(
   unifi: UnifiSnapshot | null,
   pve: ProxmoxSnapshot | null,
+  leaks: { from: string; to: string }[],
   t: Dict,
 ): SecuritySignal[] {
   const f = t.findings;
   const out: SecuritySignal[] = [];
+
+  /*
+   * Listed first, and as a fault rather than a note, because it is a separation
+   * the estate believes it has. Both rulesets were read and both were measured,
+   * so this is not a suspicion — the traffic IPv4 stops has a way through.
+   */
+  for (const { from, to } of leaks.slice(0, 6)) {
+    out.push({
+      severity: 'bad',
+      title: f.signalV6Leak(from, to),
+      text: f.signalV6LeakText,
+      zone: from,
+    });
+  }
 
   if (unifi) {
     for (const d of unifi.devices.filter((x) => x.state !== 1)) {
@@ -1205,16 +1282,60 @@ export function estateFromSnapshot(
   // each device under whatever it hangs off.
   const links = buildLinks(unifi, pve, tiers.flat());
   const nodes = placeTiers(orderTiers(tiers, links));
-  const zones = unifi ? buildZones(unifi, t) : [];
+  /*
+   * The ruleset the gateway actually holds, where a survey could read it.
+   *
+   * Parsed once and threaded through, because the zone table, the matrix and
+   * the rule list all answer the same question — is this in force? — and they
+   * must not be able to disagree.
+   */
+  const live = readLiveEstate(
+    unifi?.liveFirewall ?? '',
+    unifi?.liveFirewallV6 ?? '',
+    unifi?.liveAddresses ?? '',
+  );
+  const nets = unifi ? unifi.networks.filter((n) => n.enabled) : [];
+  const zones = unifi ? buildZones(unifi, live, t) : [];
 
   const counts: Record<Tone, number> = { ok: 0, warn: 0, bad: 0, idle: 0 };
   for (const n of nodes) counts[n.status] += 1;
 
-  // Nothing about zone-to-zone reachability can be proven by reading
-  // configuration, so every off-diagonal cell starts unverified.
-  const matrix: MatrixCell[][] = zones.map((_, i) =>
-    zones.map((__, j) => (i === j ? 'a' : 'u')),
+  /*
+   * Zone-to-zone reachability, decided by the loaded ruleset where one was
+   * read and left unverified where none was.
+   *
+   * Reading configuration can never establish these — that was the whole of
+   * this table until the gateway itself could be asked — so a cell only stops
+   * being unverified when a chain in the loaded ruleset decides it. The
+   * diagonal is a network to itself, which never crosses the firewall.
+   */
+  const combined = nets.map((from, i) =>
+    nets.map((to, j) => (i === j ? null : combinedReachability(live, from.vlan, to.vlan))),
   );
+
+  const matrix: MatrixCell[][] = combined.map((row, i) =>
+    row.map((pair, j) => {
+      if (i === j) return 'a';
+      if (!pair) return 'u';
+      return pair.verdict === 'allow' ? 'a' : pair.verdict === 'block' ? 'b' : 'l';
+    }),
+  );
+
+  const unverifiedCells = matrix.flat().filter((c) => c === 'u').length;
+
+  /*
+   * Pairs IPv4 separates and IPv6 does not.
+   *
+   * Worth naming rather than leaving as a colour, because it is the one thing
+   * here that contradicts what the controller's own interface will tell you:
+   * the rule is configured, it is loaded, it works — and the traffic gets
+   * through anyway over the family the rule does not cover.
+   */
+  const leaks = combined.flatMap((row, i) =>
+    row.flatMap((pair, j) => (pair?.leak ? [{ from: nets[i].name, to: nets[j].name }] : [])),
+  );
+  const rules = unifi ? buildRules(unifi, live.v4, snapshot.finishedAt, t) : [];
+  const verifiedRules = rules.filter((r) => r.state === 'Felmért').length;
 
   const risks = buildRisks(unifi, pve, t);
 
@@ -1306,10 +1427,10 @@ export function estateFromSnapshot(
     },
     {
       label: f.statVerifiedRules,
-      value: '0',
+      value: String(verifiedRules),
       suffix: ` / ${unifi?.firewallRules.length ?? 0}`,
-      hint: f.statVerifiedRulesHint,
-      tone: 'idle',
+      hint: live.v4.recognised ? f.statVerifiedRulesLive : f.statVerifiedRulesHint,
+      tone: verifiedRules > 0 ? 'ok' : 'idle',
     },
   ];
 
@@ -1330,9 +1451,19 @@ export function estateFromSnapshot(
     links,
     zones,
     matrix,
-    matrixNote: t.policy.matrixNoteLive,
-    rules: unifi ? buildRules(unifi, t) : [],
-    signals: buildSignals(unifi, pve, t),
+    /*
+     * Says which of the two the reader is looking at. The distinction is the
+     * point of the panel, so leaving one note for both states would undo it.
+     */
+    matrixNote: live.v4.recognised
+      ? t.policy.matrixNoteMeasured(
+          matrix.length * matrix.length - unverifiedCells,
+          live.v6.read,
+        )
+      : t.policy.matrixNoteLive,
+    liveRead: live.v4.read,
+    rules,
+    signals: buildSignals(unifi, pve, leaks, t),
     risks,
     scanLog: snapshot.log.map<ScanLogEntry>((l) => ({
       time: l.time,

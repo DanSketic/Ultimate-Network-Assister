@@ -78,6 +78,16 @@ export type Clearance = 'readOnly' | 'mutating' | 'forbidden';
 
 export interface CommandOutput {
   command: string;
+  /**
+   * What was actually sent to the far end.
+   *
+   * Differs from `command` by a `PATH` assignment that reaches the
+   * administrative binaries. Shown when it differs, because a "command not
+   * found" cannot be diagnosed while the interface shows one string and the
+   * machine ran another — and because reading it back is the only way to tell
+   * a build carrying the prefix from one that predates it.
+   */
+  executed?: string;
   clearance: Clearance;
   stdout: string;
   stderr: string;
@@ -400,6 +410,27 @@ export interface UnifiSnapshot {
   firewallRules: UnifiRule[];
   clients: UnifiClient[];
   portProfiles: UnifiPortProfile[];
+  /**
+   * `iptables-save` from the gateway, verbatim — the ruleset in force.
+   *
+   * Everything else here came from the controller and records an intention.
+   * This came from the machine enforcing it, and is the only thing in the
+   * survey that can turn a configured rule into a verified one.
+   *
+   * Optional because a snapshot written before this existed, or taken from a
+   * profile without ssh, simply has no such text — and both are ordinary.
+   */
+  liveFirewall?: string;
+  /**
+   * The same for IPv6, and `ip -br addr` to interpret it.
+   *
+   * An IPv6 table with no zone rules means either that the family is not
+   * filtered or that it is not carried, which are opposite conclusions about
+   * whether an IPv4 block is a block. Only a routable address on the interface
+   * tells them apart, so the addresses are measured rather than assumed.
+   */
+  liveFirewallV6?: string;
+  liveAddresses?: string;
 }
 
 /**

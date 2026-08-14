@@ -156,9 +156,11 @@ export function TopologyView(props: TopologyViewProps) {
         ) : (
           <PolicyView
             palette={palette}
+            accent={accent}
             zones={estate.zones}
             matrix={estate.matrix}
             matrixNote={estate.matrixNote}
+            liveRead={estate.liveRead}
             rules={estate.rules}
             signals={estate.signals}
           />

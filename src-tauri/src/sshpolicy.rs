@@ -99,6 +99,15 @@ const READ_ONLY: &[&str] = [
     "nft list", "iptables-save", "ip6tables-save", "nft -a list",
     "iptables -l", "iptables -s", "iptables -n -l", "ip6tables -l", "ip6tables -s",
     "conntrack -l", "ipset list",
+    /*
+     * The neighbour table, for what is on which port.
+     *
+     * `lldpcli show`, and deliberately not bare `lldpcli` or `lldpctl`: the two
+     * names are the same program and share a command set, so the bare form
+     * would carry `configure` and `update` in on the back of `show`. The
+     * matcher is a prefix, which is exactly the guarantee needed here.
+     */
+    "lldpcli show", "lldpctl -f",
 ]
 .as_slice();
 
@@ -247,6 +256,30 @@ mod tests {
             "nft add rule inet filter forward drop",
             "iptables -F",
             "nft list ruleset; nft flush ruleset",
+        ] {
+            assert_eq!(classify(cmd), Clearance::Mutating, "{cmd}");
+        }
+    }
+
+    /// `lldpctl` and `lldpcli` are the same program under two names, and it
+    /// takes `configure` as readily as `show`. Only the reading verb is
+    /// allowed, so the neighbour table can be asked for without the allowance
+    /// carrying a way to reconfigure the daemon that answers.
+    #[test]
+    fn the_neighbour_table_can_be_read_but_not_configured() {
+        for cmd in [
+            "lldpcli show neighbors",
+            "lldpcli show interfaces",
+            "lldpctl -f keyvalue",
+        ] {
+            assert_eq!(classify(cmd), Clearance::ReadOnly, "{cmd}");
+        }
+
+        for cmd in [
+            "lldpcli configure lldp status disabled",
+            "lldpctl configure system hostname x",
+            "lldpcli update",
+            "lldpcli show neighbors | lldpcli configure lldp status disabled",
         ] {
             assert_eq!(classify(cmd), Clearance::Mutating, "{cmd}");
         }

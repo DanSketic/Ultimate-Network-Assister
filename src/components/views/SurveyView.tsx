@@ -856,6 +856,51 @@ export function SurveyView({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/*
+            * What the last run found, above the control that starts the next
+            * one. Once a survey exists, the numbers are what someone opens this
+            * view to read; the button is what they came for the first time only.
+            */}
+          {api.snapshot ? (
+            <div className="panel" style={{ padding: '15px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 11 }}>
+                {t.survey.result}
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))',
+                  gap: 10,
+                }}
+              >
+                {[
+                  [t.survey.counts.devices, api.snapshot.unifi?.devices.length ?? 0],
+                  [t.survey.counts.networks, api.snapshot.unifi?.networks.length ?? 0],
+                  [t.survey.counts.ssids, api.snapshot.unifi?.wlans.length ?? 0],
+                  [t.survey.counts.rules, api.snapshot.unifi?.firewallRules.length ?? 0],
+                  [t.survey.counts.clients, api.snapshot.unifi?.clients.length ?? 0],
+                  [t.survey.counts.guests, api.snapshot.proxmox?.guests.length ?? 0],
+                  [t.survey.counts.storages, api.snapshot.proxmox?.storages.length ?? 0],
+                ].map(([label, value]) => (
+                  <div
+                    key={String(label)}
+                    style={vars({ '--tile-bg': tint(accent, '0f') }, {
+                      padding: '10px 11px',
+                      borderRadius: 9,
+                      border: '1px solid var(--line)',
+                      background: 'var(--panel2)',
+                    })}
+                  >
+                    <div style={{ fontSize: 10.5, color: 'var(--text3)' }}>{label}</div>
+                    <div className="mono" style={{ fontSize: 16, marginTop: 3 }}>
+                      {value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="panel" style={{ padding: '15px 16px 16px' }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t.survey.start}</div>
             <div
@@ -1006,45 +1051,6 @@ export function SurveyView({
             </div>
           </div>
 
-          {api.snapshot ? (
-            <div className="panel" style={{ padding: '15px 16px' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 11 }}>
-                {t.survey.result}
-              </div>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))',
-                  gap: 10,
-                }}
-              >
-                {[
-                  [t.survey.counts.devices, api.snapshot.unifi?.devices.length ?? 0],
-                  [t.survey.counts.networks, api.snapshot.unifi?.networks.length ?? 0],
-                  [t.survey.counts.ssids, api.snapshot.unifi?.wlans.length ?? 0],
-                  [t.survey.counts.rules, api.snapshot.unifi?.firewallRules.length ?? 0],
-                  [t.survey.counts.clients, api.snapshot.unifi?.clients.length ?? 0],
-                  [t.survey.counts.guests, api.snapshot.proxmox?.guests.length ?? 0],
-                  [t.survey.counts.storages, api.snapshot.proxmox?.storages.length ?? 0],
-                ].map(([label, value]) => (
-                  <div
-                    key={String(label)}
-                    style={vars({ '--tile-bg': tint(accent, '0f') }, {
-                      padding: '10px 11px',
-                      borderRadius: 9,
-                      border: '1px solid var(--line)',
-                      background: 'var(--panel2)',
-                    })}
-                  >
-                    <div style={{ fontSize: 10.5, color: 'var(--text3)' }}>{label}</div>
-                    <div className="mono" style={{ fontSize: 16, marginTop: 3 }}>
-                      {value}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
     </div>

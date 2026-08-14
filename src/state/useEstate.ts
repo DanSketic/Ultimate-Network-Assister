@@ -81,6 +81,9 @@ export function demoEstate(lang: Lang, matrixNote: string): Estate {
     zones: demoZones(lang),
     matrix: ZONE_MATRIX,
     matrixNote,
+    // The demo's verdicts are written, not read off a gateway. Claiming
+    // otherwise would put the one label that means "measured" on invented data.
+    liveRead: false,
     rules: demoRules(lang),
     signals: demoSignals(lang),
     risks: demoRisks(lang),

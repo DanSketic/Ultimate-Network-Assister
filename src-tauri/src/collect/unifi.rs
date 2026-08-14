@@ -20,6 +20,35 @@ pub struct UnifiSnapshot {
     // Added after the first release; see the note on ProxmoxSnapshot.
     #[serde(default)]
     pub port_profiles: Vec<UnifiPortProfile>,
+    /*
+     * The ruleset as the gateway holds it, verbatim.
+     *
+     * Kept as the untouched text rather than a parsed structure. Everything
+     * else here came from the controller's configuration, which records an
+     * intention; this came from the machine enforcing it. Storing the raw dump
+     * means a later build can read more out of it than this one knows how to,
+     * from surveys already taken — and means what the interface claims can
+     * always be checked against what the gateway said.
+     *
+     * Empty when the profile has no ssh access, which is the ordinary case and
+     * not an error.
+     */
+    #[serde(default)]
+    pub live_firewall: String,
+    /*
+     * The same for IPv6, and the addresses needed to interpret it.
+     *
+     * An IPv6 table with no zone chains means one of two opposite things — the
+     * family is not filtered, or the family is not carried — and no firewall
+     * dump distinguishes them. `live_addresses` is `ip -br addr`, from which
+     * the routable IPv6 addresses say which it is. Reading the first without
+     * the second would let the survey report a leak on every estate that runs
+     * no IPv6 at all.
+     */
+    #[serde(default)]
+    pub live_firewall_v6: String,
+    #[serde(default)]
+    pub live_addresses: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -433,18 +462,52 @@ async fn collect_zone_policies(
 ) {
     let v2 = format!("/proxy/network/v2/api/site/{site}");
 
-    let mut zones: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    match get(client, profile, secret, &format!("{v2}/firewall/zones")).await {
-        Ok(items) => {
-            for z in &items {
-                zones.insert(as_str(z, "_id"), as_str(z, "name"));
+    /*
+     * Every name we can put to an identifier.
+     *
+     * A policy refers to its two ends by id, and those ids are a mixture: some
+     * name a firewall zone, some name a network. Seeded from the networks
+     * already collected, so even a controller that will not list its zones
+     * produces a readable table rather than a wall of hex — which is what the
+     * first version of this did, and it was no more use than nothing.
+     */
+    let mut zones: std::collections::HashMap<String, String> = snap
+        .networks
+        .iter()
+        .map(|n| (n.id.clone(), n.name.clone()))
+        .collect();
+    let from_networks = zones.len();
+
+    // The endpoint under each name it has carried; the first that answers wins.
+    let mut named = 0usize;
+    for path in [
+        format!("{v2}/firewall/zones"),
+        format!("{v2}/firewall/zone"),
+        format!("{v2}/firewall-zones"),
+    ] {
+        match get(client, profile, secret, &path).await {
+            Ok(items) if !items.is_empty() => {
+                for z in &items {
+                    let id = as_str(z, "_id");
+                    let name = as_str(z, "name");
+                    if !id.is_empty() && !name.is_empty() {
+                        zones.insert(id, name);
+                        named += 1;
+                    }
+                }
+                log.push(LogEntry::ok(SOURCE, format!("GET {path} → {named} zóna")));
+                break;
             }
-            log.push(LogEntry::ok(
-                SOURCE,
-                format!("GET v2 firewall/zones → {} zóna", zones.len()),
-            ));
+            Ok(_) => log.push(LogEntry::ok(SOURCE, format!("GET {path} → üres"))),
+            Err(e) => log.push(LogEntry::fail(SOURCE, e)),
         }
-        Err(e) => log.push(LogEntry::fail(SOURCE, format!("{e} — a zónanevek kimaradnak"))),
+    }
+
+    if named == 0 {
+        log.push(LogEntry::ok(
+            SOURCE,
+            format!("a zónaneveket a hálózatok adják ({from_networks} név)"),
+        ));
     }
 
     // The endpoint under both names it has carried, so a controller in between
@@ -474,24 +537,38 @@ async fn collect_zone_policies(
     // which is still more use than an empty cell.
     let endpoint = |p: &Value, side: &str| -> String {
         let node = p.get(side);
-        let id = node
-            .and_then(|n| n.get("zone_id").or_else(|| n.get("zoneId")))
-            .and_then(Value::as_str)
+
+        // The identifier, wherever this release keeps it.
+        let id = ["zone_id", "zoneId", "network_id", "networkId"]
+            .iter()
+            .find_map(|key| node.and_then(|n| n.get(*key)).and_then(Value::as_str))
             .map(String::from)
             .or_else(|| {
-                p.get(&format!("{side}_zone_id"))
-                    .and_then(Value::as_str)
+                [format!("{side}_zone_id"), format!("{side}_networkconf_id")]
+                    .iter()
+                    .find_map(|key| p.get(key).and_then(Value::as_str))
                     .map(String::from)
             })
             .unwrap_or_default();
-        if id.is_empty() {
-            return node
-                .and_then(|n| n.get("matching_target"))
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
+
+        if let Some(name) = zones.get(&id) {
+            return name.clone();
         }
-        zones.get(&id).cloned().unwrap_or(id)
+
+        // No name for it. What the policy says it is matching — "ANY",
+        // "INTERNET", an address — is more use than an identifier, and where
+        // even that is absent the identifier is all there is.
+        let target = node
+            .and_then(|n| n.get("matching_target"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if !target.is_empty() && target != "OBJECT" {
+            return target.to_string();
+        }
+        if id.is_empty() {
+            return "—".to_string();
+        }
+        id
     };
 
     for (i, p) in policies.iter().enumerate() {

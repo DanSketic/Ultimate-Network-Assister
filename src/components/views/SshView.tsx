@@ -491,6 +491,34 @@ function RunBlock({
         </div>
       ) : null}
 
+      {/*
+        * What actually went over the wire.
+        *
+        * Shown only when it differs from what was typed, which it does by a
+        * `PATH` assignment reaching the administrative binaries. Without it a
+        * "command not found" is undiagnosable: the interface says one thing and
+        * the machine ran another, and there is no way to tell whether the path
+        * even applied.
+        */}
+      {run.executed && run.executed !== run.command ? (
+        <div style={{ padding: '0 16px 10px' }}>
+          <div className="col-head" style={{ padding: '0 0 4px' }}>
+            {t.ssh.executed}
+          </div>
+          <div
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: 'var(--text3)',
+              wordBreak: 'break-all',
+              lineHeight: 1.5,
+            }}
+          >
+            {run.executed}
+          </div>
+        </div>
+      ) : null}
+
       {run.stdout ? <Stream text={run.stdout} /> : null}
       {run.stderr ? <Stream text={run.stderr} tone={palette.warn} label={t.ssh.stderr} /> : null}
       {!run.error && !run.stdout && !run.stderr ? (

@@ -49,6 +49,15 @@ pub struct HostKeyProbe {
 #[serde(rename_all = "camelCase")]
 pub struct CommandOutput {
     pub command: String,
+    /// What was actually sent to the far end.
+    ///
+    /// It differs from `command` by a `PATH` assignment, and the difference has
+    /// to be visible: a "command not found" is impossible to diagnose when the
+    /// interface shows one string and the machine ran another. Reading it back
+    /// is also the only way to tell a build that carries the path prefix from
+    /// one that predates it.
+    #[serde(default)]
+    pub executed: String,
     pub clearance: Clearance,
     pub stdout: String,
     pub stderr: String,
@@ -191,6 +200,24 @@ fn take(buffer: &mut Vec<u8>, chunk: &[u8], truncated: &mut bool) {
 /// No pty is requested and no shell is spawned: the command string is handed
 /// to the server's exec channel exactly as given. It is authorised first —
 /// there is no path from here to a destructive command.
+/// Prepends a path that reaches the administrative binaries.
+///
+/// An exec channel is not a login shell, so it inherits a minimal `PATH` —
+/// usually `/usr/bin:/bin`. Most of what is worth reading on a router or a
+/// hypervisor lives in `sbin`: `nft`, `iptables`, `ethtool`, `smartctl`,
+/// `zpool`, `dmidecode`. The same command typed over `ssh` interactively works,
+/// because that shell reads a profile; here it came back as "command not
+/// found", which reads as "this machine does not have it".
+///
+/// An assignment is prepended rather than the command being wrapped in a login
+/// shell. It cannot introduce a second command, and it is exactly the form the
+/// policy already looks through — so the string that was judged and the string
+/// that runs are the same command. `ssh_path_does_not_change_the_verdict`
+/// holds that.
+fn with_search_path(command: &str) -> String {
+    format!("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH {command}")
+}
+
 /// Signs in, and says what the server would have accepted when it will not.
 ///
 /// A password is offered two ways. `password` is the plain method; many
@@ -345,8 +372,25 @@ pub async fn run_command(
         .channel_open_session()
         .await
         .map_err(|e| format!("csatorna nem nyitható: {e}"))?;
+
+    /*
+     * A path that reaches the administrative binaries.
+     *
+     * An exec channel is not a login shell, so it inherits a minimal `PATH` —
+     * usually `/usr/bin:/bin`. Most of what is worth reading on a router or a
+     * hypervisor lives in `sbin`: `nft`, `iptables`, `ethtool`, `smartctl`,
+     * `zpool`, `dmidecode`. Typing the same command over `ssh` interactively
+     * works, because that shell reads a profile; here it came back as
+     * "command not found", which reads as "this machine does not have it".
+     *
+     * An assignment is prepended rather than the command being wrapped in a
+     * login shell. It cannot introduce a second command, and it is exactly the
+     * form `sshpolicy::strip_env_prefix` already looks through — so what was
+     * classified and what runs stay the same command.
+     */
+    let with_path = with_search_path(command);
     channel
-        .exec(true, command)
+        .exec(true, with_path.as_str())
         .await
         .map_err(|e| format!("a parancs nem indult: {e}"))?;
 
@@ -355,6 +399,21 @@ pub async fn run_command(
     let mut exit_status = None;
     let mut truncated = false;
 
+    /*
+     * Read to the close, not to the end of the data.
+     *
+     * The order on the wire is `Data…`, `Eof`, `ExitStatus`, `Close`: the server
+     * says it has finished sending before it says how the command ended. This
+     * used to break on `Eof`, so the exit status was usually never seen and came
+     * back as "not reported" — and only usually, because a server that sends the
+     * status first is within its rights, which made it a race rather than a
+     * consistent absence. It went unnoticed while nothing depended on the status;
+     * the survey's live reads did, and read three commands as failures on a
+     * gateway that had run all three.
+     *
+     * Breaking on `Eof` never truncated anything — `Eof` means the data is
+     * complete — so only the status was lost.
+     */
     let pump = async {
         while let Some(msg) = channel.wait().await {
             match msg {
@@ -363,7 +422,9 @@ pub async fn run_command(
                     take(&mut stderr, data, &mut truncated)
                 }
                 ChannelMsg::ExitStatus { exit_status: code } => exit_status = Some(code),
-                ChannelMsg::Close | ChannelMsg::Eof => break,
+                // The data is complete; the status is still to come.
+                ChannelMsg::Eof => {}
+                ChannelMsg::Close => break,
                 _ => {}
             }
         }
@@ -381,6 +442,7 @@ pub async fn run_command(
 
     Ok(CommandOutput {
         command: command.to_string(),
+        executed: with_path,
         clearance,
         stdout: String::from_utf8_lossy(&stdout).to_string(),
         stderr: String::from_utf8_lossy(&stderr).to_string(),
@@ -389,4 +451,49 @@ pub async fn run_command(
         duration_ms: started.elapsed().as_millis() as u64,
         ran_at: crate::collect::now_iso(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sshpolicy::{classify, Clearance};
+
+    /// The command that is judged and the command that runs must be the same
+    /// one. A path is prepended before execution, so that has to be invisible
+    /// to the policy — otherwise a read could be executed under a verdict
+    /// earned by something else, which is the one way this boundary can be
+    /// undone quietly.
+    #[test]
+    fn ssh_path_does_not_change_the_verdict() {
+        for command in [
+            "nft list ruleset",
+            "iptables-save",
+            "zpool status tank",
+            "smartctl -a /dev/sda",
+            "nft flush ruleset",
+            "systemctl restart pveproxy",
+            "mkfs.ext4 /dev/sdb",
+            "zpool status; zpool destroy tank",
+            "cat /etc/hosts > /tmp/x",
+        ] {
+            assert_eq!(
+                classify(command),
+                classify(&with_search_path(command)),
+                "the prefix changed the verdict for: {command}"
+            );
+        }
+    }
+
+    /// And the prefix must not turn something dangerous into something that
+    /// looks safe, whatever the command is.
+    #[test]
+    fn the_prefix_cannot_launder_a_destructive_command() {
+        for command in ["mkfs.xfs /dev/sdb", "reboot", "dd if=/dev/zero of=/dev/sda"] {
+            assert_eq!(
+                classify(&with_search_path(command)),
+                Clearance::Forbidden,
+                "{command}"
+            );
+        }
+    }
 }

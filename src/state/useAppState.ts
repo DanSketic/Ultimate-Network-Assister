@@ -103,7 +103,7 @@ export function useAppState(config: AppConfig): AppStateApi {
     ...(link.theme ? { themePref: link.theme } : {}),
     ...(link.lang ? { langPref: link.lang } : {}),
     view: link.view ?? restored?.view ?? config.startView,
-    sub: restored?.sub ?? 'map',
+    sub: link.sub ?? restored?.sub ?? 'map',
     tab: restored?.tab ?? 'overview',
     selected: restored?.selected || 'pve',
     hovered: null,

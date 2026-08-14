@@ -28,6 +28,7 @@ const THEME = process.env.UNA_THEME ?? 'light';
 /** Each view, the size it is captured at, and any extra query it needs. */
 const SHOTS = [
   { name: 'topology', size: [1600, 1000], query: 'fit=1' },
+  { name: 'policy', size: [1600, 1000], query: 'sub=policy', view: 'topology' },
   { name: 'overview', size: [1600, 1000] },
   { name: 'advice', size: [1600, 1000] },
   { name: 'backup', size: [1600, 1000] },
@@ -67,12 +68,14 @@ try {
 
 mkdirSync(OUT, { recursive: true });
 
-for (const { name, size: [width, height], query } of SHOTS) {
+for (const { name, size: [width, height], query, view } of SHOTS) {
   const file = resolve(OUT, `${name}.png`);
   // A fresh profile per capture: a browser process that lingers after one run
   // otherwise holds the profile lock and stalls the next one.
   const profile = mkdtempSync(join(tmpdir(), 'una-shot-'));
-  const url = `${URL_BASE}/?view=${name}&lang=en&theme=${THEME}${query ? `&${query}` : ''}`;
+  // Most captures are named after the view they open; a few are a sub-view of
+  // one, and say which.
+  const url = `${URL_BASE}/?view=${view ?? name}&lang=en&theme=${THEME}${query ? `&${query}` : ''}`;
 
   try {
     execFileSync(
