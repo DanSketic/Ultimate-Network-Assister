@@ -390,6 +390,71 @@ export const en: Dict = {
    * wording says what was measured rather than what is assumed. Where a number
    * appears it comes from the snapshot — that is why these are functions.
    */
+  /*
+   * Wording for the comparison of two surveys.
+   *
+   * Each line says what moved, and the measurement behind it is shown beside
+   * it rather than described — "1000 → 100 Mb/s" carries more than any
+   * sentence about a port having slowed down.
+   */
+  diff: {
+    title: 'Changes',
+    subtitle: (when: string) => `Against the survey of ${when}`,
+    pick: 'Compare with:',
+    none: 'Nothing differs between the two surveys.',
+    noneBody:
+      'That does not mean nothing happened — only that whatever both surveys measured came back the same.',
+    onlyOne: 'Only one survey so far',
+    onlyOneBody:
+      'Comparing needs two runs. After the next survey this panel will show what moved.',
+    countLabel: (n: number) => (n === 1 ? '1 change' : `${n} changes`),
+    capped: (n: number) => `${n} further changes are not listed.`,
+    port: 'port',
+    free: 'free',
+
+    unifiOneSided: 'The UniFi side appears in only one of the surveys, so it was not compared.',
+    proxmoxOneSided: 'The Proxmox side appears in only one of the surveys, so it was not compared.',
+
+    deviceAppeared: 'New device appeared',
+    deviceGone: 'Gone from the controller',
+    deviceLost: 'Became unreachable',
+    deviceBack: 'Reachable again',
+    firmwareChanged: 'Firmware changed',
+    addressChanged: 'Address changed',
+
+    portDown: 'Port went down',
+    portUp: 'Port came up',
+    portSlower: 'Port negotiated slower',
+    portFaster: 'Port negotiated faster',
+    neighbourChanged: 'A different device is at the far end',
+
+    networkAdded: 'New network',
+    networkRemoved: 'Network removed',
+    vlanChanged: 'VLAN id changed',
+    ssidAdded: 'New SSID',
+    ssidRemoved: 'SSID removed',
+    ssidOn: 'SSID switched on',
+    ssidOff: 'SSID switched off',
+    securityChanged: 'Security mode changed',
+    ruleAdded: 'New firewall rule',
+    ruleRemoved: 'Firewall rule deleted',
+    ruleOn: 'Firewall rule switched on',
+    ruleOff: 'Firewall rule switched off',
+    ruleActionChanged: 'The rule’s action changed',
+
+    guestAdded: 'New guest',
+    guestGone: 'Guest gone',
+    guestStarted: 'Started',
+    guestStopped: 'Stopped',
+    storageGrew: 'Store filled up further',
+    storageShrank: 'Space freed on the store',
+    diskHealthChanged: 'Disk health changed',
+    backupLost: 'Backup coverage lost',
+    backupGained: 'Backup coverage established',
+    bridgeVlanOn: 'Bridge became VLAN-aware',
+    bridgeVlanOff: 'Bridge is no longer VLAN-aware',
+  },
+
   adviceRules: {
     stepSurvey: 'Survey',
     stepPrecheck: 'Pre-check',

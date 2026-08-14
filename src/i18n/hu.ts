@@ -397,6 +397,71 @@ export const hu = {
    * wording says what was measured rather than what is assumed. Where a number
    * appears it comes from the snapshot — that is why these are functions.
    */
+  /*
+   * Wording for the comparison of two surveys.
+   *
+   * Each line says what moved, and the measurement behind it is shown beside
+   * it rather than described — "1000 → 100 Mb/s" carries more than any
+   * sentence about a port having slowed down.
+   */
+  diff: {
+    title: 'Változások',
+    subtitle: (when: string) => `A ${when}-i felméréshez képest`,
+    pick: 'Összehasonlítás ezzel:',
+    none: 'Nincs eltérés a két felmérés között.',
+    noneBody:
+      'Ez nem jelenti azt, hogy semmi nem történt — csak azt, hogy amit mindkét felmérés megmért, az ugyanaz maradt.',
+    onlyOne: 'Még csak egy felmérés van',
+    onlyOneBody:
+      'Az összehasonlításhoz két lefutás kell. A következő felmérés után ez a panel megmutatja, mi változott.',
+    countLabel: (n: number) => `${n} változás`,
+    capped: (n: number) => `További ${n} változás nincs kilistázva.`,
+    port: 'port',
+    free: 'szabad',
+
+    unifiOneSided: 'A UniFi oldal csak az egyik felmérésben szerepel, ezért nincs összehasonlítva.',
+    proxmoxOneSided: 'A Proxmox oldal csak az egyik felmérésben szerepel, ezért nincs összehasonlítva.',
+
+    deviceAppeared: 'Új eszköz jelent meg',
+    deviceGone: 'Eltűnt a vezérlőből',
+    deviceLost: 'Elérhetetlenné vált',
+    deviceBack: 'Újra elérhető',
+    firmwareChanged: 'Firmware változott',
+    addressChanged: 'IP-cím változott',
+
+    portDown: 'A port lekapcsolódott',
+    portUp: 'A port bekapcsolódott',
+    portSlower: 'A port lassabban tárgyalt',
+    portFaster: 'A port gyorsabban tárgyalt',
+    neighbourChanged: 'Más eszköz van a port túloldalán',
+
+    networkAdded: 'Új hálózat',
+    networkRemoved: 'Hálózat megszűnt',
+    vlanChanged: 'VLAN-azonosító változott',
+    ssidAdded: 'Új SSID',
+    ssidRemoved: 'SSID megszűnt',
+    ssidOn: 'SSID bekapcsolva',
+    ssidOff: 'SSID kikapcsolva',
+    securityChanged: 'Titkosítási mód változott',
+    ruleAdded: 'Új tűzfalszabály',
+    ruleRemoved: 'Tűzfalszabály törölve',
+    ruleOn: 'Tűzfalszabály bekapcsolva',
+    ruleOff: 'Tűzfalszabály kikapcsolva',
+    ruleActionChanged: 'A szabály művelete változott',
+
+    guestAdded: 'Új vendéggép',
+    guestGone: 'Vendéggép eltűnt',
+    guestStarted: 'Elindult',
+    guestStopped: 'Leállt',
+    storageGrew: 'A tároló telítettebb lett',
+    storageShrank: 'A tárolón felszabadult hely',
+    diskHealthChanged: 'A lemez egészségi állapota változott',
+    backupLost: 'Megszűnt a mentési lefedettség',
+    backupGained: 'Mentési lefedettség jött létre',
+    bridgeVlanOn: 'A bridge VLAN-tudatos lett',
+    bridgeVlanOff: 'A bridge már nem VLAN-tudatos',
+  },
+
   adviceRules: {
     stepSurvey: 'Felmérés',
     stepPrecheck: 'Előellenőrzés',

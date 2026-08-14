@@ -352,6 +352,22 @@ export interface UnifiPortProfile {
 
 /* --------------------------------------------------------------- snapshot */
 
+/**
+ * Enough about a kept survey to choose between them.
+ *
+ * Deliberately not the survey itself: a real estate's snapshot is a large
+ * document, and a picker that loaded every one of them would get slower the
+ * longer the history is kept.
+ */
+export interface SnapshotHeader {
+  id: string;
+  startedAt: string;
+  finishedAt: string;
+  devices: number;
+  guests: number;
+  errors: number;
+}
+
 export interface SurveySnapshot {
   id: string;
   startedAt: string;

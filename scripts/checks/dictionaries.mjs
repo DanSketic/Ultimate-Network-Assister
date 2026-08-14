@@ -36,7 +36,7 @@ const SHARED = new Set([
   'ID', 'URL', 'PVE', 'WAN', 'LAN', 'IoT', 'NAT', 'QoS', 'MTU', 'CIDR', 'NAS',
   'OK', 'PDF', 'HTML', 'JSON', 'CSV', 'UPS', 'RDP', 'SMB', 'NFS', 'DMZ',
   // Network vocabulary that stays English in Hungarian usage.
-  'Online', 'online', 'Uplink', 'Switch', 'Port', 'SSID', 'Site', 'Wi-Fi',
+  'Online', 'online', 'Uplink', 'Switch', 'Port', 'port', 'SSID', 'Site', 'Wi-Fi',
   'Proxmox host', 'Switch trunk', 'Trunk bridge', 'Uptime', 'Firmware',
   'vCPU', 'VM / LXC', 'OS', 'AUTO', '#', 'offline', 'VLAN-aware', 'Site backup',
   // Two-part navigation labels whose second half is shared.

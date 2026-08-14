@@ -881,6 +881,8 @@ export function SurveyView({
             </div>
           </div>
 
+          <Changes api={api} palette={palette} t={t} />
+
           <div className="panel" style={{ overflow: 'hidden' }}>
             <div
               style={{
@@ -999,6 +1001,156 @@ export function SurveyView({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What moved since an earlier survey.
+ *
+ * The history was always kept and never read, which left the one question a
+ * person cannot answer by looking — what changed while nobody was watching —
+ * with nowhere to be asked. Each line carries the measurement rather than
+ * describing it: "1000 → 100 Mb/s" says more than any sentence about a port
+ * having slowed down.
+ */
+function Changes({
+  api,
+  palette,
+  t,
+}: {
+  api: EstateApi;
+  palette: Palette;
+  t: ReturnType<typeof useT>;
+}) {
+  if (!api.snapshot) return null;
+
+  const when = (iso: string) => iso.slice(0, 16).replace('T', ' ');
+  const earlier = api.history.filter((h) => h.id !== api.snapshot?.id);
+
+  if (earlier.length === 0) {
+    return (
+      <div className="panel" style={{ padding: '15px 16px' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.diff.onlyOne}</div>
+        <div className="pretty" style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}>
+          {t.diff.onlyOneBody}
+        </div>
+      </div>
+    );
+  }
+
+  const TONE: Record<'bad' | 'warn' | 'good' | 'info', string> = {
+    bad: palette.bad,
+    warn: palette.warn,
+    good: palette.ok,
+    info: palette.idle,
+  };
+
+  return (
+    <div className="panel" style={{ overflow: 'hidden' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+          padding: '14px 16px',
+          borderBottom: '1px solid var(--line)',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{t.diff.title}</div>
+          {api.diff ? (
+            <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 3 }}>
+              {t.diff.subtitle(when(api.diff.from?.at ?? ''))}
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          {api.diff && api.diff.changes.length > 0 ? (
+            <Pill color={palette.warn} tight>
+              {t.diff.countLabel(api.diff.changes.length)}
+            </Pill>
+          ) : null}
+          <label style={{ fontSize: 10.5, color: 'var(--text3)' }}>{t.diff.pick}</label>
+          <select
+            className="input"
+            value={api.compareWith}
+            onChange={(e) => api.setCompareWith(e.target.value)}
+            style={{ fontSize: 11, padding: '5px 8px', width: 'auto' }}
+          >
+            {earlier.map((h) => (
+              <option key={h.id} value={h.id}>
+                {when(h.finishedAt)} · {h.devices + h.guests}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {api.diff?.notCompared.map((note) => (
+        <div
+          key={note}
+          className="pretty"
+          style={{
+            padding: '11px 16px',
+            fontSize: 11,
+            color: palette.warn,
+            borderBottom: '1px solid var(--line)',
+            lineHeight: 1.55,
+          }}
+        >
+          {note}
+        </div>
+      ))}
+
+      {api.diff && api.diff.changes.length === 0 ? (
+        <div style={{ padding: '15px 16px' }}>
+          <div style={{ fontSize: 12, marginBottom: 5 }}>{t.diff.none}</div>
+          <div className="pretty" style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.6 }}>
+            {t.diff.noneBody}
+          </div>
+        </div>
+      ) : null}
+
+      {/*
+        * Capped for the panel's sake, and the cap is stated. A survey after a
+        * rebuild can move hundreds of things, and silently showing the first
+        * forty would read as "that was all of it".
+        */}
+      {(api.diff?.changes ?? []).slice(0, 40).map((change, i) => (
+        <div
+          key={`${change.where}-${change.what}-${i}`}
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 10,
+            padding: '10px 16px',
+            borderBottom: '1px solid var(--line)',
+          }}
+        >
+          <Dot color={TONE[change.tone]} size={6} style={{ flex: 'none', top: 5 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12 }}>{change.what}</span>
+            <span className="mono" style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 9 }}>
+              {change.where}
+            </span>
+          </div>
+          {change.detail ? (
+            <div className="mono" style={{ fontSize: 10.5, color: 'var(--text2)', flex: 'none' }}>
+              {change.detail}
+            </div>
+          ) : null}
+        </div>
+      ))}
+
+      {(api.diff?.changes.length ?? 0) > 40 ? (
+        <div style={{ padding: '11px 16px', fontSize: 10.5, color: 'var(--text3)' }}>
+          {t.diff.capped((api.diff?.changes.length ?? 0) - 40)}
+        </div>
+      ) : null}
     </div>
   );
 }

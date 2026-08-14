@@ -7,8 +7,15 @@ import { demoRules, demoSignals, demoZones, ZONE_MATRIX } from '@/data/policy';
 import { demoBackups, demoCapacity, demoProfiles, demoScanLog, demoStats } from '@/data/operations';
 import { demoNodes, LINKS } from '@/data/topology';
 import * as api from '@/survey/client';
+import { diffSurveys, type SurveyDiff } from '@/survey/diff';
 import { estateFromSnapshot, type Estate } from '@/survey/mapping';
-import type { EndpointProbe, HostKeyProbe, Profile, SurveySnapshot } from '@/survey/model';
+import type {
+  EndpointProbe,
+  HostKeyProbe,
+  Profile,
+  SnapshotHeader,
+  SurveySnapshot,
+} from '@/survey/model';
 
 /**
  * The estate the views render.
@@ -23,6 +30,13 @@ export interface EstateApi {
   /** Live surveying needs the desktop shell for TLS pinning and credentials. */
   supported: boolean;
   snapshot: SurveySnapshot | null;
+  /** The kept surveys, newest first, for choosing what to compare against. */
+  history: SnapshotHeader[];
+  /** What moved since the chosen earlier survey, or null while none is chosen. */
+  diff: SurveyDiff | null;
+  /** Which earlier survey the comparison is against; empty picks the previous. */
+  compareWith: string;
+  setCompareWith: (id: string) => void;
   profiles: Profile[];
   loading: boolean;
   running: boolean;
@@ -85,6 +99,9 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [snapshot, setSnapshot] = useState<SurveySnapshot | null>(null);
   const [mode, setMode] = useState<'demo' | 'survey'>('demo');
+  const [history, setHistory] = useState<SnapshotHeader[]>([]);
+  const [compareWith, setCompareWith] = useState('');
+  const [earlier, setEarlier] = useState<SurveySnapshot | null>(null);
   const [loading, setLoading] = useState(supported);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +144,55 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
     };
   }, [supported, fail]);
 
+  /*
+   * The kept surveys, and the one being compared against.
+   *
+   * Listing is separate from loading: the list carries only headers, so the
+   * picker stays cheap however long the history grows, and the body of an
+   * earlier survey is fetched only once one is actually chosen.
+   */
+  const refreshHistory = useCallback(async () => {
+    if (!supported) return;
+    try {
+      setHistory(await api.listSnapshots());
+    } catch (e) {
+      fail(e);
+    }
+  }, [supported, fail]);
+
+  useEffect(() => {
+    void refreshHistory();
+  }, [refreshHistory]);
+
+  // Nothing chosen means the one taken before the current survey.
+  const wanted = useMemo(() => {
+    if (compareWith) return compareWith;
+    const index = history.findIndex((h) => h.id === snapshot?.id);
+    return index >= 0 ? (history[index + 1]?.id ?? '') : (history[1]?.id ?? '');
+  }, [compareWith, history, snapshot?.id]);
+
+  useEffect(() => {
+    if (!supported || !wanted || wanted === snapshot?.id) {
+      setEarlier(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .snapshotById(wanted)
+      .then((s) => {
+        if (!cancelled) setEarlier(s);
+      })
+      .catch(fail);
+    return () => {
+      cancelled = true;
+    };
+  }, [supported, wanted, snapshot?.id, fail]);
+
+  const diff = useMemo(
+    () => (earlier && snapshot ? diffSurveys(earlier, snapshot, t) : null),
+    [earlier, snapshot, t],
+  );
+
   const demo = useMemo(() => demoEstate(lang, t.policy.matrixNoteDemo), [lang, t]);
   const live = useMemo(
     () => (snapshot ? estateFromSnapshot(snapshot, profiles, t) : null),
@@ -149,6 +215,10 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
     mode: estate.source,
     supported,
     snapshot,
+    history,
+    diff,
+    compareWith: wanted,
+    setCompareWith,
     profiles,
     loading,
     running,
@@ -226,10 +296,14 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
         const result = await api.runSurvey(profileIds);
         setSnapshot(result);
         setMode('survey');
+        // Back to comparing against whatever came immediately before this run,
+        // which is what someone who just pressed the button wants to see.
+        setCompareWith('');
         if (result.errors.length > 0) {
           setError(t.survey.partialRun(result.errors.join('; ')));
         }
         await reloadProfiles();
+        await refreshHistory();
       } catch (e) {
         fail(e);
       } finally {
@@ -242,6 +316,8 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
         await api.clearSnapshots();
         setSnapshot(null);
         setMode('demo');
+        setHistory([]);
+        setCompareWith('');
       } catch (e) {
         fail(e);
       }

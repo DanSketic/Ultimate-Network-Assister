@@ -11,6 +11,32 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.1.0] — 2026-08-14
+
+### Added
+
+- **What changed since the last survey.** The application had always kept a
+  history of surveys and never once read it — only the newest was ever loaded.
+  The Survey view now compares the current survey against an earlier one and
+  lists what moved: a device that stopped answering, a port that quietly
+  dropped from a gigabit to a tenth of it, a different device at the far end of
+  a cable, a guest that lost its backup coverage, a firewall rule switched off,
+  a store past ninety per cent, a disk whose SMART verdict turned. Each line
+  carries the measurement rather than describing it — `1000 → 100 Mb/s` says
+  more than any sentence about a port having slowed down.
+
+  This is the question a person cannot answer by looking and a machine can, and
+  it obeys the same rule as everything else here: a difference is only reported
+  where *both* surveys measured the thing. A source present in one survey and
+  absent from the other is named as not compared, because calling its contents
+  "new" would be a claim about the estate that nothing measured supports.
+
+- `list_snapshots` and `snapshot_by_id` on the native side. Listing returns
+  headers only, so the picker stays cheap however long the history grows, and
+  an earlier survey is loaded only once one is actually chosen.
+
+---
+
 ## [1.0.0] — 2026-08-14
 
 First public release, under the MIT licence.

@@ -608,6 +608,47 @@ fn latest_snapshot(db: State<'_, Db>) -> Result<Option<SurveySnapshot>, String> 
         .find_map(|payload| serde_json::from_str::<SurveySnapshot>(payload).ok()))
 }
 
+/// Enough about each kept snapshot to choose between them.
+///
+/// Deliberately not the snapshots themselves: a survey of a real estate is a
+/// large document, and a list that has to load every one of them to draw a
+/// dropdown would get slower the longer the history is kept.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotHeader {
+    pub id: String,
+    pub started_at: String,
+    pub finished_at: String,
+    pub devices: usize,
+    pub guests: usize,
+    pub errors: usize,
+}
+
+#[tauri::command]
+fn list_snapshots(db: State<'_, Db>) -> Result<Vec<SnapshotHeader>, String> {
+    Ok(read_all(&db, "snapshots", "created_at")?
+        .iter()
+        .filter_map(|payload| serde_json::from_str::<SurveySnapshot>(payload).ok())
+        .map(|s| SnapshotHeader {
+            id: s.id.clone(),
+            started_at: s.started_at.clone(),
+            finished_at: s.finished_at.clone(),
+            devices: s.unifi.as_ref().map_or(0, |u| u.devices.len()),
+            guests: s.proxmox.as_ref().map_or(0, |p| p.guests.len()),
+            errors: s.errors.len(),
+        })
+        .collect())
+}
+
+/// One kept snapshot by id, for comparing against the current one.
+#[tauri::command]
+fn snapshot_by_id(db: State<'_, Db>, id: String) -> Result<Option<SurveySnapshot>, String> {
+    Ok(read_all(&db, "snapshots", "created_at")?
+        .iter()
+        .filter_map(|payload| serde_json::from_str::<SurveySnapshot>(payload).ok())
+        .find(|s| s.id == id))
+}
+
 /* ------------------------------------------------------------------ apply */
 
 /// Everything a write needs: the profile, its secret, and a pinned client.
@@ -819,6 +860,8 @@ pub fn run() {
             run_survey,
             latest_snapshot,
             clear_snapshots,
+            list_snapshots,
+            snapshot_by_id,
             take_site_backup,
             apply_operations,
             rollback_apply_run,

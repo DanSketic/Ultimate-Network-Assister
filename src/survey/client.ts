@@ -5,6 +5,7 @@ import type {
   EndpointProbe,
   HostKeyProbe,
   Profile,
+  SnapshotHeader,
   SurveySnapshot,
 } from './model';
 
@@ -103,6 +104,15 @@ export function runSurvey(profileIds: string[]): Promise<SurveySnapshot> {
 
 export function latestSnapshot(): Promise<SurveySnapshot | null> {
   return invoke<SurveySnapshot | null>('latest_snapshot');
+}
+
+/** Enough about each kept survey to choose between them, without loading any. */
+export function listSnapshots(): Promise<SnapshotHeader[]> {
+  return invoke<SnapshotHeader[]>('list_snapshots');
+}
+
+export function snapshotById(id: string): Promise<SurveySnapshot | null> {
+  return invoke<SurveySnapshot | null>('snapshot_by_id', { id });
 }
 
 export function clearSnapshots(): Promise<void> {
