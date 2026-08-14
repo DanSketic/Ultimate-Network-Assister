@@ -183,6 +183,37 @@ export interface ProxmoxSnapshot {
   disks: PveDisk[];
   backupJobs: PveBackupJob[];
   backupFiles: PveBackupFile[];
+  certificates: PveCertificate[];
+  updates: PveUpdate[];
+  /**
+   * Whether the node let us list updates at all.
+   *
+   * "Nothing is pending" and "we were not allowed to look" are different facts,
+   * and only the first is reassuring.
+   */
+  updatesReadable: boolean;
+}
+
+/** A certificate the node serves, and when it stops being valid. */
+export interface PveCertificate {
+  node: string;
+  filename: string;
+  subject: string;
+  issuer: string;
+  /** Unix seconds; 0 when the node did not say. */
+  notAfter: number;
+  fingerprint: string;
+}
+
+/** A package with a newer version available. */
+export interface PveUpdate {
+  node: string;
+  package: string;
+  current: string;
+  candidate: string;
+  /** "important" marks the security and stability ones. */
+  priority: string;
+  title: string;
 }
 
 /**
@@ -248,6 +279,35 @@ export interface UnifiDevice {
   uplinkLocalPort: number;
   /** Physical ports, where the device has any. Empty for access points. */
   ports: UnifiPort[];
+  /** Radios, where the device has any. Empty for switches and gateways. */
+  radios: UnifiRadio[];
+}
+
+/**
+ * One radio on an access point.
+ *
+ * Channel utilisation is the number worth having: the share of airtime the
+ * radio observed as busy, other people's networks included. That is exactly
+ * what a channel choice has to account for and exactly what nobody can see by
+ * looking at their own equipment.
+ *
+ * Measurements the controller did not report come back as -1, not 0 — a radio
+ * that said nothing is a different thing from one that measured an idle
+ * channel, and only the second is worth acting on.
+ */
+export interface UnifiRadio {
+  name: string;
+  /** "ng" for 2.4 GHz, "na" for 5 GHz, "6e" for 6 GHz. */
+  band: string;
+  channel: string;
+  /** Channel width in MHz, as configured. */
+  width: number;
+  txPowerMode: string;
+  txPower: number;
+  utilisation: number;
+  selfUtilisation: number;
+  clients: number;
+  satisfaction: number;
 }
 
 /**

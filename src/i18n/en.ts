@@ -298,6 +298,13 @@ export const en: Dict = {
     startHint:
       'The run uses GET calls only. Every request expects the pinned certificate; if it changed, the connection fails rather than asking.',
     discard: 'Discard results',
+    exportName: 'survey',
+    exportSnapshot: 'Save to a file',
+    importSnapshot: 'Load from a file',
+    portableNote:
+      'The file holds measurements only — a credential never enters a survey. So it can be carried to another machine, or sent to whoever needs to look at it.',
+    reportName: 'survey-report',
+    exportReport: 'Export report',
     log: 'Log',
     lastLog: 'Last run log',
     neverRan: 'No survey has run yet.',
@@ -397,6 +404,57 @@ export const en: Dict = {
    * it rather than described — "1000 → 100 Mb/s" carries more than any
    * sentence about a port having slowed down.
    */
+  /** The document language attribute of the exported report. */
+  reportLang: 'en',
+
+  /*
+   * The survey as a handed-over document.
+   *
+   * Written to be read by someone who has never seen this application — a
+   * colleague, a client, or the same person in a year — so nothing here relies
+   * on the interface being open beside it.
+   */
+  report: {
+    title: 'Survey report',
+    subtitle: (when: string) => `Measured state · ${when}`,
+    subtitleDemo: 'Sample data set — not a real survey',
+    demoWarning:
+      'This report was produced from the sample data set, not from real systems. None of its findings describe an existing network.',
+    findings: 'Findings',
+    noFindings:
+      'The survey found nothing amiss. That does not make the segmentation proven — only a traffic measurement can show that the rules take effect.',
+    capacity: 'Capacity',
+    backups: 'Backups',
+    noBackups: 'The survey found no backup jobs.',
+    backupSummary: (covered: number, total: number, missing: number) =>
+      `Of ${total} guests, ${covered} have a backup file behind them and ${missing} do not. Coverage follows from the files found, not from the jobs scheduled.`,
+    backupsUnverifiable:
+      'No store reports a verification result, so the usability of the backups is not proven.',
+    devices: 'Devices',
+    rules: 'Firewall rules',
+    noRules: 'The survey read no firewall rules.',
+    sources: 'Survey log',
+    problems: 'What could not be read',
+    colSeverity: 'Severity',
+    colWhat: 'What',
+    colWhere: 'Where',
+    colDetail: 'Detail',
+    colValue: 'Value',
+    colUsed: 'Used',
+    colJob: 'Job',
+    colTarget: 'Target',
+    colEvidence: 'Evidence',
+    colName: 'Name',
+    colState: 'State',
+    colAction: 'Action',
+    colSource: 'Source',
+    colVerified: 'Verified',
+    colPort: 'Port',
+    colTime: 'Time',
+    footer: (when: string) =>
+      `Produced by Ultimate Network Assister · ${when} · The report states only what the survey measured.`,
+  },
+
   diff: {
     title: 'Changes',
     subtitle: (when: string) => `Against the survey of ${when}`,
@@ -543,6 +601,52 @@ export const en: Dict = {
     bridgeExecute: 'Switch the bridge to VLAN-aware in one step, then restart networking.',
     bridgeVerify: 'Reach the host and every guest on its own VLAN.',
     bridgeRollback: 'Copy the original interfaces file back from the local console.',
+
+    channelLabel: 'channel',
+
+    airtimeTitle: (device: string, band: string) => `${device}’s ${band} radio is on a busy channel`,
+    airtimeImpact: 'Less waiting before transmitting, and Wi-Fi that feels faster',
+    airtimeWhy: (band: string, total: number, own: number, clients: number) =>
+      `The ${band} radio measures the air as busy ${total}% of the time, ${own}% of which is its own traffic; ${clients} clients are using it. The difference is somebody else's network — the one thing about Wi-Fi that does not show up in your own equipment's statistics, and the thing slowing it down. The radio waits for the channel to clear before every transmission.`,
+    airtimePrecheck:
+      'Look at what the neighbouring networks occupy in the same band, at more than one time of day.',
+    airtimeExecute: 'Set a fixed, quieter channel, narrowing the channel width if that is what it takes.',
+    airtimeVerify: 'Measure the utilisation again with a survey, at the same time of day.',
+    airtimeRollback: 'Switch automatic channel selection back on.',
+
+    sameChannelTitle: (band: string, channel: string) =>
+      `Several access points on the same ${band} channel (${channel})`,
+    sameChannelImpact: 'The access points stop taking the air from each other',
+    sameChannelWhy: (n: number, band: string, channel: string) =>
+      `${n} access points are set to channel ${channel} in the ${band} band. Whether they actually hear each other is not something the application can tell — that needs a measurement on site. If they do, they share the same air and both slow down.`,
+    sameChannelPrecheck:
+      'Check how far apart the access points are, and how strongly each hears the other.',
+    sameChannelExecute:
+      'Give them separate channels; on 2.4 GHz only 1, 6 and 11 do not overlap.',
+    sameChannelVerify: 'Measure utilisation and client satisfaction again.',
+    sameChannelRollback: 'Put the original channel settings back.',
+
+    certTitle: (node: string, days: number) => `${node}’s certificate expires in ${days} days`,
+    certExpiredTitle: (node: string) => `${node}’s certificate has expired`,
+    certImpact: 'The interface and the API stay reachable without an interruption',
+    certWhy: (subject: string, issuer: string, days: number) =>
+      days <= 0
+        ? `The certificate for “${subject}” (issued by ${issuer}) has expired. Browsers and every API client will report an error, and the survey itself can fail on it.`
+        : `The certificate for “${subject}” (issued by ${issuer}) expires in ${days} days. This is the failure nobody notices in time: one morning the interface simply stops loading.`,
+    certPrecheck: 'Settle how it will be renewed: ACME, an internal CA, or uploaded by hand.',
+    certExecute: 'Renew the certificate and install it on the node.',
+    certVerify: 'Check the new expiry date, then run a survey.',
+    certRollback: 'Put the previous certificate back if the new one is not accepted.',
+
+    updatesTitle: (n: number) => `${n} package updates pending`,
+    updatesImpact: 'Known bugs and vulnerabilities are closed',
+    updatesWhy: (total: number, important: number, sample: string) =>
+      `${total} packages have a newer version, ${important} of them marked important. For example: ${sample}. An update may replace the kernel, so it needs a window with a restart in it.`,
+    updatesPrecheck: 'Confirm the shutdown order for the guests, and that their backups exist.',
+    updatesExecute: 'Update in a maintenance window, node by node, with the guests stopped.',
+    updatesVerify: 'The node and every guest come back; then run a survey.',
+    updatesRollback:
+      'A package update cannot be reliably undone — the way back is the backup taken beforehand.',
 
     slowPortTitle: (device: string, port: number) => `Investigate the speed of ${device} port ${port}`,
     slowPortImpact: 'The link settles at the speed the cabling allows',

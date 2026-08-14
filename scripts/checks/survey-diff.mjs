@@ -7,11 +7,13 @@
  * estate, and calling its contents "new" would be a claim nothing supports.
  */
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { build } from 'esbuild';
 import { rmSync } from 'node:fs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '');
-const OUT = new URL('./diff-bundle.mjs', import.meta.url).pathname.slice(1);
+const OUT = join(tmpdir(), 'diff-bundle-' + process.pid + '.mjs').replace(/\\/g, '/');
 const DOUT = OUT.replace('diff-bundle', 'diff-dict');
 
 for (const [entry, out] of [
@@ -43,7 +45,7 @@ const port = (idx, over = {}) => ({
 const device = (mac, over = {}) => ({
   mac, name: mac.toUpperCase(), model: 'USW', kind: 'usw', state: 1, ip: `10.0.0.${mac.length}`,
   version: '6.6.0', uptimeSecs: 1000, clients: 0, uplinkMac: '', uplinkRemotePort: 0,
-  uplinkLocalPort: 0, ports: [], ...over,
+  uplinkLocalPort: 0, ports: [], radios: [], ...over,
 });
 
 const unifi = (over = {}) => ({
@@ -53,7 +55,7 @@ const unifi = (over = {}) => ({
 
 const pve = (over = {}) => ({
   version: '8.2', nodes: [], storages: [], guests: [], interfaces: [], disks: [],
-  backupJobs: [], backupFiles: [], ...over,
+  backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false, ...over,
 });
 
 const snap = (id, over = {}) => ({

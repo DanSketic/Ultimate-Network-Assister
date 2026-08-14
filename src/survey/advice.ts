@@ -24,6 +24,20 @@ const WEAK_WIFI = ['open', 'none', 'wep', 'wpa', 'wpapersonal', 'wpa1'];
 /** A backup this recent is treated as an available restore point. */
 const CHECKPOINT_MAX_AGE_DAYS = 7;
 
+/**
+ * Airtime busy above this is worth acting on.
+ *
+ * Below roughly this a channel absorbs bursts without anyone noticing; above
+ * it, every transmission waits, and the symptom people report is "the Wi-Fi is
+ * slow" on equipment whose own statistics look fine.
+ */
+const BUSY_AIRTIME = 65;
+
+/** A certificate within this many days of expiring is worth raising. */
+const CERT_WARNING_DAYS = 30;
+
+const BAND_NAMES: Record<string, string> = { ng: '2.4 GHz', na: '5 GHz', '6e': '6 GHz' };
+
 interface Draft {
   id: string;
   severity: Severity;
@@ -169,6 +183,58 @@ function proxmoxDrafts(pve: ProxmoxSnapshot, backups: BackupSummary, t: Dict): D
     });
   }
 
+  /*
+   * A certificate about to expire.
+   *
+   * The expiry date is measured, so the days remaining are arithmetic rather
+   * than a guess — and this is the classic failure nobody notices until the
+   * morning the interface stops loading.
+   */
+  for (const c of pve.certificates ?? []) {
+    if (c.notAfter <= 0) continue;
+    const days = Math.floor((c.notAfter * 1000 - Date.now()) / 86_400_000);
+    if (days > CERT_WARNING_DAYS) continue;
+    out.push({
+      id: `adv:cert:${c.node}:${c.filename}`,
+      severity: days <= 0 ? 'bad' : days <= 7 ? 'bad' : 'warn',
+      title: days <= 0 ? r.certExpiredTitle(c.node) : r.certTitle(c.node, days),
+      where: `${c.node} · ${c.filename}`,
+      impact: r.certImpact,
+      risk: 'Alacsony',
+      minutes: 20,
+      why: r.certWhy(c.subject || c.filename, c.issuer || '—', days),
+      precheck: r.certPrecheck,
+      execute: r.certExecute,
+      verify: r.certVerify,
+      rollback: r.certRollback,
+    });
+  }
+
+  // Pending updates, but only where the node actually let us look.
+  const updates = pve.updates ?? [];
+  const important = updates.filter((u) => u.priority.toLowerCase() === 'important');
+  if (pve.updatesReadable && updates.length > 0) {
+    out.push({
+      id: 'adv:updates',
+      severity: important.length > 0 ? 'warn' : 'info',
+      title: r.updatesTitle(updates.length),
+      where: [...new Set(updates.map((u) => u.node))].join(', '),
+      impact: r.updatesImpact,
+      risk: 'Közepes',
+      minutes: 45,
+      needsWindow: true,
+      why: r.updatesWhy(
+        updates.length,
+        important.length,
+        updates.slice(0, 5).map((u) => u.package).join(', '),
+      ),
+      precheck: r.updatesPrecheck,
+      execute: r.updatesExecute,
+      verify: r.updatesVerify,
+      rollback: r.updatesRollback,
+    });
+  }
+
   for (const d of pve.disks.filter((x) => x.health && !['PASSED', 'OK'].includes(x.health))) {
     out.push({
       id: `adv:disk:${d.node}:${d.devpath}`,
@@ -229,6 +295,73 @@ function unifiDrafts(unifi: UnifiSnapshot, t: Dict): Draft[] {
       execute: r.weakWifiExecute,
       verify: r.weakWifiVerify,
       rollback: r.weakWifiRollback,
+    });
+  }
+
+  /*
+   * A radio working in a busy channel.
+   *
+   * This is the one thing about Wi-Fi that cannot be seen from the equipment's
+   * own statistics: the airtime is shared with everybody else's network, and a
+   * radio whose own counters look healthy can still be waiting most of the time
+   * to transmit. The controller measures it; the application had been throwing
+   * the number away.
+   */
+  for (const d of unifi.devices) {
+    // Guarded because a snapshot can arrive from an older build or from a file
+    // someone imported, where a list added later simply is not there.
+    for (const radio of d.radios ?? []) {
+      if (radio.utilisation < BUSY_AIRTIME) continue;
+      const band = BAND_NAMES[radio.band] ?? radio.band;
+      const name = d.name || d.model || d.mac;
+      out.push({
+        id: `adv:airtime:${d.mac}:${radio.name}`,
+        severity: radio.utilisation >= 85 ? 'bad' : 'warn',
+        title: r.airtimeTitle(name, band),
+        where: `${name} · ${band} · ${r.channelLabel} ${radio.channel}`,
+        impact: r.airtimeImpact,
+        risk: 'Alacsony',
+        minutes: 25,
+        why: r.airtimeWhy(band, radio.utilisation, Math.max(radio.selfUtilisation, 0), radio.clients),
+        precheck: r.airtimePrecheck,
+        execute: r.airtimeExecute,
+        verify: r.airtimeVerify,
+        rollback: r.airtimeRollback,
+      });
+    }
+  }
+
+  /*
+   * Two access points sharing a channel in the same band.
+   *
+   * Both channels are measured, so this states a fact rather than modelling
+   * coverage: the application cannot know whether the two overlap on air, and
+   * says so in the plan instead of pretending otherwise.
+   */
+  const onChannel = new Map<string, string[]>();
+  for (const d of unifi.devices) {
+    for (const radio of d.radios ?? []) {
+      if (!radio.channel || radio.channel === 'auto') continue;
+      const key = `${radio.band}:${radio.channel}`;
+      onChannel.set(key, [...(onChannel.get(key) ?? []), d.name || d.model || d.mac]);
+    }
+  }
+  for (const [key, names] of onChannel) {
+    if (names.length < 2) continue;
+    const [band, channel] = key.split(':');
+    out.push({
+      id: `adv:channel:${key}`,
+      severity: 'info',
+      title: r.sameChannelTitle(BAND_NAMES[band!] ?? band!, channel!),
+      where: names.join(', '),
+      impact: r.sameChannelImpact,
+      risk: 'Alacsony',
+      minutes: 20,
+      why: r.sameChannelWhy(names.length, BAND_NAMES[band!] ?? band!, channel!),
+      precheck: r.sameChannelPrecheck,
+      execute: r.sameChannelExecute,
+      verify: r.sameChannelVerify,
+      rollback: r.sameChannelRollback,
     });
   }
 

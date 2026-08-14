@@ -11,6 +11,59 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.2.0] — 2026-08-14
+
+### Added
+
+- **Wi-Fi findings that come from a measurement.** The application advised on
+  channels and congestion in its sample data while its collector never read a
+  single radio field — so on a real network that whole class of finding was
+  silent. `radio_table` and `radio_table_stats` arrive inside the device object
+  already being downloaded, and are now read: channel, width, transmit power,
+  clients per radio, and channel utilisation.
+
+  Utilisation is the number worth having. It is the share of airtime the radio
+  observed as busy, *other people's networks included* — the one thing about
+  Wi-Fi that does not show up in your own equipment's statistics and the thing
+  actually slowing it down. Two rules use it: a radio working in a channel busy
+  above two-thirds of the time, and access points configured onto the same
+  channel in the same band. The second says plainly that the application cannot
+  know whether they overlap on air, because that needs a measurement on site.
+
+  A radio that reported no utilisation is recorded as -1 rather than 0: saying
+  nothing and measuring an idle channel are different, and only the second is
+  worth acting on.
+
+- **Certificates and pending updates.** `/nodes/{node}/certificates/info` gives
+  the expiry dates, which is the classic failure nobody notices until the
+  morning the interface stops loading. Pending package updates are read where
+  the token is permitted; where it is not, that is recorded rather than passed
+  off as "nothing pending" — being unable to look and having nothing to find
+  are different facts and only one of them is reassuring.
+
+- **A survey is a file.** It can be written out and read back, which is what
+  makes it portable: survey a site, take it home, compare it there, or send it
+  to whoever asked. An imported file is validated natively before anything is
+  stored — it is the one snapshot that did not come from this application's own
+  collectors — and re-serialised into this build's shape, so what lands in the
+  history is exactly as if the survey had been run here. A snapshot holds
+  measurements only; no credential ever enters one.
+
+- **The survey as a report.** A self-contained HTML document of what was found:
+  findings, capacity, backup evidence, devices, rules, and the log of what was
+  read. It opens anywhere with no reader and no network, prints from the
+  browser, and can be read in a year by someone who has never heard of this
+  application. Where the survey could not establish something the report says
+  so — a document that quietly omits its gaps reads as though there were none.
+
+### Changed
+
+- Lists added to a snapshot after the fact are read defensively on the
+  TypeScript side. Rust fills its own defaults, but an imported file can come
+  from any build, and that is now a supported path rather than a theoretical one.
+
+---
+
 ## [1.1.0] — 2026-08-14
 
 ### Added

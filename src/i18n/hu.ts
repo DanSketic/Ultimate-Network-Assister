@@ -308,6 +308,13 @@ export const hu = {
     startHint:
       'A futás csak GET hívásokat használ. Minden kérés a rögzített tanúsítványt várja; ha az megváltozott, a kapcsolat megszakad, nem kérdez.',
     discard: 'Eredmények eldobása',
+    exportName: 'felmeres',
+    exportSnapshot: 'Mentés fájlba',
+    importSnapshot: 'Betöltés fájlból',
+    portableNote:
+      'A fájl csak méréseket tartalmaz — hitelesítő adat sosem kerül felmérésbe. Így elvihető másik gépre, vagy elküldhető annak, akinek rá kell néznie.',
+    reportName: 'felmeresi-jelentes',
+    exportReport: 'Jelentés exportálása',
     log: 'Napló',
     lastLog: 'Utolsó futás naplója',
     neverRan: 'Még nem futott felmérés.',
@@ -404,6 +411,57 @@ export const hu = {
    * it rather than described — "1000 → 100 Mb/s" carries more than any
    * sentence about a port having slowed down.
    */
+  /** The document language attribute of the exported report. */
+  reportLang: 'hu',
+
+  /*
+   * The survey as a handed-over document.
+   *
+   * Written to be read by someone who has never seen this application — a
+   * colleague, a client, or the same person in a year — so nothing here relies
+   * on the interface being open beside it.
+   */
+  report: {
+    title: 'Felmérési jelentés',
+    subtitle: (when: string) => `Mért állapot · ${when}`,
+    subtitleDemo: 'Bemutató adatkészlet — nem valós felmérés',
+    demoWarning:
+      'Ez a jelentés a bemutató adatkészletből készült, nem valós rendszerekről. Semmilyen megállapítása nem vonatkozik létező hálózatra.',
+    findings: 'Megállapítások',
+    noFindings:
+      'A felmérés nem talált eltérést. Ez nem jelenti azt, hogy a szegmentáció bizonyított — a szabályok érvényesülését csak forgalmi mérés igazolhatja.',
+    capacity: 'Kapacitás',
+    backups: 'Mentések',
+    noBackups: 'A felmérés nem talált mentési feladatot.',
+    backupSummary: (covered: number, total: number, missing: number) =>
+      `${total} vendéggépből ${covered} mögött van mentési fájl, ${missing} mögött nincs. A lefedettség a megtalált fájlokból következik, nem az ütemezett feladatokból.`,
+    backupsUnverifiable:
+      'Egyetlen tároló sem jelez ellenőrzési eredményt, ezért a mentések használhatósága nem igazolt.',
+    devices: 'Eszközök',
+    rules: 'Tűzfalszabályok',
+    noRules: 'A felmérés nem olvasott ki tűzfalszabályt.',
+    sources: 'A felmérés naplója',
+    problems: 'Amit nem sikerült kiolvasni',
+    colSeverity: 'Súly',
+    colWhat: 'Mi',
+    colWhere: 'Hol',
+    colDetail: 'Részlet',
+    colValue: 'Érték',
+    colUsed: 'Foglalt',
+    colJob: 'Feladat',
+    colTarget: 'Cél',
+    colEvidence: 'Bizonyíték',
+    colName: 'Név',
+    colState: 'Állapot',
+    colAction: 'Művelet',
+    colSource: 'Forrás',
+    colVerified: 'Igazolt',
+    colPort: 'Port',
+    colTime: 'Idő',
+    footer: (when: string) =>
+      `Készítette az Ultimate Network Assister · ${when} · A jelentés csak azt állítja, amit a felmérés mért.`,
+  },
+
   diff: {
     title: 'Változások',
     subtitle: (when: string) => `A ${when}-i felméréshez képest`,
@@ -551,6 +609,52 @@ export const hu = {
     bridgeExecute: 'A bridge VLAN-tudatosra kapcsolása, egy lépésben, majd a hálózat újraindítása.',
     bridgeVerify: 'A host és minden vendéggép elérése a saját VLAN-jában.',
     bridgeRollback: 'Az eredeti interfaces fájl visszamásolása helyi konzolról.',
+
+    channelLabel: 'csatorna',
+
+    airtimeTitle: (device: string, band: string) => `${device} ${band}-es rádiója zsúfolt csatornán`,
+    airtimeImpact: 'Kevesebb várakozás adás előtt, gyorsabbnak érzett Wi-Fi',
+    airtimeWhy: (band: string, total: number, own: number, clients: number) =>
+      `A(z) ${band}-es rádió a levegőt ${total}%-ban foglaltnak méri, ebből ${own}% a saját forgalma; ${clients} kliens használja. A különbözet idegen forgalom — ez az egyetlen dolog a Wi-Fi-ben, ami a saját eszköz statisztikáiból nem látszik, mégis ez lassítja. A rádió minden adás előtt megvárja, amíg a csatorna felszabadul.`,
+    airtimePrecheck:
+      'A szomszédos hálózatok csatornafoglaltságának megnézése ugyanabban a sávban, több napszakban.',
+    airtimeExecute: 'Kevésbé foglalt fix csatorna beállítása, szükség esetén szűkebb csatornaszélességgel.',
+    airtimeVerify: 'A foglaltság újramérése felméréssel, azonos napszakban.',
+    airtimeRollback: 'Az automatikus csatornaválasztás visszakapcsolása.',
+
+    sameChannelTitle: (band: string, channel: string) =>
+      `Több hozzáférési pont ugyanazon a ${band}-es csatornán (${channel})`,
+    sameChannelImpact: 'A hozzáférési pontok nem veszik el egymás elől a levegőt',
+    sameChannelWhy: (n: number, band: string, channel: string) =>
+      `${n} hozzáférési pont van a ${band} sáv ${channel}-es csatornájára állítva. Hogy a valóságban hallják-e egymást, azt az alkalmazás nem tudja megmondani — ahhoz helyszíni mérés kell. Ha viszont hallják, ugyanazon a levegőn osztoznak, és mindkettő lassul.`,
+    sameChannelPrecheck:
+      'A hozzáférési pontok fizikai távolságának és jelerősségének ellenőrzése egymás felől.',
+    sameChannelExecute:
+      'Eltérő csatornák kiosztása; 2,4 GHz-en csak az 1-es, 6-os és 11-es nem fed át egymással.',
+    sameChannelVerify: 'A foglaltság és a kliensek elégedettségi értékének újramérése.',
+    sameChannelRollback: 'Az eredeti csatornabeállítások visszaállítása.',
+
+    certTitle: (node: string, days: number) => `${node} tanúsítványa ${days} nap múlva lejár`,
+    certExpiredTitle: (node: string) => `${node} tanúsítványa lejárt`,
+    certImpact: 'A felület és az API megszakítás nélkül elérhető marad',
+    certWhy: (subject: string, issuer: string, days: number) =>
+      days <= 0
+        ? `A(z) „${subject}” tanúsítvány (kiállító: ${issuer}) már lejárt. A böngésző és minden API-kliens hibát jelez, és a saját felmérés is elakadhat rajta.`
+        : `A(z) „${subject}” tanúsítvány (kiállító: ${issuer}) ${days} nap múlva lejár. Ez az a hiba, amit senki nem vesz észre időben: egyik reggel egyszerűen nem tölt be a felület.`,
+    certPrecheck: 'A megújítás módjának tisztázása: ACME, saját CA vagy kézi feltöltés.',
+    certExecute: 'A tanúsítvány megújítása és telepítése a csomóponton.',
+    certVerify: 'Az új lejárati dátum ellenőrzése, majd új felmérés.',
+    certRollback: 'A korábbi tanúsítvány visszaállítása, ha az új nem fogadható el.',
+
+    updatesTitle: (n: number) => `${n} függőben lévő csomagfrissítés`,
+    updatesImpact: 'Ismert hibák és sérülékenységek megszűnnek',
+    updatesWhy: (total: number, important: number, sample: string) =>
+      `${total} csomaghoz van újabb verzió, ebből ${important} fontosnak jelölt. Például: ${sample}. A frissítés kernelcserét is jelenthet, ezért újraindítási ablakot igényel.`,
+    updatesPrecheck: 'A vendéggépek leállítási sorrendjének és a mentések meglétének ellenőrzése.',
+    updatesExecute: 'Frissítés karbantartási ablakban, csomópontonként, a vendéggépek leállítása után.',
+    updatesVerify: 'A csomópont és minden vendéggép visszatérése, majd új felmérés.',
+    updatesRollback:
+      'Csomagfrissítés nem vonható vissza megbízhatóan — a visszaút a művelet előtti mentés.',
 
     slowPortTitle: (device: string, port: number) => `${device} ${port}. port sebességének kivizsgálása`,
     slowPortImpact: 'A kapcsolat a kábelezés által megengedett sebességre áll',

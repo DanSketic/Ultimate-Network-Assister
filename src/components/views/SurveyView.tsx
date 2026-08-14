@@ -879,6 +879,52 @@ export function SurveyView({
                 </button>
               ) : null}
             </div>
+
+            {/*
+              * A survey is a file, and that is what makes it portable: survey a
+              * site, take it home, compare it there — or send it to whoever
+              * asked. Nothing in it has to stay on the machine that made it,
+              * because a credential never enters a snapshot.
+              */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+                marginTop: 14,
+                paddingTop: 14,
+                borderTop: '1px solid var(--line)',
+              }}
+            >
+              {api.snapshot ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={() => void api.exportSnapshot()}
+                  >
+                    {t.survey.exportSnapshot}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={() => void api.exportReport()}
+                  >
+                    {t.survey.exportReport}
+                  </button>
+                </>
+              ) : null}
+              <button type="button" className="btn-ghost" onClick={() => void api.importSnapshot()}>
+                {t.survey.importSnapshot}
+              </button>
+              <span
+                className="pretty"
+                style={{ fontSize: 10.5, color: 'var(--text3)', flex: 1, minWidth: 220, lineHeight: 1.5 }}
+              >
+                {t.survey.portableNote}
+              </span>
+            </div>
           </div>
 
           <Changes api={api} palette={palette} t={t} />

@@ -38,7 +38,7 @@ const port = (idx, neighbourMac, neighbourName, speed = 1000) => ({
 
 const dev = (mac, name, kind, uplinkMac, model, ports = []) => ({
   mac, name, model, kind, state: 1, ip: `192.168.11.${mac.length + 60}`, version: '6.6',
-  uptimeSecs: 90000, clients: 5, uplinkMac, uplinkRemotePort: 0, uplinkLocalPort: 0, ports,
+  uptimeSecs: 90000, clients: 5, uplinkMac, uplinkRemotePort: 0, uplinkLocalPort: 0, ports, radios: [],
 });
 
 // Listed the way a controller returns them: gateway, switches, then every
@@ -75,7 +75,7 @@ const snapshot = {
     ],
     guests: [{ vmid: 100, name: 'CT100', kind: 'lxc', node: 'pve', status: 'stopped',
       cpuCount: 2, memTotal: 2e9, diskTotal: 8e9, tags: '' }],
-    interfaces: [], disks: [], backupJobs: [], backupFiles: [],
+    interfaces: [], disks: [], backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false,
   },
   unifi: {
     site: 'default', devices, networks: [], wlans: [], firewallRules: [],

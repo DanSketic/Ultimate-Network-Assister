@@ -47,6 +47,42 @@ pub struct UnifiDevice {
     /// Physical ports, where the device has any. Empty for access points.
     #[serde(default)]
     pub ports: Vec<UnifiPort>,
+    /// Radios, where the device has any. Empty for switches and gateways.
+    #[serde(default)]
+    pub radios: Vec<UnifiRadio>,
+}
+
+/// One radio on an access point.
+///
+/// The controller reports the settings and the measurements in two separate
+/// arrays of the same device object we already download; both are read and
+/// joined on the radio's own name.
+///
+/// Channel utilisation is the number worth having. It is the share of airtime
+/// the radio observed as busy — including other people's networks, which is
+/// exactly what a channel choice has to account for and exactly what nobody can
+/// see by looking at their own equipment.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiRadio {
+    /// The controller's own name for the radio, e.g. "wifi0".
+    pub name: String,
+    /// "ng" for 2.4 GHz, "na" for 5 GHz, "6e" for 6 GHz.
+    pub band: String,
+    pub channel: String,
+    /// Channel width in MHz, as configured.
+    pub width: u64,
+    /// "auto" or "custom".
+    pub tx_power_mode: String,
+    /// dBm, when the controller reports a figure.
+    pub tx_power: i64,
+    /// Percentage of airtime seen busy; -1 when the controller did not say.
+    pub utilisation: i64,
+    /// The share of that which is this radio's own traffic.
+    pub self_utilisation: i64,
+    pub clients: u64,
+    /// The controller's own 0–100 verdict; -1 when absent.
+    pub satisfaction: i64,
 }
 
 /// One physical port, as the controller reports it.
@@ -179,6 +215,60 @@ fn as_i64(v: &Value, key: &str) -> i64 {
 /// port index. A port with no neighbour entry is reported empty rather than
 /// guessed: "nothing announced itself here" is a different fact from "nothing
 /// is plugged in", and the interface says which.
+/// Reads a device's radios, joining the settings to the measurements.
+///
+/// `radio_table` holds what the radio is set to and `radio_table_stats` what it
+/// observed; the controller keys both on the radio's own name. Both arrive
+/// inside the device object already being downloaded, so this costs nothing
+/// beyond reading fields that were previously discarded.
+///
+/// Absent measurements are reported as -1 rather than 0: a radio that did not
+/// report its utilisation is a different thing from one that measured an idle
+/// channel, and only the second is worth acting on.
+fn radios_of(device: &Value) -> Vec<UnifiRadio> {
+    let stats: Vec<&Value> = device
+        .get("radio_table_stats")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().collect())
+        .unwrap_or_default();
+
+    device
+        .get("radio_table")
+        .and_then(Value::as_array)
+        .map(|radios| {
+            radios
+                .iter()
+                .map(|r| {
+                    let name = as_str(r, "name");
+                    let stat = stats.iter().find(|s| as_str(s, "name") == name);
+                    let measured = |key: &str| {
+                        stat.and_then(|s| s.get(key))
+                            .and_then(Value::as_i64)
+                            .unwrap_or(-1)
+                    };
+
+                    UnifiRadio {
+                        band: as_str(r, "radio"),
+                        // The configured channel can be the literal "auto".
+                        channel: r
+                            .get("channel")
+                            .map(|c| c.as_str().map(String::from).unwrap_or_else(|| c.to_string()))
+                            .unwrap_or_default(),
+                        width: as_u64(r, "ht"),
+                        tx_power_mode: as_str(r, "tx_power_mode"),
+                        tx_power: as_i64(r, "tx_power"),
+                        utilisation: measured("cu_total"),
+                        self_utilisation: measured("cu_self_tx").max(measured("cu_self_rx")),
+                        clients: stat.map(|s| as_u64(s, "num_sta")).unwrap_or(0),
+                        satisfaction: measured("satisfaction"),
+                        name,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn ports_of(device: &Value) -> Vec<UnifiPort> {
     let neighbours: Vec<&Value> = device
         .get("lldp_table")
@@ -352,6 +442,7 @@ pub async fn collect(
                 .unwrap_or(0),
             uplink_local_port: d.get("uplink").map(|u| as_u64(u, "port_idx")).unwrap_or(0),
             ports: ports_of(d),
+            radios: radios_of(d),
         });
     }
     let offline = snap.devices.iter().filter(|d| d.state == 0).count();

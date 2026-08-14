@@ -115,6 +115,16 @@ export function snapshotById(id: string): Promise<SurveySnapshot | null> {
   return invoke<SurveySnapshot | null>('snapshot_by_id', { id });
 }
 
+/**
+ * Takes a survey from a file into the history.
+ *
+ * Validated natively before anything is stored: an imported file is the one
+ * snapshot that did not come from this application's own collectors.
+ */
+export function importSnapshot(payload: string): Promise<SurveySnapshot> {
+  return invoke<SurveySnapshot>('import_snapshot', { payload });
+}
+
 export function clearSnapshots(): Promise<void> {
   return invoke<void>('clear_snapshots');
 }

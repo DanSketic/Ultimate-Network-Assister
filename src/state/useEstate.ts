@@ -7,8 +7,10 @@ import { demoRules, demoSignals, demoZones, ZONE_MATRIX } from '@/data/policy';
 import { demoBackups, demoCapacity, demoProfiles, demoScanLog, demoStats } from '@/data/operations';
 import { demoNodes, LINKS } from '@/data/topology';
 import * as api from '@/survey/client';
+import { openTextFile, saveTextFile } from '@/blueprint/store';
 import { diffSurveys, type SurveyDiff } from '@/survey/diff';
 import { estateFromSnapshot, type Estate } from '@/survey/mapping';
+import { surveyReport } from '@/survey/report';
 import type {
   EndpointProbe,
   HostKeyProbe,
@@ -57,6 +59,14 @@ export interface EstateApi {
   probeSsh: (host: string, port: number, pinned: string | null) => Promise<HostKeyProbe | null>;
   run: (profileIds: string[]) => Promise<void>;
   discard: () => Promise<void>;
+  /** Writes the current survey to a file the user chooses. */
+  exportSnapshot: () => Promise<string | null>;
+  /** Reads one back, validated natively, and opens it. */
+  importSnapshot: () => Promise<boolean>;
+  /** Writes what was found as a document someone else can read. */
+  exportReport: () => Promise<string | null>;
+  /** Opens a survey already in the history. */
+  openSnapshot: (id: string) => Promise<void>;
 }
 
 export function demoEstate(lang: Lang, matrixNote: string): Estate {
@@ -317,6 +327,78 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
         setSnapshot(null);
         setMode('demo');
         setHistory([]);
+        setCompareWith('');
+      } catch (e) {
+        fail(e);
+      }
+    },
+
+    /*
+     * A survey becomes a file.
+     *
+     * Which is what makes it portable: survey a site, take the file home, and
+     * compare it there — or send it to whoever asked. The file holds
+     * measurements only; credentials never enter a snapshot, so there is
+     * nothing in it that has to stay on the machine that made it.
+     */
+    exportSnapshot: async () => {
+      if (!snapshot) return null;
+      try {
+        const stamp = snapshot.finishedAt.slice(0, 10);
+        return await saveTextFile(
+          `${t.survey.exportName}-${stamp}.json`,
+          JSON.stringify(snapshot, null, 2),
+          [{ name: 'JSON', extensions: ['json'] }],
+        );
+      } catch (e) {
+        fail(e);
+        return null;
+      }
+    },
+
+    importSnapshot: async () => {
+      try {
+        const text = await openTextFile([{ name: 'JSON', extensions: ['json'] }]);
+        if (!text) return false;
+        const imported = await api.importSnapshot(text);
+        setSnapshot(imported);
+        setMode('survey');
+        setCompareWith('');
+        await refreshHistory();
+        return true;
+      } catch (e) {
+        fail(e);
+        return false;
+      }
+    },
+
+    /*
+     * What was found, as something to hand over.
+     *
+     * Self-contained HTML: it opens anywhere with no reader and no network,
+     * prints from the browser, and can be read in a year by someone who has
+     * never heard of this application.
+     */
+    exportReport: async () => {
+      try {
+        const stamp = (estate.surveyedAt ?? new Date().toISOString()).slice(0, 10);
+        return await saveTextFile(
+          `${t.survey.reportName}-${stamp}.html`,
+          surveyReport(estate, snapshot, t),
+          [{ name: 'HTML', extensions: ['html'] }],
+        );
+      } catch (e) {
+        fail(e);
+        return null;
+      }
+    },
+
+    openSnapshot: async (id) => {
+      try {
+        const chosen = await api.snapshotById(id);
+        if (!chosen) return;
+        setSnapshot(chosen);
+        setMode('survey');
         setCompareWith('');
       } catch (e) {
         fail(e);

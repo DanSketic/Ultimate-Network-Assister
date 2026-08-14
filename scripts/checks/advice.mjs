@@ -1,4 +1,6 @@
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 /*
  * Drives the recommendation engine with made-up snapshots.
  *
@@ -10,7 +12,7 @@ import { build } from 'esbuild';
 import { rmSync } from 'node:fs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '');
-const OUT = new URL('./advice-bundle.mjs', import.meta.url).pathname.slice(1);
+const OUT = join(tmpdir(), 'advice-bundle-' + process.pid + '.mjs').replace(/\\/g, '/');
 
 await build({
   entryPoints: [`${ROOT}/src/survey/advice.ts`],
@@ -55,7 +57,7 @@ const snap = (over = {}) => ({
 const pve = (over = {}) => ({
   version: '8.2', nodes: [{ name: 'pve01', status: 'online', cpuRatio: 0.1, cpuCount: 8,
     memUsed: 1, memTotal: 10, uptimeSecs: 100 }],
-  storages: [], guests: [], interfaces: [], disks: [], backupJobs: [], backupFiles: [], ...over,
+  storages: [], guests: [], interfaces: [], disks: [], backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false, ...over,
 });
 
 const unifi = (over = {}) => ({
@@ -107,7 +109,7 @@ check(
   recommendationsFromSnapshot(
     snap({ unifi: unifi({ devices: [{ mac: 'a', name: 'AP', model: 'U6', kind: 'uap', state: 0,
       ip: '10.0.0.5', version: '', uptimeSecs: 0, clients: 0, uplinkMac: '', uplinkRemotePort: 0,
-      uplinkLocalPort: 0, ports: [] }] }) }),
+      uplinkLocalPort: 0, ports: [], radios: [] }] }) }),
     { ...emptyBackups, newestAgeDays: 2 },
     hu,
   )[0].steps[2].state === 'kész',
@@ -117,7 +119,7 @@ check(
   recommendationsFromSnapshot(
     snap({ unifi: unifi({ devices: [{ mac: 'a', name: 'AP', model: 'U6', kind: 'uap', state: 0,
       ip: '10.0.0.5', version: '', uptimeSecs: 0, clients: 0, uplinkMac: '', uplinkRemotePort: 0,
-      uplinkLocalPort: 0, ports: [] }] }) }),
+      uplinkLocalPort: 0, ports: [], radios: [] }] }) }),
     { ...emptyBackups, newestAgeDays: 40 },
     hu,
   )[0].steps[2].state === 'vár',
@@ -134,6 +136,112 @@ const storage = (used, total) =>
 check('92% storage is bad', storage(92, 100)[0]?.severity === 'bad');
 check('84% storage is a warning', storage(84, 100)[0]?.severity === 'warn');
 check('70% storage says nothing', storage(70, 100).length === 0);
+
+/* -------------------------------------------------------------- airtime */
+
+const radio = (over = {}) => ({
+  name: 'wifi0', band: 'na', channel: '36', width: 80, txPowerMode: 'auto', txPower: 20,
+  utilisation: 40, selfUtilisation: 10, clients: 5, satisfaction: 95, ...over,
+});
+
+const ap = (mac, radios) => ({
+  mac, name: `AP ${mac}`, model: 'U6', kind: 'uap', state: 1, ip: '10.0.0.5', version: '',
+  uptimeSecs: 0, clients: 0, uplinkMac: '', uplinkRemotePort: 0, uplinkLocalPort: 0,
+  ports: [], radios,
+});
+
+const airtime = (utilisation) =>
+  recommendationsFromSnapshot(
+    snap({ unifi: unifi({ devices: [ap('a', [radio({ utilisation })])] }) }), emptyBackups, hu);
+
+check('a quiet channel says nothing', airtime(40).length === 0);
+check('a busy channel is a warning', airtime(70)[0]?.severity === 'warn');
+check('a saturated one is worse', airtime(90)[0]?.severity === 'bad');
+check(
+  'and the plan quotes the airtime it measured',
+  /70%/.test(airtime(70)[0]?.why ?? ''),
+  airtime(70)[0]?.why?.slice(0, 90),
+);
+check(
+  'a radio that reported no utilisation is not treated as busy',
+  recommendationsFromSnapshot(
+    snap({ unifi: unifi({ devices: [ap('a', [radio({ utilisation: -1 })])] }) }),
+    emptyBackups, hu,
+  ).length === 0,
+);
+
+const shared = recommendationsFromSnapshot(
+  snap({ unifi: unifi({ devices: [
+    ap('a', [radio({ channel: '36' })]), ap('b', [radio({ channel: '36' })]),
+  ] }) }), emptyBackups, hu);
+check('two access points on one channel are noted', shared.length === 1);
+check('as a note, not a fault', shared[0]?.severity === 'info');
+check(
+  'and the plan admits it cannot know whether they overlap',
+  /nem tudja megmondani/.test(shared[0]?.why ?? ''),
+);
+check(
+  'different channels say nothing',
+  recommendationsFromSnapshot(
+    snap({ unifi: unifi({ devices: [
+      ap('a', [radio({ channel: '36' })]), ap('b', [radio({ channel: '44' })]),
+    ] }) }), emptyBackups, hu).length === 0,
+);
+check(
+  'and neither does "auto" on both',
+  recommendationsFromSnapshot(
+    snap({ unifi: unifi({ devices: [
+      ap('a', [radio({ channel: 'auto' })]), ap('b', [radio({ channel: 'auto' })]),
+    ] }) }), emptyBackups, hu).length === 0,
+);
+
+/* --------------------------------------------------- certificates and updates */
+
+const cert = (days) => ({
+  node: 'pve01', filename: 'pveproxy-ssl.pem', subject: 'CN=pve01', issuer: 'CN=Local CA',
+  notAfter: Math.floor((Date.now() + days * 86400000) / 1000), fingerprint: 'aa',
+});
+
+const certs = (days) =>
+  recommendationsFromSnapshot(snap({ proxmox: pve({ certificates: [cert(days)] }) }), emptyBackups, hu);
+
+check('a certificate with a year left says nothing', certs(365).length === 0);
+check('one with three weeks left is a warning', certs(21)[0]?.severity === 'warn');
+check('one with three days left is worse', certs(3)[0]?.severity === 'bad');
+check('an expired one is stated as expired', /lejárt/.test(certs(-5)[0]?.title ?? ''));
+check(
+  'a certificate with no expiry date is not guessed about',
+  recommendationsFromSnapshot(
+    snap({ proxmox: pve({ certificates: [{ ...cert(1), notAfter: 0 }] }) }), emptyBackups, hu,
+  ).length === 0,
+);
+
+const update = (priority) => ({ node: 'pve01', package: 'pve-kernel', current: '1', candidate: '2',
+  priority, title: 'kernel' });
+
+check(
+  'pending updates are reported once the node let us look',
+  recommendationsFromSnapshot(
+    snap({ proxmox: pve({ updates: [update('important')], updatesReadable: true }) }),
+    emptyBackups, hu,
+  )[0]?.severity === 'warn',
+);
+check(
+  'and a token that could not look reports nothing rather than "all clear"',
+  recommendationsFromSnapshot(
+    snap({ proxmox: pve({ updates: [update('important')], updatesReadable: false }) }),
+    emptyBackups, hu,
+  ).length === 0,
+);
+check(
+  'an update needs a maintenance window, not a duration',
+  /Ablak/.test(
+    recommendationsFromSnapshot(
+      snap({ proxmox: pve({ updates: [update('standard')], updatesReadable: true }) }),
+      emptyBackups, hu,
+    )[0]?.duration ?? '',
+  ),
+);
 
 /* --------------------------------------------------------------------- wi-fi */
 
@@ -167,7 +275,7 @@ const withPort = (p) =>
   recommendationsFromSnapshot(
     snap({ unifi: unifi({ devices: [{ mac: 'a', name: 'USW', model: 'USW-24', kind: 'usw',
       state: 1, ip: '10.0.0.2', version: '', uptimeSecs: 0, clients: 0, uplinkMac: '',
-      uplinkRemotePort: 0, uplinkLocalPort: 0, ports: [p] }] }) }),
+      uplinkRemotePort: 0, uplinkLocalPort: 0, ports: [p], radios: [] }] }) }),
     emptyBackups, hu,
   );
 check('100 Mb/s to a known neighbour is worth chasing', withPort(port(100, 'AP-Loft')).length === 1);
@@ -205,7 +313,7 @@ const many = recommendationsFromSnapshot(
     unifi: unifi({
       devices: [{ mac: 'a', name: 'AP', model: 'U6', kind: 'uap', state: 0, ip: '10.0.0.5',
         version: '', uptimeSecs: 0, clients: 0, uplinkMac: '', uplinkRemotePort: 0,
-        uplinkLocalPort: 0, ports: [] }],
+        uplinkLocalPort: 0, ports: [], radios: [] }],
       networks: [{ id: 'n', name: 'v10', vlan: 10, subnet: '', purpose: 'corporate',
         enabled: true, dhcpEnabled: true }],
     }),

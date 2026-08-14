@@ -1,4 +1,6 @@
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 /*
  * Walks the two dictionaries in step and reports any leaf where the English
  * string is byte-identical to the Hungarian one — the signature of a key that
@@ -9,7 +11,7 @@ import { build } from 'esbuild';
 import { readFileSync, rmSync } from 'node:fs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '');
-const OUT = new URL('./dict-bundle.mjs', import.meta.url).pathname.slice(1);
+const OUT = join(tmpdir(), 'dict-bundle-' + process.pid + '.mjs').replace(/\\/g, '/');
 
 await build({
   entryPoints: [`${ROOT}/src/i18n/index.ts`],

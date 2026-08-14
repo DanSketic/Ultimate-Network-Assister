@@ -1,4 +1,6 @@
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 /*
  * Checks the two things the fit has to get right at once: a cable that bows
  * outside the cards still ends up on screen, and the estate still looks
@@ -8,7 +10,7 @@ import { build } from 'esbuild';
 import { rmSync } from 'node:fs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '');
-const OUT = new URL('./fit-bundle.mjs', import.meta.url).pathname.slice(1);
+const OUT = join(tmpdir(), 'fit-bundle-' + process.pid + '.mjs').replace(/\\/g, '/');
 
 await build({
   entryPoints: [`${ROOT}/src/lib/fit.ts`],
@@ -43,7 +45,7 @@ const check = (name, ok, detail = '') => {
 
 /* ------------------------------------------------ nothing hanging outside */
 
-const plain = frameFor({ ...VIEW, nodes, ports: [], drawn: null });
+const plain = frameFor({ ...VIEW, nodes, ports: [], radios: [], drawn: null });
 check('centre is the cards', plain.centreX === CENTRE_X, `centreX ${plain.centreX}`);
 check(
   'frame is symmetric',
@@ -61,7 +63,7 @@ check(
 const bowed = frameFor({
   ...VIEW,
   nodes,
-  ports: [],
+  ports: [], radios: [],
   drawn: { minX: 100, minY: 20, maxX: 976 + 400, maxY: 260 },
 });
 check('centre is unmoved by the bow', bowed.centreX === CENTRE_X, `centreX ${bowed.centreX}`);
@@ -97,7 +99,7 @@ for (const [name, fit] of [
 const chipped = frameFor({
   ...VIEW,
   nodes,
-  ports: [{ x: 976 + 60, y: 40 }],
+  ports: [{ x: 976 + 60, y: 40 }], radios: [],
   drawn: null,
 });
 check(
@@ -109,10 +111,10 @@ check('and the centre still holds', chipped.centreX === CENTRE_X, `centreX ${chi
 
 /* ---------------------------------------------------- degenerate input */
 
-check('no nodes means no fit', frameFor({ ...VIEW, nodes: [], ports: [], drawn: null }) === null);
+check('no nodes means no fit', frameFor({ ...VIEW, nodes: [], ports: [], radios: [], drawn: null }) === null);
 check(
   'a collapsed viewport means no fit',
-  frameFor({ ...VIEW, available: 0, nodes, ports: [], drawn: null }) === null,
+  frameFor({ ...VIEW, available: 0, nodes, ports: [], radios: [], drawn: null }) === null,
 );
 
 /* ------------------------------ a bow on the left is mirrored to the right */
@@ -120,7 +122,7 @@ check(
 const left = frameFor({
   ...VIEW,
   nodes,
-  ports: [],
+  ports: [], radios: [],
   drawn: { minX: -400, minY: 20, maxX: 900, maxY: 260 },
 });
 check(

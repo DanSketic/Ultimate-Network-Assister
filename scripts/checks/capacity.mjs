@@ -1,4 +1,6 @@
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 /*
  * The capacity panel's four states.
  *
@@ -10,7 +12,7 @@ import { build } from 'esbuild';
 import { rmSync } from 'node:fs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '');
-const OUT = new URL('./cap-bundle.mjs', import.meta.url).pathname.slice(1);
+const OUT = join(tmpdir(), 'cap-bundle-' + process.pid + '.mjs').replace(/\\/g, '/');
 const DOUT = OUT.replace('cap-bundle', 'cap-dict');
 
 for (const [entry, out] of [
@@ -39,7 +41,7 @@ const store = (over) => ({ node: 'pve01', name: 'local-lvm', kind: 'lvmthin', to
 const snap = (storages, withPve = true) => ({
   id: 's', startedAt: '', finishedAt: '2026-08-13T09:00:00Z', log: [], errors: [],
   proxmox: withPve ? { version: '8.2', nodes: [node], storages, guests: [], interfaces: [],
-    disks: [], backupJobs: [], backupFiles: [] } : null,
+    disks: [], backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false } : null,
   unifi: null,
 });
 
@@ -109,7 +111,7 @@ const legacy = estateFromSnapshot(
       // As a row stored before `active` and `content` existed would come back.
       storages: [{ node: 'pve01', name: 'tank', kind: 'zfs', total: 4e12, used: 1e12,
         available: 3e12, enabled: true }],
-      guests: [], interfaces: [], disks: [], backupJobs: [], backupFiles: [] } },
+      guests: [], interfaces: [], disks: [], backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false } },
   [], hu,
 );
 check('an older snapshot still charts', legacy.capacity.some((c) => /tank/.test(c.label)));

@@ -1,4 +1,6 @@
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 /*
  * Switching the interface language has to move the form fields with it —
  * but only the ones nobody filled in.
@@ -12,7 +14,7 @@ import { build } from 'esbuild';
 import { rmSync } from 'node:fs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '');
-const OUT = new URL('./param-bundle.mjs', import.meta.url).pathname.slice(1);
+const OUT = join(tmpdir(), 'param-bundle-' + process.pid + '.mjs').replace(/\\/g, '/');
 
 await build({
   entryPoints: [`${ROOT}/src/blueprint/registry.ts`],

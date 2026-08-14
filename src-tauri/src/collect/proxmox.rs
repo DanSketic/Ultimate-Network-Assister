@@ -24,6 +24,45 @@ pub struct ProxmoxSnapshot {
     pub backup_jobs: Vec<PveBackupJob>,
     #[serde(default)]
     pub backup_files: Vec<PveBackupFile>,
+    #[serde(default)]
+    pub certificates: Vec<PveCertificate>,
+    #[serde(default)]
+    pub updates: Vec<PveUpdate>,
+    /// Set when the node refused to list updates, which a read-only token can
+    /// legitimately be denied. Absence of updates and inability to look are
+    /// different facts and must not both read as "nothing pending".
+    #[serde(default)]
+    pub updates_readable: bool,
+}
+
+/// A certificate the node serves, and when it stops being valid.
+///
+/// Read because it is the classic thing nobody notices until the morning it
+/// breaks, and because it costs one call to an endpoint a read-only token is
+/// already allowed.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PveCertificate {
+    pub node: String,
+    pub filename: String,
+    pub subject: String,
+    pub issuer: String,
+    /// Unix seconds; 0 when the node did not say.
+    pub not_after: u64,
+    pub fingerprint: String,
+}
+
+/// A package with a newer version available.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PveUpdate {
+    pub node: String,
+    pub package: String,
+    pub current: String,
+    pub candidate: String,
+    /// "important" marks the security and stability ones.
+    pub priority: String,
+    pub title: String,
 }
 
 /// A scheduled backup job, as configured.
@@ -342,11 +381,92 @@ pub async fn collect(
                 format!("{e} — a lemezleltár kimarad"),
             )),
         }
+
+        collect_certificates(client, base, &token, name, &mut snap, log).await;
+        collect_updates(client, base, &token, name, &mut snap, log).await;
     }
 
     collect_backups(client, base, &token, &mut snap, log).await;
 
     Ok(snap)
+}
+
+/// The certificates a node serves, and when they expire.
+///
+/// Read-only and cheap. This is the classic thing nobody notices until the
+/// morning it breaks, and the node knows the answer already.
+async fn collect_certificates(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    node: &str,
+    snap: &mut ProxmoxSnapshot,
+    log: &mut Vec<LogEntry>,
+) {
+    match get(client, base, token, &format!("/nodes/{node}/certificates/info")).await {
+        Ok(v) => {
+            for c in array(&v) {
+                snap.certificates.push(PveCertificate {
+                    node: node.to_string(),
+                    filename: as_str(&c, "filename"),
+                    subject: as_str(&c, "subject"),
+                    issuer: as_str(&c, "issuer"),
+                    not_after: as_u64(&c, "notafter"),
+                    fingerprint: as_str(&c, "fingerprint"),
+                });
+            }
+            log.push(LogEntry::ok(
+                SOURCE,
+                format!(
+                    "GET /nodes/{node}/certificates/info → {} tanúsítvány",
+                    snap.certificates.iter().filter(|c| c.node == node).count()
+                ),
+            ));
+        }
+        Err(e) => log.push(LogEntry::fail(SOURCE, format!("{e} — a tanúsítványok kimaradnak"))),
+    }
+}
+
+/// Packages with a newer version waiting.
+///
+/// Proxmox guards this endpoint more tightly than the rest of the audit surface,
+/// so a read-only token is quite likely to be refused. That is recorded rather
+/// than treated as an error: "nothing is pending" and "we were not allowed to
+/// look" are different facts, and only the first is reassuring.
+async fn collect_updates(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    node: &str,
+    snap: &mut ProxmoxSnapshot,
+    log: &mut Vec<LogEntry>,
+) {
+    match get(client, base, token, &format!("/nodes/{node}/apt/update")).await {
+        Ok(v) => {
+            snap.updates_readable = true;
+            for u in array(&v) {
+                snap.updates.push(PveUpdate {
+                    node: node.to_string(),
+                    package: as_str(&u, "Package"),
+                    current: as_str(&u, "OldVersion"),
+                    candidate: as_str(&u, "Version"),
+                    priority: as_str(&u, "Priority"),
+                    title: as_str(&u, "Title"),
+                });
+            }
+            log.push(LogEntry::ok(
+                SOURCE,
+                format!(
+                    "GET /nodes/{node}/apt/update → {} frissítés",
+                    snap.updates.iter().filter(|u| u.node == node).count()
+                ),
+            ));
+        }
+        Err(e) => log.push(LogEntry::fail(
+            SOURCE,
+            format!("{e} — a függőben lévő frissítések nem olvashatók ezzel a tokennel"),
+        )),
+    }
 }
 
 /// Backup jobs and the files they left behind.

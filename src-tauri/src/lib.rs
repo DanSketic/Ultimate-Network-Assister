@@ -640,6 +640,32 @@ fn list_snapshots(db: State<'_, Db>) -> Result<Vec<SnapshotHeader>, String> {
         .collect())
 }
 
+/// Takes a survey written to a file and puts it into the history.
+///
+/// Parsed into the typed shape before anything is stored, which is the whole
+/// point: an imported file is the one snapshot that did not come from this
+/// application's own collectors, and the only thing standing between a
+/// hand-edited or truncated document and the rest of the estate. Anything that
+/// does not parse is refused rather than kept for later to fall over.
+///
+/// Re-serialising rather than storing the bytes given is deliberate too: what
+/// lands in the database is then in this build's shape, defaults filled in,
+/// exactly as if the survey had been run here.
+#[tauri::command]
+fn import_snapshot(db: State<'_, Db>, payload: String) -> Result<SurveySnapshot, String> {
+    let snapshot: SurveySnapshot = serde_json::from_str(&payload)
+        .map_err(|e| format!("a fájl nem felmérés, vagy sérült: {e}"))?;
+
+    if snapshot.id.trim().is_empty() {
+        return Err("a felmérésnek nincs azonosítója".into());
+    }
+
+    let stored = serde_json::to_string(&snapshot).map_err(to_err)?;
+    upsert(&db, "snapshots", "created_at", &snapshot.id, &stored)?;
+    prune_snapshots(&db)?;
+    Ok(snapshot)
+}
+
 /// One kept snapshot by id, for comparing against the current one.
 #[tauri::command]
 fn snapshot_by_id(db: State<'_, Db>, id: String) -> Result<Option<SurveySnapshot>, String> {
@@ -862,6 +888,7 @@ pub fn run() {
             clear_snapshots,
             list_snapshots,
             snapshot_by_id,
+            import_snapshot,
             take_site_backup,
             apply_operations,
             rollback_apply_run,

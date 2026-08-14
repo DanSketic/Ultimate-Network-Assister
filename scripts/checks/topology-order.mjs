@@ -34,7 +34,7 @@ const m = await import('file://' + out.replace(/\\/g, '/'));
 
 const dev = (mac, name, kind, uplinkMac = '', model = 'X') => ({
   mac, name, model, kind, state: 1, ip: `10.0.1.${mac.length}`, version: '6.6',
-  uptimeSecs: 8000, clients: 3, uplinkMac, ports: [],
+  uptimeSecs: 8000, clients: 3, uplinkMac, ports: [], radios: [], radios: [],
 });
 
 // Access points are listed in an order unrelated to the switch each hangs off.
