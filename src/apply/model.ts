@@ -1,3 +1,4 @@
+import type { NetworkRole } from '@/blueprint/model';
 import type { Dict } from '@/i18n';
 
 /*
@@ -41,6 +42,13 @@ export interface ApplyOperation {
   /** Blueprint module that asked for this. */
   moduleId: string;
   /**
+   * What the object is for in the target state, where that has a bearing on
+   * whether the application may write it at all. A VPN range is the case that
+   * needs it: the gateway's own VPN server owns that network, so finding one
+   * already there is the expected outcome rather than a clash.
+   */
+  role?: NetworkRole;
+  /**
    * How to find the object that already represents this one. Matching is by a
    * stable natural key, never by array position.
    */
@@ -61,7 +69,7 @@ export interface ApplyOperation {
   managedFields: string[];
 }
 
-export type DiffVerdict = 'create' | 'update' | 'noop' | 'conflict';
+export type DiffVerdict = 'create' | 'update' | 'noop' | 'conflict' | 'external';
 
 export interface FieldChange {
   field: string;
@@ -77,6 +85,8 @@ export interface OperationDiff {
   changes: FieldChange[];
   /** Why the operation is blocked, when the verdict is `conflict`. */
   blockedReason?: string;
+  /** Why nothing is written, when something outside the application provides it. */
+  note?: string;
 }
 
 export interface DryRunReport {

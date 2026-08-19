@@ -22,8 +22,9 @@ import { mhText, type MhText } from './multiHousehold.text';
  * Multi-household Proxmox + UniFi estate.
  *
  * One gateway, one hypervisor, and N households that must not see each other.
- * Every household gets a client, an IoT and a guest VLAN; shared services sit
- * in their own VLANs and are reached through named allows only.
+ * Every household gets a client VLAN, and — where the layout shuts the floors
+ * off from each other — an IoT and a guest VLAN of its own too; shared services
+ * sit in their own VLANs and are reached through named allows only.
  *
  * Policy ordering follows the handbook: specific allows first, broad blocks
  * last, so a later deny can never shadow an earlier permit.
@@ -148,34 +149,59 @@ function makeBuild(x: MhText) {
      *                   reach each other — one household, several segments.
      *   floorsIsolated  a subnet per floor, and they never see each other.
      *
-     * Only the last two differ in policy; the networks are built the same way,
-     * which keeps the difference legible in the plan instead of hidden in two
-     * near-identical branches.
+     * The last two build the same client networks and differ in policy, which
+     * keeps that difference legible in the plan instead of hidden in two
+     * near-identical branches. Where they do part company is IoT and guests,
+     * below.
      */
     const layout = ctx.str('layout');
     const perFloor = layout !== 'single';
     const floorsIsolated = layout === 'floorsIsolated';
 
-    // In single-household mode the whole building is one synthetic household,
-    // so every downstream loop stays the same shape.
-    const households: Household[] = perFloor
-      ? ctx.households
-      : [
-          {
-            id: 'building',
-            name: x.net.buildingName,
-            slug: x.net.buildingName,
-            clientVlan: ctx.households[0]?.clientVlan ?? 10,
-            iotVlan: ctx.households[0]?.iotVlan ?? 71,
-            guestVlan: ctx.households[0]?.guestVlan ?? 91,
-          },
-        ];
+    // The whole building as one synthetic household. Used in single-household
+    // mode, and for whichever of IoT and guests is kept building-wide, so
+    // every downstream loop stays the same shape.
+    const building: Household = {
+      id: 'building',
+      name: x.net.buildingName,
+      slug: x.net.buildingName,
+      clientVlan: ctx.households[0]?.clientVlan ?? 10,
+      iotVlan: ctx.households[0]?.iotVlan ?? 71,
+      guestVlan: ctx.households[0]?.guestVlan ?? 91,
+    };
+
+    const households: Household[] = perFloor ? ctx.households : [building];
+
+    /*
+     * Clients are cut up by the layout, but IoT and guests need not follow.
+     * Where the floors may reach each other, a sensor or guest subnet per
+     * floor separates nothing that is not already open — it only multiplies
+     * VLANs, keys and rules. So `auto` splits them only under full isolation;
+     * `perFloor` and `shared` override that in either direction.
+     */
+    const splitBy = (id: string): boolean => {
+      const choice = ctx.str(id);
+      if (choice === 'perFloor') return perFloor;
+      if (choice === 'shared') return false;
+      return perFloor && floorsIsolated;
+    };
+    const perFloorIot = splitBy('iotScope');
+    const perFloorGuest = splitBy('guestScope');
+
+    const iotUnits: Household[] = perFloorIot ? households : [building];
+    const guestUnits: Household[] = perFloorGuest ? households : [building];
 
     /**
-     * Names a per-household object. With one household there is nothing to
-     * tell apart, so the suffix would only produce `HOME-HOME`.
+     * Names an object belonging to one unit. Where the thing is not split,
+     * there is nothing to tell apart, so the suffix would only produce
+     * `HOME-HOME`.
      */
-    const per = (base: string, slug: string) => (perFloor ? `${base}-${slug}` : base);
+    const named = (split: boolean, base: string, slug: string) =>
+      split ? `${base}-${slug}` : base;
+    const per = (base: string, slug: string) => named(perFloor, base, slug);
+
+    /** The IoT VLAN a household's devices actually land in. */
+    const iotVlanOf = (h: Household) => (perFloorIot ? h.iotVlan : building.iotVlan);
 
     const networks: PlannedNetwork[] = [];
     const zones: PlannedZone[] = [];
@@ -263,19 +289,25 @@ function makeBuild(x: MhText) {
         'vlan-wifi',
         h.id,
       );
+    }
+
+    for (const h of iotUnits) {
       addNetwork(
         h.iotVlan,
-        per('IOT', h.slug),
+        named(perFloorIot, 'IOT', h.slug),
         'iot',
-        perFloor ? x.net.iot(h.name) : x.net.buildingIot,
+        perFloorIot ? x.net.iot(h.name) : x.net.buildingIot,
         'vlan-wifi',
         h.id,
       );
+    }
+
+    for (const h of guestUnits) {
       addNetwork(
         h.guestVlan,
-        per('GUEST', h.slug),
+        named(perFloorGuest, 'GUEST', h.slug),
         'guest',
-        perFloor ? x.net.guest(h.name) : x.net.buildingGuests,
+        perFloorGuest ? x.net.guest(h.name) : x.net.buildingGuests,
         'vlan-wifi',
         h.id,
       );
@@ -318,7 +350,7 @@ function makeBuild(x: MhText) {
         purpose: castShares ? x.ssid.castShared : x.ssid.castSeparate,
         ppsk: households.map((h) => ({
           label: x.ssid.castKey(h.name),
-          vlan: castShares ? h.clientVlan : h.iotVlan,
+          vlan: castShares ? h.clientVlan : iotVlanOf(h),
           householdId: h.id,
           note: castShares ? x.ssid.castNote : undefined,
         })),
@@ -329,8 +361,8 @@ function makeBuild(x: MhText) {
         name: ctx.str('ssidIot'),
         security: 'wpa2-ppsk',
         band: x.ssid.band24,
-        purpose: x.ssid.iotPurpose,
-        ppsk: households.map((h) => ({
+        purpose: perFloorIot ? x.ssid.iotPurpose : x.ssid.iotPurposeShared,
+        ppsk: iotUnits.map((h) => ({
           label: x.ssid.iotKey(h.name),
           vlan: h.iotVlan,
           householdId: h.id,
@@ -338,7 +370,7 @@ function makeBuild(x: MhText) {
         moduleId: 'vlan-wifi',
       });
 
-      const guestKeys: PpskEntry[] = households.map((h) => ({
+      const guestKeys: PpskEntry[] = guestUnits.map((h) => ({
         label: x.ssid.guestKey(h.name),
         vlan: h.guestVlan,
         householdId: h.id,
@@ -374,16 +406,19 @@ function makeBuild(x: MhText) {
           'firewall',
           h.id,
         );
+      }
+
+      for (const h of iotUnits) {
         addZone(
-          per('IOT', h.slug),
-          perFloor ? x.zone.iot(h.name) : x.net.buildingIot,
+          named(perFloorIot, 'IOT', h.slug),
+          perFloorIot ? x.zone.iot(h.name) : x.net.buildingIot,
           [h.iotVlan],
           'firewall',
           h.id,
         );
       }
 
-      const guestVlans = households.map((h) => h.guestVlan);
+      const guestVlans = guestUnits.map((h) => h.guestVlan);
       if (sharedGuestVlan > 0) guestVlans.push(sharedGuestVlan);
       addZone('GUEST', x.zone.guest, guestVlans, 'firewall');
 
@@ -582,8 +617,12 @@ function makeBuild(x: MhText) {
           });
         }
 
-        // IoT: resolver and clock only, plus whatever automation needs.
-        const iot = per('IOT', h.slug);
+      }
+
+      // IoT: resolver and clock only, plus whatever automation needs. One pass
+      // per IoT network, which is per floor or once for the building.
+      for (const h of iotUnits) {
+        const iot = named(perFloorIot, 'IOT', h.slug);
         if (enabled.has('adguard')) {
           policies.push({
             order: ORDER.iotAllow,
@@ -629,8 +668,7 @@ function makeBuild(x: MhText) {
       }
 
       // Between floors: shut off entirely, or allowed to talk, depending on
-      // the layout. The IoT block stays either way — floors sharing a
-      // household is not a reason for one floor's sensors to reach another's.
+      // the layout.
       for (let i = 0; i < households.length; i++) {
         for (let j = i + 1; j < households.length; j++) {
           const a = households[i]!;
@@ -656,10 +694,18 @@ function makeBuild(x: MhText) {
                   moduleId: 'firewall',
                 },
           );
+        }
+      }
+
+      // One floor's sensors have no business on another's, even where the
+      // floors themselves are open. With a single IoT network there is no
+      // pair to write the rule between.
+      for (let i = 0; i < iotUnits.length; i++) {
+        for (let j = i + 1; j < iotUnits.length; j++) {
           policies.push({
             order: ORDER.crossHouseholdBlock + 1,
-            from: `IOT-${a.slug}`,
-            to: `IOT-${b.slug}`,
+            from: `IOT-${iotUnits[i]!.slug}`,
+            to: `IOT-${iotUnits[j]!.slug}`,
             action: 'block',
             log: true,
             purpose: floorsIsolated ? x.policy.crossIot : x.policy.crossFloorIotBlock,

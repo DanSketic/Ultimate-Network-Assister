@@ -312,6 +312,8 @@ export interface BackupJob {
  */
 export interface BackupSummary {
   jobs: BackupJob[];
+  /** False when the survey could not read the job list, rather than finding none. */
+  jobsReadable: boolean;
   /** Guests with no backup file at all — the list worth acting on. */
   unprotected: { vmid: number; name: string }[];
   guestCount: number;

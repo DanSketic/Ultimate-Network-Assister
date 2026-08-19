@@ -31,8 +31,9 @@ function evidenceTone(evidence: BackupEvidence): 'ok' | 'bad' | 'warn' {
 export function BackupView({ estate, palette }: { estate: Estate; palette: Palette }) {
   const { lang, t } = useI18n();
   const live = estate.source === 'survey';
-  const { jobs, unprotected, guestCount, protectedCount, newestAgeDays, verifiable, stores } =
-    estate.backups;
+  const {
+    jobs, jobsReadable, unprotected, guestCount, protectedCount, newestAgeDays, verifiable, stores,
+  } = estate.backups;
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px 28px' }}>
@@ -46,13 +47,55 @@ export function BackupView({ estate, palette }: { estate: Estate; palette: Palet
         }
       />
 
-      {live && jobs.length === 0 ? (
+      {/*
+       * Two different things look alike here and must not read alike: a cluster
+       * with no backup, and a token that was not allowed to ask. Only the first
+       * is a finding; the second is a gap in the survey.
+       */}
+      {live && jobs.length === 0 && !jobsReadable ? (
+        <div className="panel" style={{ padding: '16px 18px', marginBottom: 16 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: palette.warn }}>
+            {t.backup.jobsUnreadable}
+          </div>
+          <div className="pretty" style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 6 }}>
+            {t.backup.jobsUnreadableBody}
+          </div>
+        </div>
+      ) : null}
+
+      {live && jobs.length === 0 && jobsReadable ? (
         <div className="panel" style={{ padding: '16px 18px', marginBottom: 16 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: palette.bad }}>
             {t.backup.noJobs}
           </div>
           <div className="pretty" style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 6 }}>
             {t.backup.noJobsBody}
+          </div>
+
+          <div className="sect" style={{ marginTop: 13, marginBottom: 6 }}>
+            {t.backup.whereToAdd}
+          </div>
+          <div
+            className="pretty"
+            style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}
+          >
+            {t.backup.whereToAddBody}
+          </div>
+          <div className="mono" style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 7 }}>
+            {t.backup.whereToAddPath}
+          </div>
+          <div
+            className="pretty"
+            style={{
+              fontSize: 11,
+              color: stores.length > 0 ? 'var(--text2)' : palette.warn,
+              marginTop: 9,
+              lineHeight: 1.55,
+            }}
+          >
+            {stores.length > 0
+              ? t.backup.whereToAddStore(stores[0]!.name, stores[0]!.freeLabel)
+              : t.backup.whereToAddNoStore}
           </div>
         </div>
       ) : null}

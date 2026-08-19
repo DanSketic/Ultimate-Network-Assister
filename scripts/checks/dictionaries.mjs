@@ -41,11 +41,15 @@ const SHARED = new Set([
   'Online', 'online', 'Uplink', 'Switch', 'Port', 'port', 'SSID', 'Site', 'Wi-Fi',
   'Proxmox host', 'Switch trunk', 'Trunk bridge', 'Uptime', 'Firmware',
   'vCPU', 'VM / LXC', 'OS', 'AUTO', '#', 'offline', 'VLAN-aware', 'Site backup',
+  'IoT VLAN',
   // Two-part navigation labels whose second half is shared.
   '& policy', 'recovery',
   // Link speeds and product names, written the same either way.
   '10 G', '1 G', '100 M', '10 M', 'UniFi Network', 'Proxmox VE', 'Docker',
   'Kubernetes',
+  // A file path and a vendor's own menu items: the Proxmox interface says
+  // "Datacenter → Backup → Add" whatever language this one is in.
+  '/etc/pve/jobs.cfg · Datacenter → Backup → Add',
   // Port-profile names the application writes to the controller verbatim.
   'ACCESS', 'AP-TRUNK', 'SERVER-TRUNK', 'SWITCH-TRUNK', 'UPLINK', 'DISABLED',
 ]);

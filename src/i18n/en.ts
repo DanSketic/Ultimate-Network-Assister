@@ -453,6 +453,8 @@ export const en: Dict = {
     capacity: 'Capacity',
     backups: 'Backups',
     noBackups: 'The survey found no backup jobs.',
+    backupsUnreadable:
+      'The survey could not read the backup jobs: the cluster refused to list them, which a read-only token can legitimately be denied. Whether any job exists is therefore unknown, not answered.',
     backupSummary: (covered: number, total: number, missing: number) =>
       `Of ${total} guests, ${covered} have a backup file behind them and ${missing} do not. Coverage follows from the files found, not from the jobs scheduled.`,
     backupsUnverifiable:
@@ -698,6 +700,17 @@ export const en: Dict = {
     noJobs: 'No backup job at all',
     noJobsBody:
       'The cluster has no backup configured. That is not missing evidence, it is a missing backup: after a disk failure or a bad upgrade there is nothing to go back to.',
+    jobsUnreadable: 'The backup jobs could not be read',
+    jobsUnreadableBody:
+      'The cluster refused to list them, which a read-only token can legitimately be denied. So this says nothing about whether a backup exists: there may well be jobs the survey was not shown. The survey log has the /cluster/backup line with the reason; a token carrying the PVEAuditor role on / can read the list.',
+    whereToAdd: 'Where a job is added',
+    whereToAddBody:
+      'Not here: this application reads Proxmox and writes nothing to it. The job is created in the Proxmox interface under Datacenter → Backup → Add — pick the guests, a store that accepts backups, a schedule and a retention. From the next survey on, this view measures the files it leaves behind rather than the schedule itself.',
+    whereToAddPath: '/etc/pve/jobs.cfg · Datacenter → Backup → Add',
+    whereToAddStore: (name: string, free: string) =>
+      `A surveyed store that accepts backups: ${name}, ${free} free. A job can target it.`,
+    whereToAddNoStore:
+      'No surveyed store reports the “backup” content type. One has to accept backups before a job can target it.',
     coverage: 'Coverage',
     coverageAll: 'Every guest has at least one backup.',
     coverageMissing: (n: number) => `${n} guests have no backup at all.`,
@@ -852,7 +865,7 @@ export const en: Dict = {
         'Destructive storage operation: the application prepares the command but never runs it. Check the model, the serial and the /dev/disk/by-id/ path.',
       noApi: 'No API for this: the application prepares the exact values and you type them in.',
       commandOnly:
-        'No API call in this step, only a command — the application prepares it and running it needs your approval.',
+        'No API call in this step, only a command: the application prepares it, and where an SSH connection is set up it runs it on your approval.',
     },
     issue: {
       moduleMissingDeps: (title: string, missing: string) =>
@@ -904,11 +917,13 @@ export const en: Dict = {
     issuesShort: (n: number) => `${n} contradictions`,
     households: 'Households',
     householdsNote:
-      'Every household gets a client, an IoT and a guest network, and the plan automatically carries the rule that shuts it off from the other households — in both directions.',
+      'Every household gets a client network; whether IoT and guests are split the same way is decided under Addressing. Where the households are shut off from each other, the plan automatically carries the rule that does it — in both directions.',
     resetParams: 'Reset parameters to their defaults',
     handbookFile: 'Handbook',
     householdName: 'Name',
     householdSlug: 'Short name',
+    householdClientVlan: 'Client VLAN',
+    householdIotVlan: 'IoT VLAN',
     householdGuestVlan: 'Guest VLAN',
     newHousehold: 'Name of the new household',
   },
@@ -959,7 +974,7 @@ export const en: Dict = {
     modeManual:
       'You carry out every step; the application prepares the commands and the checks.',
     modeAssisted:
-      'The application prepares the exact values and commands; approval and execution stay with you.',
+      'The application prepares the exact values and commands; nothing runs without your approval, one command at a time.',
     modeAuto:
       'Where there is an API and a verified backup, the application may apply the change. Destructive storage work stays manual even then.',
     step: 'Step',
@@ -968,13 +983,25 @@ export const en: Dict = {
     automatable: 'Automatable',
     automatableHint: 'over an API, with a backup',
     assisted: 'Assisted',
-    assistedHint: 'prepared value, typed by hand',
+    assistedHint: 'prepared value: typed in, or run over SSH',
     manualOnly: 'Manual only',
     precheck: 'Pre-check',
     verification: 'Verification',
     actionApi: 'API',
     actionCommand: 'command',
     actionUi: 'screen',
+    sshTarget: 'Run commands on',
+    sshTargetNote:
+      'Commands in the steps below run on this machine. The application classifies each one first, and anything destructive stays yours to run at a console.',
+    sshNoProfiles:
+      'No SSH connection with an accepted host key. Add one in the Survey view and the commands below become runnable from here.',
+    sshClassifying: 'Asking what this command is allowed to do…',
+    sshTemplateNote:
+      'A shape to fill in, not a finished command: the application does not know what belongs in the blanks, so this one is yours to complete and run.',
+    sshLocalConsoleNote:
+      'This step needs someone at the machine: the change can cut the session it would be sent over. Copy it and run it at a console.',
+    sshRunHere: 'Run over SSH',
+    sshFailed: 'Did not run',
     executionMode: 'Execution mode',
     modules: (n: number) => `${n} modules`,
     minutesTotal: (n: number) => `${n} min`,
@@ -1209,6 +1236,41 @@ export const en: Dict = {
       'Only the listed ports answer from outside.',
       'Dynamic DNS points at the current public address.',
     ],
+
+    backupExistingTitle: 'What backup there is now',
+    backupExistingDetail:
+      'Before anything is created, read what the cluster already has. A job that exists but produces nothing looks the same from outside as no job at all, and the two are fixed differently.',
+    backupExistingVerify: [
+      'The job list has been read, and it is known whether one already covers these guests.',
+      'At least one store reports the “backup” content type.',
+    ],
+    backupCreateTitle: (store: string, schedule: string) =>
+      `Create the backup job (${store}, ${schedule})`,
+    backupCreateDetail:
+      'One job covering every guest on the host, including any this plan did not create. The application prepares the exact command; running it over SSH needs your approval, because it changes the cluster.',
+    backupCreatePrechecks: (store: string) => [
+      `The ${store} store exists and accepts backups.`,
+      'There is room on it for a full round plus the retention.',
+      'No existing job already covers the same guests — two jobs at the same hour compete for the same disks.',
+    ],
+    backupCreateVerify: [
+      'The job appears in Datacenter → Backup with the schedule given.',
+      'Its next run is at the expected time.',
+    ],
+    backupProveTitle: 'Prove it produced something',
+    backupProveDetail:
+      'A schedule is intent; a file is evidence. After the first run, the files are what this application measures — and what a restore can actually use.',
+    backupProveVerify: [
+      'After the first run there is a file for every guest.',
+      'A restore has been tried at least once, into a throwaway VM ID.',
+    ],
+    backupComment: 'Created from the deployment planner',
+    backupActions: {
+      list: 'Backup jobs the cluster has',
+      stores: 'Stores that accept backups',
+      create: 'Create the job',
+      files: 'Files the job left behind',
+    },
 
     bootTitle: 'Set the start-up order',
     bootDetail:
@@ -1468,6 +1530,8 @@ export const en: Dict = {
         `A network called “${name}” already exists on another VLAN (${vlan}). Rename one of them.`,
       subnetClash: (subnet: string, name: string) =>
         `The ${subnet} range is already used by the “${name}” network.`,
+      vpnServerNetwork: (name: string) =>
+        `The gateway's VPN server already serves this range as the “${name}” network. The application leaves it alone: that network belongs to the VPN server, and a second one on the same range would clash with it.`,
     },
     busyBackup: 'Taking a backup…',
     busyApply: 'Applying…',
@@ -1483,6 +1547,7 @@ export const en: Dict = {
     dryRunHint: 'Compares the target state with the latest survey. Writes nothing.',
     dryRunSummary: (c: number, u: number, n: number, x: number) =>
       `${c} to create · ${u} to update · ${n} already correct · ${x} conflicts`,
+    dryRunExternal: (n: number) => `${n} provided elsewhere`,
     runDryRun: 'Run a dry run',
     rerun: 'Run again',
     confirmation: 'Confirmation',
@@ -1505,6 +1570,7 @@ export const en: Dict = {
       update: 'Update',
       noop: 'Already correct',
       conflict: 'Conflict',
+      external: 'Provided elsewhere',
     },
     outcomes: {
       applied: 'applied',

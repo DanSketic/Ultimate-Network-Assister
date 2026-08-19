@@ -86,6 +86,17 @@ export interface BlueprintModule {
   minutes: number;
   /** false for the modules that define the estate and cannot be dropped. */
   optional: boolean;
+  /**
+   * Left switched off when a blueprint is created from the preset.
+   *
+   * The default everywhere else is that a preset describes a whole estate and
+   * switching a part off is the deliberate act. This is for the chapters where
+   * that reads backwards: a module that only applies to a case the preset does
+   * not assume — VLANs on a host whose network is flat — would otherwise put a
+   * plan in front of someone that they have to notice and undo. Only ever set
+   * together with `optional`, since a required module is switched on anyway.
+   */
+  defaultOff?: boolean;
   /** Module ids that must also be enabled. */
   requires?: string[];
   /** Modules that cannot be enabled at the same time. */

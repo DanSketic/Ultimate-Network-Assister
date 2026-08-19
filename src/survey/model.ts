@@ -192,6 +192,14 @@ export interface ProxmoxSnapshot {
   interfaces: PveInterface[];
   disks: PveDisk[];
   backupJobs: PveBackupJob[];
+  /**
+   * Whether the cluster let us list the backup jobs at all.
+   *
+   * A read-only token can legitimately be denied `/cluster/backup`. "There is
+   * no backup job" and "we were not allowed to look" are different facts, and
+   * only one of them is worth acting on.
+   */
+  backupJobsReadable: boolean;
   backupFiles: PveBackupFile[];
   certificates: PveCertificate[];
   updates: PveUpdate[];

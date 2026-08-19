@@ -41,7 +41,8 @@ const pve = (over = {}) => ({
   version: '8.2',
   nodes: [{ name: 'pve01', status: 'online', cpuRatio: 0.2, cpuCount: 8,
     memUsed: 8e9, memTotal: 32e9, uptimeSecs: 90000 }],
-  storages: [], guests: [], interfaces: [], disks: [], backupJobs: [], backupFiles: [],
+  storages: [], guests: [], interfaces: [], disks: [], backupJobs: [], backupJobsReadable: true,
+  backupFiles: [],
   certificates: [], updates: [], updatesReadable: false, ...over,
 });
 
@@ -79,6 +80,19 @@ check('under its own heading', withErrors.includes(hu.report.problems));
 check(
   'no backup jobs is stated rather than left blank',
   reportOf(snapshot()).includes(hu.report.noBackups),
+);
+
+// The two ways of having nothing to show. A refused listing establishes
+// nothing, and a document that renders it as "none found" would be claiming
+// the survey answered a question it was not allowed to ask.
+const unread = reportOf(snapshot({ proxmox: pve({ backupJobsReadable: false }) }));
+check(
+  'a refused backup listing is reported as unread',
+  unread.includes(hu.report.backupsUnreadable),
+);
+check(
+  'and never as "none found"',
+  !unread.includes(hu.report.noBackups),
 );
 
 /* -------------------------------------------------------------- sample data */

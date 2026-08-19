@@ -106,6 +106,24 @@ const PARAM_SHAPES: ParamShape[] = [
     optionValues: ['single', 'floorsOpen', 'floorsIsolated'],
     group: 'addressing',
   },
+  // Whether IoT and guests are cut up the same way the clients are. `auto`
+  // splits them only where the floors are fully shut off from each other;
+  // with open floors a separate sensor or guest subnet per floor divides
+  // nothing that is not already open.
+  {
+    id: 'iotScope',
+    type: 'enum',
+    default: 'auto',
+    optionValues: ['auto', 'perFloor', 'shared'],
+    group: 'addressing',
+  },
+  {
+    id: 'guestScope',
+    type: 'enum',
+    default: 'auto',
+    optionValues: ['auto', 'perFloor', 'shared'],
+    group: 'addressing',
+  },
   { id: 'ipPrefix', type: 'text', default: '192.168', group: 'addressing' },
   { id: 'gatewayHostByte', type: 'number', default: 1, min: 1, max: 254, group: 'addressing' },
 

@@ -326,8 +326,9 @@ export function createBlueprint(preset: BlueprintPreset, name?: string, now = ne
     households: preset.households.map((h) => ({ ...h })),
     params: withDefaults(preset, {}),
     // Everything on by default: the preset describes a complete estate, and
-    // switching parts off is the deliberate act.
-    enabledModules: preset.modules.map((m) => m.id),
+    // switching parts off is the deliberate act. The exception is a module the
+    // preset marks as belonging to a case it does not assume.
+    enabledModules: preset.modules.filter((m) => !m.defaultOff).map((m) => m.id),
     // Ports start empty: what is plugged in is a fact about the building, not
     // something a preset can know.
     ports: [],

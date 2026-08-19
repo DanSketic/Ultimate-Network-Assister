@@ -77,6 +77,8 @@ export interface MhText {
     castSeparate: string;
     castNote: string;
     iotPurpose: string;
+    /** Wording for the same SSID when one IoT network serves the building. */
+    iotPurposeShared: string;
     guestPurpose: string;
     clientsKey: (name: string) => string;
     castKey: (name: string) => string;
@@ -412,6 +414,24 @@ const HU: MhText = {
         floorsIsolated: 'Szintenként külön háztartás – teljes elzárás',
       },
     },
+    iotScope: {
+      label: 'IoT-hálózatok',
+      help: 'Ha a szintek amúgy is átjárhatók, a szintenkénti szenzor-alhálózat nem választ el semmit — ezért alapból csak teljes elzárásnál válik szét. Itt akkor is kérheted a szétvágást.',
+      options: {
+        auto: 'Az elrendezést követi – csak teljes elzárásnál külön',
+        perFloor: 'Szintenként külön alhálózat',
+        shared: 'Egy IoT-hálózat az egész épületnek',
+      },
+    },
+    guestScope: {
+      label: 'Vendéghálózatok',
+      help: 'Ugyanez a választás a vendégeknek. Épületenként egy vendéghálózat rendszerint elég; a vendégek minden belső hálózattól így is el vannak zárva.',
+      options: {
+        auto: 'Az elrendezést követi – csak teljes elzárásnál külön',
+        perFloor: 'Szintenként külön alhálózat',
+        shared: 'Egy vendéghálózat az egész épületnek',
+      },
+    },
     vlanCameras: { label: 'CAMERA VLAN' },
     ipNvr: { label: 'Kamerarögzítő' },
     cameraCount: {
@@ -469,6 +489,7 @@ const HU: MhText = {
     castSeparate: 'Médialejátszók külön kulccsal',
     castNote: 'Azonos VLAN a kliensekkel',
     iotPurpose: 'Okoseszközök, háztartásonként elkülönítve',
+    iotPurposeShared: 'Okoseszközök, a lakók hálózataitól elkülönítve',
     guestPurpose: 'Vendégek, csak internet',
     clientsKey: (name) => `${name} – kliensek`,
     castKey: (name) => `${name} – lejátszók`,
@@ -822,6 +843,24 @@ const EN: MhText = {
         floorsIsolated: 'A household per floor – fully shut off',
       },
     },
+    iotScope: {
+      label: 'IoT networks',
+      help: 'Where the floors can reach each other anyway, a sensor subnet per floor separates nothing — so by default IoT is only split under full isolation. Set it here if you want the split regardless.',
+      options: {
+        auto: 'Follow the layout – split only under full isolation',
+        perFloor: 'A subnet per floor',
+        shared: 'One IoT network for the whole building',
+      },
+    },
+    guestScope: {
+      label: 'Guest networks',
+      help: 'Same choice for guests. One guest network per building is usually enough; guests are shut off from everything internal either way.',
+      options: {
+        auto: 'Follow the layout – split only under full isolation',
+        perFloor: 'A subnet per floor',
+        shared: 'One guest network for the whole building',
+      },
+    },
     vlanCameras: { label: 'CAMERA VLAN' },
     ipNvr: { label: 'Camera recorder' },
     cameraCount: {
@@ -879,6 +918,7 @@ const EN: MhText = {
     castSeparate: 'Media players on a separate key',
     castNote: 'Same VLAN as the clients',
     iotPurpose: 'Smart devices, separated per household',
+    iotPurposeShared: 'Smart devices, kept apart from the residents’ networks',
     guestPurpose: 'Guests, internet only',
     clientsKey: (name) => `${name} – clients`,
     castKey: (name) => `${name} – players`,

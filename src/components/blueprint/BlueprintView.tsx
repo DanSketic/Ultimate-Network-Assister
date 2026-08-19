@@ -323,7 +323,13 @@ export function BlueprintView({
               ) : null}
               {tab === 'target' ? <TargetStateTab resolved={resolved} palette={palette} /> : null}
               {tab === 'plan' ? (
-                <PlanTab plan={plan} palette={palette} accent={accent} copy={copy} />
+                <PlanTab
+                  plan={plan}
+                  profiles={estate.profiles}
+                  palette={palette}
+                  accent={accent}
+                  copy={copy}
+                />
               ) : null}
               {tab === 'apply' ? <ApplyTab resolved={resolved} estate={estate} palette={palette} /> : null}
             </div>

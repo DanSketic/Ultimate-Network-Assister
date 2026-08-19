@@ -42,6 +42,7 @@ export function compileNetworkOperations(resolved: ResolvedBlueprint): ApplyOper
       kind: 'unifi.network' as const,
       label: `VLAN ${network.vlan} · ${network.name}`,
       moduleId: network.moduleId,
+      role: network.role,
       // VLAN id is the natural key: names get edited, ids do not.
       matchField: 'vlan',
       matchValue: network.vlan,

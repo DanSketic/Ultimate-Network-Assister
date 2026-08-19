@@ -10,6 +10,7 @@ const VERDICT_TONE: Record<DiffVerdict, Tone> = {
   update: 'warn',
   noop: 'idle',
   conflict: 'bad',
+  external: 'idle',
 };
 
 function formatValue(value: unknown): string {
@@ -127,7 +128,10 @@ export function ApplyPanel({ api, palette }: { api: ApplyApi; palette: Palette }
                     report.counts.update,
                     report.counts.noop,
                     report.counts.conflict,
-                  )
+                  ) +
+                  (report.counts.external > 0
+                    ? ` · ${t.apply.dryRunExternal(report.counts.external)}`
+                    : '')
                 : t.apply.dryRunHint
             }
             action={
@@ -355,6 +359,15 @@ function DiffRow({ diff, palette, t }: { diff: OperationDiff; palette: Palette; 
           {t.apply.operationKind[diff.operation.kind]}
         </span>
       </div>
+
+      {diff.note ? (
+        <div
+          className="pretty"
+          style={{ fontSize: 11, color: 'var(--text2)', marginTop: 6, lineHeight: 1.55 }}
+        >
+          {diff.note}
+        </div>
+      ) : null}
 
       {diff.blockedReason ? (
         <div

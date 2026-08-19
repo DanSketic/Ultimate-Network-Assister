@@ -2,6 +2,7 @@ import type { Dict, Lang } from '@/i18n';
 import type { Blueprint, BlueprintPreset } from './model';
 import { createKubernetesHomelabPreset } from './presets/kubernetesHomelab';
 import { createMultiHouseholdPreset } from './presets/multiHousehold';
+import { createProxmoxHostPreset } from './presets/proxmoxHost';
 import { createBlueprint } from './resolve';
 
 /**
@@ -10,7 +11,11 @@ import { createBlueprint } from './resolve';
  * ids, so there is nothing left to translate once it has run.
  */
 export function presets(lang: Lang): BlueprintPreset[] {
-  return [createMultiHouseholdPreset(lang), createKubernetesHomelabPreset(lang)];
+  return [
+    createMultiHouseholdPreset(lang),
+    createProxmoxHostPreset(lang),
+    createKubernetesHomelabPreset(lang),
+  ];
 }
 
 export function findPreset(id: string, lang: Lang): BlueprintPreset | undefined {

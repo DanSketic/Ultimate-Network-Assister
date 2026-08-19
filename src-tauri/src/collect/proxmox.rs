@@ -22,6 +22,11 @@ pub struct ProxmoxSnapshot {
     // older row stops parsing and takes the whole load with it.
     #[serde(default)]
     pub backup_jobs: Vec<PveBackupJob>,
+    /// Set when the cluster let us list backup jobs at all. A token scoped to
+    /// read guests but not `/cluster/backup` is a sensible setup, and "there is
+    /// no backup job" must never be said on the strength of a refused read.
+    #[serde(default)]
+    pub backup_jobs_readable: bool,
     #[serde(default)]
     pub backup_files: Vec<PveBackupFile>,
     #[serde(default)]
@@ -529,6 +534,7 @@ async fn collect_backups(
                     comment: as_str(&j, "comment"),
                 });
             }
+            snap.backup_jobs_readable = true;
             log.push(LogEntry::ok(
                 SOURCE,
                 format!("GET /cluster/backup → {} mentési feladat", snap.backup_jobs.len()),

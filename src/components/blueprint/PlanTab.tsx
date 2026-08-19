@@ -1,26 +1,37 @@
-import { useState } from 'react';
-import { effectiveLevel } from '@/blueprint/automation';
-import { type AutomationLevel, type Plan, type PlanStep } from '@/blueprint/model';
+import { useEffect, useState } from 'react';
+import { effectiveLevel, isTemplateCommand } from '@/blueprint/automation';
+import { type AutomationLevel, type Plan, type PlanAction, type PlanStep } from '@/blueprint/model';
 import { useT } from '@/i18n';
 import { vars } from '@/lib/css';
 import type { Palette } from '@/lib/palette';
 import type { CopyApi } from '@/state/useAppState';
+import { usePlanRunner, type PlanRun, type PlanRunnerApi } from '@/state/usePlanRunner';
+import type { Clearance, Profile } from '@/survey/model';
 import { Pill, StatCard } from '../ui';
 
 const MODES: AutomationLevel[] = ['manual', 'assisted', 'auto'];
 
+const CLEARANCE_TONE: Record<Clearance, 'ok' | 'warn' | 'bad'> = {
+  readOnly: 'ok',
+  mutating: 'warn',
+  forbidden: 'bad',
+};
+
 export function PlanTab({
   plan,
+  profiles,
   palette,
   accent,
   copy,
 }: {
   plan: Plan;
+  profiles: Profile[];
   palette: Palette;
   accent: string;
   copy: CopyApi;
 }) {
   const t = useT();
+  const runner = usePlanRunner(profiles);
   const [mode, setMode] = useState<AutomationLevel>('assisted');
   const [open, setOpen] = useState<string | null>(plan.steps[0]?.id ?? null);
 
@@ -109,6 +120,48 @@ export function PlanTab({
         >
           {modeHint[mode]}
         </div>
+
+        {runner.supported ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginTop: 12,
+              paddingTop: 12,
+              borderTop: '1px solid var(--line)',
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 500 }}>{t.plan.sshTarget}</span>
+            {runner.profiles.length > 0 ? (
+              <>
+                <select
+                  className="input"
+                  style={{ maxWidth: 320, fontSize: 11.5 }}
+                  value={runner.selected?.id ?? ''}
+                  onChange={(e) => runner.select(e.target.value)}
+                >
+                  {runner.profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label} · {p.sshUsername}@{p.sshHost}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="pretty"
+                  style={{ fontSize: 11, color: 'var(--text2)', flex: 1, minWidth: 220 }}
+                >
+                  {t.plan.sshTargetNote}
+                </span>
+              </>
+            ) : (
+              <span className="pretty" style={{ fontSize: 11, color: 'var(--text2)' }}>
+                {t.plan.sshNoProfiles}
+              </span>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {plan.modules.map((pm) => (
@@ -146,6 +199,7 @@ export function PlanTab({
                 accent={accent}
                 toneFor={toneFor}
                 copy={copy}
+                runner={runner}
               />
             ))}
           </div>
@@ -165,6 +219,7 @@ function StepCard({
   accent,
   toneFor,
   copy,
+  runner,
 }: {
   step: PlanStep;
   index: number;
@@ -175,6 +230,7 @@ function StepCard({
   accent: string;
   toneFor: (level: AutomationLevel) => string;
   copy: CopyApi;
+  runner: PlanRunnerApi;
 }) {
   const t = useT();
   const capped = effective !== step.capability;
@@ -309,67 +365,18 @@ function StepCard({
                 {t.plan.todo}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {step.actions.map((a, i) => {
-                  const key = `${step.id}-${i}`;
-                  return (
-                    <div
-                      key={key}
-                      style={{
-                        border: `1px solid ${a.destructive ? palette.bad : 'var(--line)'}`,
-                        borderRadius: 9,
-                        overflow: 'hidden',
-                        background: 'var(--panel2)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 10,
-                          padding: '7px 11px',
-                          borderBottom: '1px solid var(--line)',
-                        }}
-                      >
-                        <span style={{ fontSize: 11, fontWeight: 500 }}>{a.label}</span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <Pill color={a.destructive ? palette.bad : palette.idle} tight>
-                            {a.kind === 'api'
-                              ? t.plan.actionApi
-                              : a.kind === 'command'
-                                ? t.plan.actionCommand
-                                : t.plan.actionUi}
-                          </Pill>
-                          <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
-                            {a.target}
-                          </span>
-                          <button
-                            type="button"
-                            className="link"
-                            style={{ fontSize: 10 }}
-                            onClick={() => copy.copy(a.body, key)}
-                          >
-                            {copy.label(key)}
-                          </button>
-                        </span>
-                      </div>
-                      <pre
-                        className="mono"
-                        style={{
-                          margin: 0,
-                          padding: '10px 11px',
-                          fontSize: 10.5,
-                          lineHeight: 1.65,
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
-                          color: 'var(--text)',
-                        }}
-                      >
-                        {a.body}
-                      </pre>
-                    </div>
-                  );
-                })}
+                {step.actions.map((a, i) => (
+                  <ActionCard
+                    key={`${step.id}-${i}`}
+                    actionKey={`${step.id}-${i}`}
+                    action={a}
+                    localConsole={step.requiresLocalConsole}
+                    palette={palette}
+                    accent={accent}
+                    copy={copy}
+                    runner={runner}
+                  />
+                ))}
               </div>
             </div>
           ) : null}
@@ -380,6 +387,256 @@ function StepCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One thing to do, and — where it is a command and a route exists — the means
+ * to do it.
+ *
+ * The clearance shown here is the native policy's, fetched for this exact text.
+ * Nothing is offered while it is unknown: an unclassified command is one the
+ * far side has not agreed to yet.
+ */
+function ActionCard({
+  actionKey,
+  action,
+  localConsole,
+  palette,
+  accent,
+  copy,
+  runner,
+}: {
+  actionKey: string;
+  action: PlanAction;
+  /** The step this belongs to has to be done at the machine, not over SSH. */
+  localConsole: boolean;
+  palette: Palette;
+  accent: string;
+  copy: CopyApi;
+  runner: PlanRunnerApi;
+}) {
+  const t = useT();
+  // Two reasons a command is not ours to run at all, both decided before
+  // anything is asked of the far side: it is a shape to fill in, or it
+  // destroys something. The native policy is asked about the rest.
+  const template = action.kind === 'command' && isTemplateCommand(action.body);
+  const isCommand = action.kind === 'command' && !template && !action.destructive;
+
+  // `classify` is stable and caches by command text, so this settles after the
+  // first render of each distinct command.
+  const { classify } = runner;
+  useEffect(() => {
+    if (isCommand) classify(action.body);
+  }, [isCommand, action.body, classify]);
+
+  const clearance = isCommand ? runner.clearanceOf(action.body) : null;
+  const run = runner.runOf(actionKey);
+  const busy = runner.running(actionKey);
+
+  /*
+   * A step marked "local console" is one whose change can cut the session a
+   * command would travel over — so on those, reading is still fine and
+   * changing anything is not. Everywhere else the policy's own verdict is
+   * enough.
+   */
+  const consoleOnly = localConsole && clearance !== null && clearance !== 'readOnly';
+  const offered =
+    isCommand && runner.ready && clearance !== null && clearance !== 'forbidden' && !consoleOnly;
+  const needsApproval = offered && clearance === 'mutating';
+  const approved = runner.approved(actionKey, action.body);
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${action.destructive ? palette.bad : 'var(--line)'}`,
+        borderRadius: 9,
+        overflow: 'hidden',
+        background: 'var(--panel2)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          padding: '7px 11px',
+          borderBottom: '1px solid var(--line)',
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 500 }}>{action.label}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {clearance ? (
+            <Pill color={palette[CLEARANCE_TONE[clearance]]} tight>
+              {t.ssh.clearance[clearance]}
+            </Pill>
+          ) : null}
+          <Pill color={action.destructive ? palette.bad : palette.idle} tight>
+            {action.kind === 'api'
+              ? t.plan.actionApi
+              : action.kind === 'command'
+                ? t.plan.actionCommand
+                : t.plan.actionUi}
+          </Pill>
+          <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
+            {action.target}
+          </span>
+          <button
+            type="button"
+            className="link"
+            style={{ fontSize: 10 }}
+            onClick={() => copy.copy(action.body, actionKey)}
+          >
+            {copy.label(actionKey)}
+          </button>
+        </span>
+      </div>
+
+      <pre
+        className="mono"
+        style={{
+          margin: 0,
+          padding: '10px 11px',
+          fontSize: 10.5,
+          lineHeight: 1.65,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          color: 'var(--text)',
+        }}
+      >
+        {action.body}
+      </pre>
+
+      {action.kind === 'command' && runner.ready && !offered ? (
+        <div
+          className="pretty"
+          style={{
+            padding: '0 11px 10px',
+            fontSize: 10.5,
+            lineHeight: 1.55,
+            color: action.destructive || clearance === 'forbidden' ? palette.bad : 'var(--text3)',
+          }}
+        >
+          {action.destructive || clearance === 'forbidden'
+            ? t.ssh.clearanceForbiddenNote
+            : template
+              ? t.plan.sshTemplateNote
+              : consoleOnly
+                ? t.plan.sshLocalConsoleNote
+                : t.plan.sshClassifying}
+        </div>
+      ) : null}
+
+      {offered ? (
+        <div style={{ padding: '0 11px 11px' }}>
+          {needsApproval ? (
+            <label
+              style={{
+                display: 'flex',
+                gap: 9,
+                alignItems: 'flex-start',
+                margin: '0 0 10px',
+                fontSize: 11,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={approved}
+                onChange={(e) => runner.approve(actionKey, action.body, e.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              <span className="pretty">{t.ssh.confirmLabel}</span>
+            </label>
+          ) : null}
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={busy || (needsApproval && !approved)}
+              onClick={() => void runner.run(actionKey, action.body)}
+              style={vars({ '--btn-bg': accent })}
+            >
+              {busy ? t.ssh.runningNow : t.plan.sshRunHere}
+            </button>
+            <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
+              {runner.selected?.label} · {runner.selected?.sshHost}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {run ? <RunOutput run={run} palette={palette} /> : null}
+    </div>
+  );
+}
+
+/** What the far side said. Kept next to the command that produced it. */
+function RunOutput({ run, palette }: { run: PlanRun; palette: Palette }) {
+  const t = useT();
+  const failed = run.error !== undefined || (run.exitStatus !== null && run.exitStatus !== 0);
+  const tone = failed ? palette.bad : palette.ok;
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line)', padding: '9px 11px' }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Pill color={tone} tight>
+          {run.error !== undefined
+            ? t.plan.sshFailed
+            : `${t.ssh.exitStatus} ${run.exitStatus ?? '—'}`}
+        </Pill>
+        <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
+          {run.durationMs} ms
+        </span>
+        {run.truncated ? (
+          <span style={{ fontSize: 10, color: palette.warn }}>{t.ssh.truncatedNote}</span>
+        ) : null}
+      </div>
+
+      {run.error !== undefined ? (
+        <div className="pretty" style={{ fontSize: 10.5, color: palette.bad, marginTop: 7 }}>
+          {run.error}
+        </div>
+      ) : null}
+
+      {run.executed && run.executed !== run.command ? (
+        <div className="mono" style={{ fontSize: 9.5, color: 'var(--text3)', marginTop: 7 }}>
+          {t.ssh.executed}: {run.executed}
+        </div>
+      ) : null}
+
+      {run.stdout ? <Stream text={run.stdout} color="var(--text)" /> : null}
+      {run.stderr ? <Stream text={run.stderr} color={palette.warn} /> : null}
+      {!run.stdout && !run.stderr && run.error === undefined ? (
+        <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 7 }}>{t.ssh.noOutput}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function Stream({ text, color }: { text: string; color: string }) {
+  return (
+    <pre
+      className="mono"
+      style={{
+        margin: '7px 0 0',
+        padding: '8px 10px',
+        maxHeight: 220,
+        overflow: 'auto',
+        background: 'var(--panel)',
+        border: '1px solid var(--line)',
+        borderRadius: 7,
+        fontSize: 10,
+        lineHeight: 1.6,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        color,
+      }}
+    >
+      {text}
+    </pre>
   );
 }
 

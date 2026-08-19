@@ -472,6 +472,8 @@ export const hu = {
     capacity: 'Kapacitás',
     backups: 'Mentések',
     noBackups: 'A felmérés nem talált mentési feladatot.',
+    backupsUnreadable:
+      'A felmérés nem tudta kiolvasni a mentési feladatokat: a fürt nem adta ki a listát, amit egy csak olvasó tokentől jogosan meg is tagadhat. Hogy van-e egyáltalán feladat, ebből nem derül ki.',
     backupSummary: (covered: number, total: number, missing: number) =>
       `${total} vendéggépből ${covered} mögött van mentési fájl, ${missing} mögött nincs. A lefedettség a megtalált fájlokból következik, nem az ütemezett feladatokból.`,
     backupsUnverifiable:
@@ -719,6 +721,17 @@ export const hu = {
     noJobs: 'Nincs egyetlen mentési feladat sem',
     noJobsBody:
       'A fürtön nincs beállítva mentés. Ez nem hiányzó bizonyíték, hanem hiányzó mentés: egy lemezhiba vagy egy elrontott frissítés után nincs mihez visszanyúlni.',
+    jobsUnreadable: 'A mentési feladatokat nem sikerült kiolvasni',
+    jobsUnreadableBody:
+      'A fürt nem adta ki a listát, amit egy csak olvasó tokentől jogosan meg is tagadhat. Ebből tehát nem következik, hogy nincs mentés: simán lehetnek feladatok, amiket a felmérés nem látott. A felmérési naplóban ott a /cluster/backup sor az indokkal; a listát egy / útvonalon PVEAuditor szerepkörű token ki tudja olvasni.',
+    whereToAdd: 'Hol lehet felvenni',
+    whereToAddBody:
+      'Nem itt: ez az alkalmazás olvassa a Proxmoxot, írni nem ír bele. A feladat a Proxmox felületén készül, a Datacenter → Backup → Add alatt — kiválasztod a vendéggépeket, egy mentést fogadó tárolót, az ütemezést és a megőrzést. A következő felméréstől ez a nézet nem az ütemezést, hanem a mögötte hagyott fájlokat méri.',
+    whereToAddPath: '/etc/pve/jobs.cfg · Datacenter → Backup → Add',
+    whereToAddStore: (name: string, free: string) =>
+      `Felmért tároló, ami fogad mentést: ${name}, ${free} szabad. Egy feladat ide célozhat.`,
+    whereToAddNoStore:
+      'Egyetlen felmért tároló sem jelenti a „backup” tartalomtípust. Előbb kell egy, ami fogad mentést.',
     coverage: 'Lefedettség',
     coverageAll: 'Minden vendéggéphez tartozik legalább egy mentés.',
     coverageMissing: (n: number) => `${n} vendéggéphez egyetlen mentés sem tartozik.`,
@@ -879,7 +892,7 @@ export const hu = {
         'Destruktív tárhelyművelet: az alkalmazás előkészíti a parancsot, de sosem futtatja. Ellenőrizd a modellt, a sorozatszámot és a /dev/disk/by-id/ útvonalat.',
       noApi: 'Nincs hozzá API: az alkalmazás előkészíti a pontos értékeket, a beírás kézzel történik.',
       commandOnly:
-        'Nincs API-hívás a lépésben, csak parancs — az alkalmazás előkészíti, a futtatás jóváhagyással megy.',
+        'Nincs API-hívás a lépésben, csak parancs: az alkalmazás előkészíti, és ahol van beállított SSH-kapcsolat, a jóváhagyásoddal le is futtatja.',
     },
     /** Contradictions the resolver finds between modules and parameters. */
     issue: {
@@ -927,11 +940,13 @@ export const hu = {
     issuesShort: (n: number) => `${n} ellentmondás`,
     households: 'Háztartások',
     householdsNote:
-      'Minden háztartás kap egy kliens-, egy IoT- és egy vendéghálózatot, és a tervben automatikusan megjelenik a többi háztartástól elzáró szabály — mindkét irányban.',
+      'Minden háztartás kap egy kliens-hálózatot; hogy az IoT és a vendégek ugyanígy szétválnak-e, a Címzés alatt dől el. Ahol a háztartások el vannak zárva egymástól, a tervben automatikusan megjelenik az ezt kimondó szabály — mindkét irányban.',
     resetParams: 'Paraméterek visszaállítása alapértelmezettre',
     handbookFile: 'Kézikönyv',
     householdName: 'Név',
     householdSlug: 'Rövid név',
+    householdClientVlan: 'Kliens VLAN',
+    householdIotVlan: 'IoT VLAN',
     householdGuestVlan: 'Vendég VLAN',
     newHousehold: 'Új háztartás neve',
   },
@@ -982,7 +997,7 @@ export const hu = {
     modeManual:
       'Minden lépést te hajtasz végre; az alkalmazás előkészíti a parancsokat és az ellenőrzéseket.',
     modeAssisted:
-      'Az alkalmazás előkészíti a pontos értékeket és parancsokat, a jóváhagyás és a végrehajtás nálad marad.',
+      'Az alkalmazás előkészíti a pontos értékeket és parancsokat; a jóváhagyásod nélkül semmi nem fut le, parancsonként külön.',
     modeAuto:
       'Ahol van API és igazolt mentés, az alkalmazás alkalmazhatja a változtatást. A destruktív tárhelyműveletek ekkor is manuálisak maradnak.',
     step: 'Lépés',
@@ -991,13 +1006,25 @@ export const hu = {
     automatable: 'Automatizálható',
     automatableHint: 'API-n át, mentés mellett',
     assisted: 'Félautomata',
-    assistedHint: 'előkészített érték, kézi beírás',
+    assistedHint: 'előkészített érték: kézzel vagy SSH-n',
     manualOnly: 'Csak manuális',
     precheck: 'Előellenőrzés',
     verification: 'Ellenőrzés',
     actionApi: 'API',
     actionCommand: 'parancs',
     actionUi: 'felület',
+    sshTarget: 'Parancsok futtatása ezen',
+    sshTargetNote:
+      'Az alábbi lépések parancsai ezen a gépen futnak. Az alkalmazás előbb besorolja mindegyiket, a romboló műveletek pedig maradnak konzolon, kézzel.',
+    sshNoProfiles:
+      'Nincs elfogadott gazdakulcsú SSH-kapcsolat. Vedd fel a Felmérés nézetben, és az alábbi parancsok innen is futtathatóvá válnak.',
+    sshClassifying: 'Kérdezzük, mit tehet ez a parancs…',
+    sshTemplateNote:
+      'Ez kitöltendő minta, nem kész parancs: az alkalmazás nem tudja, mi kerül a helyére, ezért ezt neked kell befejezned és lefuttatnod.',
+    sshLocalConsoleNote:
+      'Ehhez a lépéshez ott kell lenni a gépnél: a változtatás elvághatja azt a kapcsolatot, amin átmenne. Másold ki, és futtasd konzolon.',
+    sshRunHere: 'Futtatás SSH-n',
+    sshFailed: 'Nem futott le',
     executionMode: 'Végrehajtási mód',
     modules: (n: number) => `${n} modul`,
     minutesTotal: (n: number) => `${n} perc`,
@@ -1247,6 +1274,41 @@ export const hu = {
       'Kívülről csak a felsorolt portok válaszolnak.',
       'A dinamikus névfrissítés a jelenlegi publikus címre mutat.',
     ],
+
+    backupExistingTitle: 'Ami most van mentésből',
+    backupExistingDetail:
+      'Mielőtt bármi létrejön, olvassuk ki, mi van már a fürtön. Egy létező, de semmit nem termelő feladat kívülről ugyanúgy néz ki, mint a semmi — és nem ugyanúgy kell javítani.',
+    backupExistingVerify: [
+      'A feladatlista ki lett olvasva, és kiderült, fedi-e már valami ezeket a vendéggépeket.',
+      'Legalább egy tároló jelenti a „backup” tartalomtípust.',
+    ],
+    backupCreateTitle: (store: string, schedule: string) =>
+      `Mentési feladat létrehozása (${store}, ${schedule})`,
+    backupCreateDetail:
+      'Egy feladat a gép összes vendéggépére, azokra is, amiket nem ez a terv hozott létre. Az alkalmazás előkészíti a pontos parancsot; az SSH-n futtatáshoz a jóváhagyásod kell, mert ez változtat a fürtön.',
+    backupCreatePrechecks: (store: string) => [
+      `A(z) ${store} tároló létezik, és fogad mentést.`,
+      'Elfér rajta egy teljes kör és a megőrzés is.',
+      'Nincs olyan meglévő feladat, ami ugyanezeket a vendéggépeket fedi — két feladat azonos órában ugyanazokért a lemezekért verseng.',
+    ],
+    backupCreateVerify: [
+      'A feladat megjelenik a Datacenter → Backup alatt, a megadott ütemezéssel.',
+      'A következő futása a várt időpontra esik.',
+    ],
+    backupProveTitle: 'Bizonyítsuk, hogy termel is',
+    backupProveDetail:
+      'Az ütemezés szándék, a fájl bizonyíték. Az első futás után a fájlokat méri ez az alkalmazás — és egy visszaállítás is azokból tud dolgozni.',
+    backupProveVerify: [
+      'Az első futás után minden vendéggéphez tartozik fájl.',
+      'Egy visszaállítás legalább egyszer meg lett próbálva, eldobható VM-azonosítóra.',
+    ],
+    backupComment: 'A telepítéstervezőből létrehozva',
+    backupActions: {
+      list: 'A fürt mentési feladatai',
+      stores: 'Mentést fogadó tárolók',
+      create: 'A feladat létrehozása',
+      files: 'A feladat által hagyott fájlok',
+    },
 
     bootTitle: 'Indulási sorrend beállítása',
     bootDetail:
@@ -1522,6 +1584,8 @@ export const hu = {
         `Már van „${name}” nevű hálózat más VLAN-on (${vlan}). Nevezd át valamelyiket.`,
       subnetClash: (subnet: string, name: string) =>
         `A ${subnet} tartományt már használja a(z) „${name}” hálózat.`,
+      vpnServerNetwork: (name: string) =>
+        `Ezt a tartományt az átjáró VPN-szervere már kiszolgálja, „${name}” néven. Az alkalmazás nem nyúl hozzá: az a hálózat a VPN-szerveré, és egy másik ugyanezen a tartományon ütközne vele.`,
     },
     busyBackup: 'Mentés készítése…',
     busyApply: 'Alkalmazás fut…',
@@ -1537,6 +1601,7 @@ export const hu = {
     dryRunHint: 'Összeveti a célállapotot a legutóbbi felméréssel. Semmit nem ír.',
     dryRunSummary: (c: number, u: number, n: number, x: number) =>
       `${c} létrehozás · ${u} módosítás · ${n} már helyes · ${x} ütközés`,
+    dryRunExternal: (n: number) => `${n} máshonnan van meg`,
     runDryRun: 'Dry-run futtatása',
     rerun: 'Újrafuttatás',
     confirmation: 'Megerősítés',
@@ -1559,6 +1624,7 @@ export const hu = {
       update: 'Módosítás',
       noop: 'Már helyes',
       conflict: 'Ütközés',
+      external: 'Máshonnan van meg',
     },
     outcomes: {
       applied: 'alkalmazva',

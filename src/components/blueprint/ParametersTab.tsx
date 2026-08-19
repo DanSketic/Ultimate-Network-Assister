@@ -82,7 +82,7 @@ export function ParametersTab({ api, palette }: { api: BlueprintApi; palette: Pa
                     onChange={(e) => api.updateHousehold(h.id, { slug: e.target.value.toUpperCase() })}
                   />
                 </Field>
-                <Field label="Kliens VLAN">
+                <Field label={t.blueprint.householdClientVlan}>
                   <input
                     className="input input--mono"
                     type="number"
@@ -90,7 +90,7 @@ export function ParametersTab({ api, palette }: { api: BlueprintApi; palette: Pa
                     onChange={(e) => api.updateHousehold(h.id, { clientVlan: Number(e.target.value) })}
                   />
                 </Field>
-                <Field label="IoT VLAN">
+                <Field label={t.blueprint.householdIotVlan}>
                   <input
                     className="input input--mono"
                     type="number"

@@ -131,7 +131,9 @@ export function surveyReport(estate: Estate, snapshot: SurveySnapshot | null, t:
       r.backups,
       [r.colJob, r.colTarget, r.colEvidence],
       backups.jobs.map((j) => [j.name, j.target, j.evidence]),
-      r.noBackups,
+      // An empty list means one of two things, and the document has to say
+      // which: nothing scheduled, or nothing the survey was allowed to read.
+      backups.jobsReadable ? r.noBackups : r.backupsUnreadable,
     ),
     `<div class="note">${esc(
       r.backupSummary(backups.protectedCount, backups.guestCount, backups.unprotected.length),

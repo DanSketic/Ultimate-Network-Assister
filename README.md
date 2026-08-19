@@ -55,7 +55,7 @@ number that would look like proof.
 | **Overview** | Headline counters, capacity, and the findings the survey supports. When a figure could not be read, it says so and why. |
 | **Advice** | Change plans derived from the survey: what is wrong, how it was measured, what to do, how to check it worked, and how to undo it. Exportable as a Markdown checklist. |
 | **Backup & recovery** | Backup coverage judged from evidence, not from configuration. |
-| **Deployment planner** | Blueprints resolved into a plan and rendered as a step-by-step guide, with a dry run, gates, a journal and a rollback for the parts it can apply. |
+| **Deployment planner** | Blueprints resolved into a plan and rendered as a step-by-step guide, with a dry run, gates, a journal and a rollback for the parts it can apply. Its commands can be run on a saved SSH profile, one approval at a time. |
 | **SSH** | Sessions bound to a saved system, with host-key pinning and a command policy enforced natively. |
 | **Knowledge** | The reference material the findings point at. |
 
@@ -81,6 +81,12 @@ storage and availability commands — `mkfs`, `wipefs`, `dd`, `zpool destroy`,
 `shutdown` and their kin — are never run by the application at all, only shown
 to you. The badge you read and the rule that runs are the same answer, because
 the interface asks the policy rather than deciding for itself.
+
+**The plan runs under the same rules.** A command in a plan step can be sent to
+a saved SSH profile, and it passes the same classifier — plus three gates of its
+own: a command with a blank still in it is never sent, a step that needs someone
+at the machine offers its reading commands and nothing else, and destructive
+work stays yours to run at a console.
 
 **Credentials never touch the project's own storage.** They live in the Windows
 Credential Manager. Snapshots hold measurements, never secrets.

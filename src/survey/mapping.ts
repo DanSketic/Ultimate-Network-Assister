@@ -496,6 +496,7 @@ function buildBackups(pve: ProxmoxSnapshot | null, t: Dict): BackupSummary {
   const b = t.backupFindings;
   const empty: BackupSummary = {
     jobs: [],
+    jobsReadable: false,
     unprotected: [],
     guestCount: 0,
     protectedCount: 0,
@@ -590,6 +591,9 @@ function buildBackups(pve: ProxmoxSnapshot | null, t: Dict): BackupSummary {
 
   return {
     jobs,
+    // Older stored snapshots carry no such flag; treating that as "not read"
+    // keeps the view from claiming something the survey never established.
+    jobsReadable: pve.backupJobsReadable === true,
     unprotected,
     guestCount: pve.guests.length,
     protectedCount: pve.guests.length - unprotected.length,

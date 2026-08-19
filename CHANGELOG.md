@@ -11,6 +11,102 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.7.0] — 2026-08-19
+
+### Added
+
+- **The plan can now run the commands it prepares.** A step in the deployment
+  planner has always carried exact command text, and the only thing to do with
+  it was copy it. Where an SSH profile with an accepted host key exists, each
+  command can be sent to that machine from the plan itself, under the same
+  native policy the SSH console works under: the clearance badge comes from the
+  policy rather than from the interface, a mutating command runs only once the
+  operator has approved that exact text, and one approval authorises one run.
+
+  Three gates come before the policy is even asked, and they matter more than
+  the feature. A command with a blank left in it — `qm clone <template>`,
+  `K3S_TOKEN=<token>`, a stanza of an interfaces file — is a shape rather than a
+  command, and the application does not know what belongs in the blank; guessing
+  is not one of its jobs. On a step marked "local console", reading is offered
+  and changing is not, because the change is the kind that cuts the very session
+  it would travel over. Destructive work stays where it was: prepared, shown,
+  and run by a person at a console.
+
+  `scripts/checks/plan-ssh.mjs` walks every step of every preset and measures
+  which commands survive those gates, reading the forbidden and read-only lists
+  out of `sshpolicy.rs` so the two sides cannot drift apart.
+
+- **A preset for a single Proxmox host, on a network that already exists.** The
+  other presets start from the network and put the hypervisor inside it. This
+  one starts from the machine: firmware, disks, pools, sizing, a template,
+  guests, backups, boot order, handover. VLANs, SSIDs, zones and rules are
+  absent rather than switched off — a plan that lists VLANs you are not going to
+  build is a plan you stop reading — so it produces no networks at all and the
+  apply pipeline has nothing to write.
+
+  Two things sit at its edge for the cases it does not assume: a trunk-bridge
+  chapter for a host that is fed VLANs after all, and four guests worth having.
+  Both start switched off, so the plan opens as the bare machine. That required
+  the one model change: `defaultOff` on a module, for the chapters where "on
+  unless you say otherwise" reads backwards.
+
+- **The backup job is planned as commands rather than as advice.** Read what the
+  cluster already has, create the job, then prove it produced a file. The
+  creation is a `pvesh create /cluster/backup` the application can run over SSH
+  on approval, which makes it the first place where the planner does the work it
+  describes instead of describing work for someone else.
+
+- **Where to add a backup job, said on the screen that reports there is none.**
+  The Backup view stated the absence and stopped, which leaves the obvious next
+  question unanswered by an application that knows the answer. It now names the
+  place — Datacenter → Backup → Add — and, when the survey found one, a store
+  that accepts backups and how much room it has.
+
+### Changed
+
+- **IoT and guests are only cut up per floor where the floors are cut off from
+  each other.** Under the open-floor layout a sensor or guest subnet per floor
+  separates nothing that is not already open; it only multiplies VLANs, keys and
+  rules. Both now follow the layout by default and split only under full
+  isolation, and either can be forced in either direction from the Addressing
+  parameters. Full isolation produces exactly what it produced before.
+
+- **"Assisted" now describes something the application does.** The mode said
+  approval and execution stay with you, and the cap on a command-only step said
+  running it needs your approval — while nothing existed to approve. With the
+  plan able to run a command, the wording is true rather than aspirational.
+
+### Fixed
+
+- **A VPN range the gateway's own VPN server serves was reported as a clash.** A
+  One-Click VPN network is created by the VPN server, carries no VLAN id and
+  holds a range of its own, so a blueprint asking for a VPN network matched
+  nothing by VLAN, tried to create one, and collided with the very thing it
+  wanted. That is now a verdict of its own — provided elsewhere — which writes
+  nothing, blocks nothing, and names the network that provides it. Two ordinary
+  networks on one range still clash, and so does a non-VPN network aimed at a
+  VPN range.
+
+- **Two spellings of one subnet counted as two subnets.** The controller stores
+  a network by its gateway, `192.168.40.1/24`, while other things that create
+  networks write the network address. The clash check compared the strings, so
+  the second spelling slipped past it — not merely a missed warning but a second
+  network created on top of an existing range. Subnets are now compared as
+  masked network addresses.
+
+- **"No backup job at all" was said where the survey had been refused the
+  list.** A read-only token can legitimately be denied `/cluster/backup`; the
+  collector left the list empty either way, and the view read that as a finding
+  about the cluster. Absence of a job and inability to look are now separate
+  facts, in the view and in the exported report, the way pending updates already
+  were. A snapshot written before the flag existed counts as "not read", since
+  nobody asked it.
+
+- **A Hungarian column header stood in the English interface.** The household
+  editor's client-VLAN column was never translated.
+
+---
+
 ## [1.6.0] — 2026-08-14
 
 ### Added

@@ -27,6 +27,31 @@ export function isDestructiveCommand(body: string): boolean {
   return DESTRUCTIVE_COMMANDS.some((c) => normalised.includes(c));
 }
 
+/**
+ * True when the body is something to read rather than something to run.
+ *
+ * Not every `command` action is a command. Some are a fragment of a file to
+ * paste (`iface vmbr1 inet manual`), some are a shape with a blank left in it
+ * (`qm clone <template> …`, `K3S_TOKEN=<token>`), and some are only a comment
+ * naming what the step is about. Sending any of those verbatim would fail at
+ * best; the placeholder is there precisely because the application does not
+ * know the value, and guessing is not one of its jobs.
+ */
+export function isTemplateCommand(body: string): boolean {
+  // `<name>` and `…` are how the plan writes "fill this in yourself".
+  if (/<[^<>\n]+>/.test(body) || body.includes('…') || body.includes('...')) return true;
+
+  const lines = body.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return true;
+  // Nothing but comments: prose wearing a command's clothes.
+  if (lines.every((l) => l.startsWith('#'))) return true;
+  // A stanza of an interfaces file: indented continuation lines under a
+  // keyword, with nothing that could be a command on its own.
+  if (lines.length > 1 && /^(auto|iface|allow-)/.test(lines[0] ?? '')) return true;
+
+  return false;
+}
+
 export interface Capability {
   level: AutomationLevel;
   /** Present when the policy capped the step below what it asked for. */

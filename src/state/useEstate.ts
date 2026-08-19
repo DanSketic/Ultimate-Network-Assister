@@ -97,6 +97,7 @@ export function demoEstate(lang: Lang, matrixNote: string): Estate {
     // view reads `source` and says so rather than presenting them as findings.
     backups: {
       jobs: demoBackups(lang),
+      jobsReadable: true,
       unprotected: [],
       guestCount: 0,
       protectedCount: 0,

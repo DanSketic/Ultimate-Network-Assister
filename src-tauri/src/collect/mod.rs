@@ -121,6 +121,7 @@ impl Profile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::collect::proxmox::ProxmoxSnapshot;
 
     /// Exactly what the previous build wrote for a standalone ssh profile.
     const LEGACY_SSH: &str = r#"{
@@ -195,8 +196,27 @@ mod tests {
                        "firewallRules": [], "clients": [] }
         }"#;
         let snap: SurveySnapshot = serde_json::from_str(old).expect("old snapshot must still parse");
-        assert!(snap.proxmox.unwrap().backup_jobs.is_empty());
+        let pve = snap.proxmox.unwrap();
+        assert!(pve.backup_jobs.is_empty());
+        // And an empty list from a snapshot that never carried the flag must
+        // not read as "this cluster has no backup job": nobody asked.
+        assert!(!pve.backup_jobs_readable);
         assert!(snap.unifi.unwrap().port_profiles.is_empty());
+    }
+
+    #[test]
+    fn a_refused_backup_listing_is_not_an_empty_one() {
+        // The distinction the Backup view rests on. A survey that read the job
+        // list and found none says so; one that was denied says nothing.
+        let read = r#"{ "version": "8.2", "nodes": [], "storages": [], "guests": [],
+                        "interfaces": [], "disks": [], "backupJobs": [],
+                        "backupJobsReadable": true }"#;
+        let denied = r#"{ "version": "8.2", "nodes": [], "storages": [], "guests": [],
+                          "interfaces": [], "disks": [], "backupJobs": [] }"#;
+        let read: ProxmoxSnapshot = serde_json::from_str(read).unwrap();
+        let denied: ProxmoxSnapshot = serde_json::from_str(denied).unwrap();
+        assert!(read.backup_jobs.is_empty() && read.backup_jobs_readable);
+        assert!(denied.backup_jobs.is_empty() && !denied.backup_jobs_readable);
     }
 
     #[test]

@@ -58,6 +58,22 @@ check('no parameter is missing from the English presets', missing.length === 0, 
 console.log(`   text defaults identical in both languages: ${sameText.length}`);
 for (const s of sameText.slice(0, 8)) console.log(`     ${s}`);
 
+/* -------------------------- a module that starts off has to be switchable */
+
+// `defaultOff` only means anything on an optional module: a required one is
+// switched back on by the resolver regardless, so the pair would be a promise
+// the interface cannot keep.
+const stuckOff = hu.flatMap((preset) =>
+  preset.modules.filter((m) => m.defaultOff && !m.optional).map((m) => `${preset.id}:${m.id}`),
+);
+check('no module starts off that cannot be switched on', stuckOff.length === 0, stuckOff.join(', '));
+
+const startOff = hu.flatMap((preset) =>
+  preset.modules.filter((m) => m.defaultOff).map((m) => `${preset.id}:${m.id}`),
+);
+console.log(`   modules that start switched off: ${startOff.length}`);
+for (const m of startOff) console.log(`     ${m}`);
+
 /* ---------------------- enum choices must key on a stable value, not a label */
 
 let unstable = [];

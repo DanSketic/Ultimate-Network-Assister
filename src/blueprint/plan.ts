@@ -408,6 +408,74 @@ const BUILDERS: Record<string, StepBuilder> = {
     ];
   },
 
+  /*
+   * The backup job.
+   *
+   * Written as commands rather than as prose because this is one of the few
+   * places where the application can do the work: `pvesh` creates the job over
+   * an SSH session, which is a change the policy allows once the operator has
+   * approved that exact command. Reading the current jobs comes first, so the
+   * plan never proposes a second one next to an existing job nobody saw.
+   */
+  backups: (r, p) => {
+    const store = String(r.blueprint.params['backupStorage'] ?? 'local');
+    const schedule = String(r.blueprint.params['backupSchedule'] ?? '02:30');
+    const mode = String(r.blueprint.params['backupMode'] ?? 'snapshot');
+    const daily = Number(r.blueprint.params['backupKeepDaily'] ?? 7);
+    const weekly = Number(r.blueprint.params['backupKeepWeekly'] ?? 4);
+    const keep = [
+      daily > 0 ? `keep-daily=${daily}` : '',
+      weekly > 0 ? `keep-weekly=${weekly}` : '',
+    ]
+      .filter(Boolean)
+      .join(',');
+
+    return [
+      {
+        id: 'existing',
+        title: p.backupExistingTitle,
+        detail: p.backupExistingDetail,
+        requested: 'assisted',
+        risk: 'low',
+        minutes: 5,
+        actions: [
+          cmd(p.backupActions.list, 'pvesh get /cluster/backup --output-format json'),
+          cmd(p.backupActions.stores, 'pvesm status --content backup'),
+        ],
+        verification: p.backupExistingVerify,
+      },
+      {
+        id: 'create',
+        title: p.backupCreateTitle(store, schedule),
+        detail: p.backupCreateDetail,
+        requested: 'assisted',
+        risk: 'medium',
+        minutes: 15,
+        prechecks: p.backupCreatePrechecks(store),
+        actions: [
+          cmd(
+            p.backupActions.create,
+            `pvesh create /cluster/backup --schedule "${schedule}" --storage ${store} ` +
+              `--all 1 --mode ${mode}` +
+              (keep ? ` --prune-backups ${keep}` : '') +
+              ` --comment "${p.backupComment}"`,
+          ),
+        ],
+        verification: p.backupCreateVerify,
+      },
+      {
+        id: 'prove',
+        title: p.backupProveTitle,
+        detail: p.backupProveDetail,
+        requested: 'assisted',
+        risk: 'low',
+        minutes: 10,
+        actions: [cmd(p.backupActions.files, `pvesm list ${store} --content backup`)],
+        verification: p.backupProveVerify,
+      },
+    ];
+  },
+
   'boot-order': (r, p) => [
     {
       id: 'boot',

@@ -83,6 +83,22 @@ There is exactly one `.exec(` in the Rust tree, in `ssh.rs`, and `authorise` is
 called immediately before it. The interface asks the same classifier for the
 badge it displays, so what you read and what the machine enforces cannot drift.
 
+The plan's own commands go through that same classifier. A step in the
+deployment planner has always carried exact command text; where an SSH profile
+with an accepted host key exists, it can now be sent to that machine instead of
+being copied by hand. Three gates come first, before the policy is even asked:
+
+- A command with a blank left in it — `qm clone <template>`, `K3S_TOKEN=<token>`
+  — is a shape, not a command. The application does not know what belongs in the
+  blank, and guessing is not one of its jobs.
+- On a step marked "local console", reading is offered and changing is not: the
+  change is one that can cut the very session it would travel over.
+- Destructive actions are excluded here as they are everywhere else.
+
+`scripts/checks/plan-ssh.mjs` walks every step of every preset and measures which
+commands survive those gates, reading the native forbidden and read-only lists
+out of `sshpolicy.rs` so the two sides cannot drift apart.
+
 Host keys are pinned on first use. The probe that fetches a key aborts the
 handshake before authentication, so a key can be inspected without a credential
 ever being offered.
