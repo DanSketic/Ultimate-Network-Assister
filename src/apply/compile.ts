@@ -1,4 +1,6 @@
 import type { PlannedNetwork, ResolvedBlueprint } from '@/blueprint/model';
+import type { UnifiSnapshot } from '@/survey/model';
+import { compileFirewallOperations } from './firewall';
 import type { ApplyOperation } from './model';
 
 /*
@@ -104,6 +106,25 @@ export function compilePortProfileOperations(resolved: ResolvedBlueprint): Apply
   }));
 }
 
-export function compileOperations(resolved: ResolvedBlueprint): ApplyOperation[] {
-  return [...compileNetworkOperations(resolved), ...compilePortProfileOperations(resolved)];
+/**
+ * Every operation, in the order they must be applied.
+ *
+ * Networks and port profiles first, because a firewall zone refers to networks
+ * by id and they have to exist; then the firewall, whose own ordering — zones,
+ * then allows, then blocks — is decided in `firewall.ts`. The result is that
+ * the operations which could close a path are the last ones taken.
+ *
+ * The firewall half needs the survey: it copies the shape of an object this
+ * controller already holds rather than inventing one. With no survey it
+ * contributes nothing, which is the same answer as before this existed.
+ */
+export function compileOperations(
+  resolved: ResolvedBlueprint,
+  unifi: UnifiSnapshot | null = null,
+): ApplyOperation[] {
+  return [
+    ...compileNetworkOperations(resolved),
+    ...compilePortProfileOperations(resolved),
+    ...compileFirewallOperations(resolved, unifi).operations,
+  ];
 }

@@ -30,6 +30,59 @@ fn endpoint_for(kind: &str) -> Result<&'static str, String> {
         // device object, and on the wrong port it severs the controller's own
         // uplink — so it is deliberately absent from this list.
         "unifi.portconf" => Ok("rest/portconf"),
+        // The firewall kinds live under the v2 API, whose path this release
+        // cannot know in advance; `resolve_endpoint` finds it by asking.
+        "unifi.firewallzone" | "unifi.firewallpolicy" => Ok(""),
+        other => Err(format!(
+            "a(z) „{other}” objektumtípus írása nincs engedélyezve"
+        )),
+    }
+}
+
+/// Where an object kind is written, once the controller has been asked.
+#[derive(Clone, Debug)]
+enum Api {
+    /// `/proxy/network/api/s/<site>/<path>` — the long-standing endpoints.
+    V1(String),
+    /// `/proxy/network/v2/api/site/<site>/<path>` — the zone firewall.
+    V2(String),
+}
+
+/// The v2 paths the firewall has been served under, newest spelling first.
+///
+/// A fixed list, and deliberately not something a caller can influence: the
+/// frontend names a kind and this side decides what that means. What the caller
+/// cannot do is name an address.
+const ZONE_PATHS: [&str; 3] = ["firewall/zones", "firewall/zone", "firewall-zones"];
+const POLICY_PATHS: [&str; 2] = ["firewall-policies", "firewall/policies"];
+
+/// Finds the endpoint by reading from it first.
+///
+/// This enforces the rule that makes writing the firewall defensible at all:
+/// only where a GET answered. A path that cannot be read is a path whose
+/// objects this application has never seen, and a POST to it would be a request
+/// whose effect nobody can predict — which, on a rule that denies, is the one
+/// guess that can lock somebody out of their own gateway.
+async fn resolve_endpoint(session: &Session, kind: &str, secret: &str) -> Result<Api, String> {
+    match kind {
+        "unifi.network" => Ok(Api::V1("rest/networkconf".to_string())),
+        "unifi.portconf" => Ok(Api::V1("rest/portconf".to_string())),
+        "unifi.firewallzone" | "unifi.firewallpolicy" => {
+            let candidates: &[&str] = if kind == "unifi.firewallzone" {
+                &ZONE_PATHS
+            } else {
+                &POLICY_PATHS
+            };
+            for path in candidates {
+                let api = Api::V2((*path).to_string());
+                if session.get_list(&api, secret).await.is_ok() {
+                    return Ok(api);
+                }
+            }
+            Err(format!(
+                "a(z) „{kind}” végpontja nem olvasható ezen a vezérlőn, ezért nem is írható"
+            ))
+        }
         other => Err(format!(
             "a(z) „{other}” objektumtípus írása nincs engedélyezve"
         )),
@@ -159,6 +212,22 @@ impl Session {
         format!("{}/proxy/network/api/s/{}/{}", self.base, self.site, path)
     }
 
+    /// The v2 site API, where the zone-based firewall lives.
+    fn api_v2(&self, path: &str) -> String {
+        format!("{}/proxy/network/v2/api/site/{}/{}", self.base, self.site, path)
+    }
+
+    fn url_for(&self, api: &Api, id: Option<&str>) -> String {
+        let base = match api {
+            Api::V1(p) => self.api(p),
+            Api::V2(p) => self.api_v2(p),
+        };
+        match id {
+            Some(existing) => format!("{base}/{existing}"),
+            None => base,
+        }
+    }
+
     fn with_headers(&self, req: reqwest::RequestBuilder, secret: &str) -> reqwest::RequestBuilder {
         let mut req = req.header("Accept", "application/json");
         if let Some(token) = &self.csrf {
@@ -170,35 +239,38 @@ impl Session {
         req
     }
 
-    async fn get_list(&self, path: &str, secret: &str) -> Result<Vec<Value>, String> {
+    async fn get_list(&self, api: &Api, secret: &str) -> Result<Vec<Value>, String> {
+        let url = self.url_for(api, None);
         let res = self
-            .with_headers(self.client.get(self.api(path)), secret)
+            .with_headers(self.client.get(&url), secret)
             .send()
             .await
-            .map_err(|e| format!("{path}: {e}"))?;
+            .map_err(|e| format!("{url}: {e}"))?;
 
         if !res.status().is_success() {
-            return Err(format!("{path}: a vezérlő {} kóddal válaszolt", res.status()));
+            return Err(format!("{url}: a vezérlő {} kóddal válaszolt", res.status()));
         }
-        let body: Value = res.json().await.map_err(|e| format!("{path}: {e}"))?;
-        Ok(body
-            .get("data")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default())
+        let body: Value = res.json().await.map_err(|e| format!("{url}: {e}"))?;
+
+        // v1 wraps the list in `data`; the v2 endpoints answer with the array.
+        Ok(match &body {
+            Value::Array(items) => items.clone(),
+            other => other
+                .get("data")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
+        })
     }
 
     async fn send_object(
         &self,
-        path: &str,
+        api: &Api,
         id: Option<&str>,
         body: &Value,
         secret: &str,
     ) -> Result<Value, String> {
-        let url = match id {
-            Some(existing) => self.api(&format!("{path}/{existing}")),
-            None => self.api(path),
-        };
+        let url = self.url_for(api, id);
         let req = match id {
             Some(_) => self.client.put(url),
             None => self.client.post(url),
@@ -227,17 +299,21 @@ impl Session {
             });
         }
 
-        Ok(payload
-            .get("data")
-            .and_then(Value::as_array)
-            .and_then(|a| a.first().cloned())
-            .unwrap_or(Value::Null))
+        // v1 wraps the written object in a one-element `data`; v2 returns it.
+        Ok(match &payload {
+            Value::Object(_) if payload.get("data").is_none() => payload.clone(),
+            other => other
+                .get("data")
+                .and_then(Value::as_array)
+                .and_then(|a| a.first().cloned())
+                .unwrap_or(Value::Null),
+        })
     }
 
     /// Rollback only. Never called from the apply path.
-    async fn delete_object(&self, path: &str, id: &str, secret: &str) -> Result<(), String> {
+    async fn delete_object(&self, api: &Api, id: &str, secret: &str) -> Result<(), String> {
         let res = self
-            .with_headers(self.client.delete(self.api(&format!("{path}/{id}"))), secret)
+            .with_headers(self.client.delete(self.url_for(api, Some(id))), secret)
             .send()
             .await
             .map_err(|e| format!("törlés: {e}"))?;
@@ -416,7 +492,11 @@ pub async fn apply(session: &Session, req: ApplyRequest<'_>) -> Result<ApplyRun,
     };
 
     for op in &req.operations {
-        let path = endpoint_for(&op.kind)?;
+        // Asked of the controller rather than assumed: for the firewall kinds the
+        // path is whichever one this release answers a GET on, and none is an
+        // error rather than a guess.
+        let path = resolve_endpoint(session, &op.kind, req.secret).await?;
+        let path = &path;
 
         // Read the object back before touching it, so rollback has something
         // exact to restore rather than a reconstruction.
@@ -506,8 +586,37 @@ pub async fn apply(session: &Session, req: ApplyRequest<'_>) -> Result<ApplyRun,
             },
         };
 
-        let failed = entry.outcome == "failed";
+        let mut failed = entry.outcome == "failed";
         run.entries.push(entry);
+
+        /*
+         * After a rule that can deny, ask the controller whether it is still
+         * there.
+         *
+         * The guard on the other side of the IPC refuses anything that could
+         * close the path this session is standing on, computed from the ruleset
+         * the gateway actually holds. This is the second half of that argument
+         * and the one that does not depend on having reasoned correctly: a read
+         * that fails immediately after a write is the write having cut
+         * something. The run stops there, with everything applied so far in the
+         * journal and rollback available — which is only true while the
+         * controller can still be reached, hence checking at once rather than
+         * at the end.
+         */
+        if !failed && op.kind == "unifi.firewallpolicy" {
+            if let Err(e) = session
+                .get_list(&Api::V1("rest/networkconf".to_string()), req.secret)
+                .await
+            {
+                failed = true;
+                if let Some(last) = run.entries.last_mut() {
+                    last.outcome = "failed".to_string();
+                    last.error = Some(format!(
+                        "a szabály felkerült, de a vezérlő ezután nem válaszolt: {e}"
+                    ));
+                }
+            }
+        }
 
         // Stop at the first failure. Half a policy is worse than none, and the
         // journal so far is what rollback needs.
@@ -539,7 +648,8 @@ pub async fn rollback(session: &Session, secret: &str, run: &mut ApplyRun) -> Re
 
     for i in indices {
         let entry = run.entries[i].clone();
-        let path = endpoint_for(&entry.kind)?;
+        let path = resolve_endpoint(session, &entry.kind, secret).await?;
+        let path = &path;
 
         let outcome = if entry.created {
             match entry.object_id.as_deref() {

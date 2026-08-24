@@ -21,6 +21,43 @@ pub struct UnifiSnapshot {
     #[serde(default)]
     pub port_profiles: Vec<UnifiPortProfile>,
     /*
+     * Which firewall endpoint this controller actually answered on.
+     *
+     * The zone-based endpoints have carried three names for zones and two for
+     * policies across releases, and the collector tries each until one answers.
+     * That is fine for reading, where a wrong guess returns nothing. It is not
+     * fine for writing, where a wrong guess is a request nobody can predict the
+     * effect of — so the path that answered is recorded, and anything that ever
+     * writes here may use that path and no other. An empty string means this
+     * controller never answered, and therefore that nothing may be written.
+     */
+    #[serde(default)]
+    pub zone_endpoint: String,
+    #[serde(default)]
+    pub policy_endpoint: String,
+    /// Firewall zones as the controller keeps them, with their membership.
+    #[serde(default)]
+    pub zones: Vec<UnifiZone>,
+    /*
+     * One zone object and one policy object, verbatim.
+     *
+     * Kept for the same reason the raw ruleset is: a later build can read more
+     * out of it than this one knows how to. But here there is a second, sharper
+     * use. Writing an object whose full shape is not known is guesswork, and a
+     * guessed firewall policy is the one guess that can lock somebody out of
+     * their own gateway — a controller may accept a request missing fields and
+     * fill them with defaults nobody chose. Cloning an object this controller
+     * already holds and changing only the fields we own removes the guess: the
+     * shape comes from the release that is going to receive it.
+     *
+     * Empty where the controller answered with no objects at all, which is
+     * exactly the case where nothing may be written either.
+     */
+    #[serde(default)]
+    pub zone_template: String,
+    #[serde(default)]
+    pub policy_template: String,
+    /*
      * The ruleset as the gateway holds it, verbatim.
      *
      * Kept as the untouched text rather than a parsed structure. Everything
@@ -202,6 +239,20 @@ pub struct UnifiRule {
     pub src: String,
     pub dst: String,
     pub logging: bool,
+}
+
+/// A firewall zone and the networks in it.
+///
+/// Read so that a rule can be described — and eventually written — in terms of
+/// the zones this controller actually has, rather than of names a blueprint
+/// hoped for.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiZone {
+    pub id: String,
+    pub name: String,
+    /// Controller ids of the networks the zone contains.
+    pub network_ids: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -491,10 +542,34 @@ async fn collect_zone_policies(
                     let id = as_str(z, "_id");
                     let name = as_str(z, "name");
                     if !id.is_empty() && !name.is_empty() {
+                        // The membership has carried both spellings; either is
+                        // the same fact and both are read.
+                        let network_ids = ["network_ids", "networkIds"]
+                            .iter()
+                            .find_map(|key| z.get(*key).and_then(Value::as_array))
+                            .map(|list| {
+                                list.iter()
+                                    .filter_map(Value::as_str)
+                                    .map(String::from)
+                                    .collect::<Vec<String>>()
+                            })
+                            .unwrap_or_default();
+                        snap.zones.push(UnifiZone {
+                            id: id.clone(),
+                            name: name.clone(),
+                            network_ids,
+                        });
                         zones.insert(id, name);
                         named += 1;
                     }
                 }
+                // One object kept whole, as the shape a write would have to
+                // match. The first is as good as any: they are all this
+                // release's schema.
+                if let Some(first) = items.first() {
+                    snap.zone_template = first.to_string();
+                }
+                snap.zone_endpoint = path.clone();
                 log.push(LogEntry::ok(SOURCE, format!("GET {path} → {named} zóna")));
                 break;
             }
@@ -520,7 +595,11 @@ async fn collect_zone_policies(
     ] {
         match get(client, profile, secret, &path).await {
             Ok(items) if !items.is_empty() => {
+                if let Some(first) = items.first() {
+                    snap.policy_template = first.to_string();
+                }
                 policies = items;
+                snap.policy_endpoint = path.clone();
                 answered = Some(path);
                 break;
             }

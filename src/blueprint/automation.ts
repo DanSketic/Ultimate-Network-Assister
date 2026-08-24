@@ -79,6 +79,7 @@ export function capabilityFor(
   // A step that can only be done by clicking through a vendor UI cannot be
   // automated, however safe it is.
   const hasApi = actions.some((a) => a.kind === 'api');
+  const writable = actions.some((a) => a.kind === 'api' && a.writable);
   const onlyUi = actions.length > 0 && actions.every((a) => a.kind === 'ui');
 
   if (onlyUi) {
@@ -88,10 +89,18 @@ export function capabilityFor(
     };
   }
 
-  if (requested === 'auto' && !hasApi) {
+  /*
+   * Automatable means this application can do it, not that an API exists.
+   *
+   * Describing a call is not making one. The applier writes two kinds of
+   * object; a step whose API actions are anything else was being counted as
+   * automatable on the strength of a description, which is a promise nothing
+   * in the code could keep.
+   */
+  if (requested === 'auto' && !writable) {
     return {
       level: 'assisted',
-      reason: why.commandOnly,
+      reason: hasApi ? why.notWritten : why.commandOnly,
     };
   }
 

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import * as api from '@/apply/client';
 import { compileOperations } from '@/apply/compile';
+import { parseLiveFirewall } from '@/survey/liveFirewall';
 import { dryRun, writableDiffs } from '@/apply/dryRun';
 import {
   gateBlockers,
@@ -82,7 +83,22 @@ export function useApply(input: {
 
   const selected = targets.find((p) => p.id === profileId) ?? targets[0] ?? null;
 
-  const operations = useMemo(() => compileOperations(resolved), [resolved]);
+  const operations = useMemo(
+    () => compileOperations(resolved, snapshot?.unifi ?? null),
+    [resolved, snapshot],
+  );
+
+  /*
+   * The ruleset the gateway actually holds, for the guards.
+   *
+   * Parsed here rather than carried through the snapshot because only the dry
+   * run needs it, and only to refuse: a rule judged against a ruleset nobody
+   * read would be judged against an assumption.
+   */
+  const live = useMemo(
+    () => (snapshot?.unifi ? parseLiveFirewall(snapshot.unifi.liveFirewall ?? '') : null),
+    [snapshot],
+  );
 
   /** Any change to what is being applied invalidates the review. */
   const invalidate = useCallback(() => {
@@ -133,6 +149,7 @@ export function useApply(input: {
         operations,
         snapshot: { id: snapshot?.id ?? '', unifi: snapshot?.unifi ?? null },
         controllerHost: hostOf(selected.baseUrl),
+        live,
       },
       t.apply.blocker,
     );

@@ -29,7 +29,11 @@ import type { Dict } from '@/i18n';
  * every wireless client at once. They land once rollback is proven on
  * networks.
  */
-export type OperationKind = 'unifi.network' | 'unifi.portconf';
+export type OperationKind =
+  | 'unifi.network'
+  | 'unifi.portconf'
+  | 'unifi.firewallzone'
+  | 'unifi.firewallpolicy';
 
 /** The sentences that explain why an apply is held back. */
 export type BlockerText = Dict['apply']['blocker'];
@@ -48,6 +52,14 @@ export interface ApplyOperation {
    * already there is the expected outcome rather than a clash.
    */
   role?: NetworkRole;
+  /**
+   * What a firewall policy would do, for the guard rather than for the write.
+   *
+   * The object's own fields say it too, but in whatever spelling the release
+   * uses. The guard decides whether a change could cut the hand applying it,
+   * and that decision must not depend on reading a vendor's field name right.
+   */
+  policy?: { from: string; to: string; action: 'allow' | 'block' };
   /**
    * How to find the object that already represents this one. Matching is by a
    * stable natural key, never by array position.

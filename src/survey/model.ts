@@ -364,6 +364,14 @@ export interface UnifiNetwork {
   dhcpEnabled: boolean;
 }
 
+/** A firewall zone and the networks in it. */
+export interface UnifiZone {
+  id: string;
+  name: string;
+  /** Controller ids of the networks the zone contains. */
+  networkIds: string[];
+}
+
 export interface UnifiWlan {
   id: string;
   name: string;
@@ -418,6 +426,29 @@ export interface UnifiSnapshot {
   firewallRules: UnifiRule[];
   clients: UnifiClient[];
   portProfiles: UnifiPortProfile[];
+  /**
+   * The firewall endpoints this controller answered on, if any.
+   *
+   * Read-only code has no use for these; a writer does. The zone-based
+   * endpoints have carried several names across releases and the collector
+   * tries each until one answers — fine for a GET, where a wrong guess returns
+   * nothing, and not fine for a write. Empty means this controller never
+   * answered, and therefore that nothing may be written to it.
+   */
+  zoneEndpoint?: string;
+  policyEndpoint?: string;
+  /** Firewall zones as the controller keeps them, with their membership. */
+  zones?: UnifiZone[];
+  /**
+   * One zone object and one policy object, verbatim.
+   *
+   * The shape a write would have to match, taken from the release that would
+   * receive it. Writing an object whose full shape is guessed is the one guess
+   * that can lock somebody out of their own gateway: a controller may accept a
+   * request missing fields and fill them with defaults nobody chose.
+   */
+  zoneTemplate?: string;
+  policyTemplate?: string;
   /**
    * `iptables-save` from the gateway, verbatim — the ruleset in force.
    *

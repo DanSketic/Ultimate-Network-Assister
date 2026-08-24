@@ -406,6 +406,15 @@ export interface PlanAction {
   target: TargetPlatform;
   /** Irreversible without a restore. Forces the step to `manual`. */
   destructive: boolean;
+  /**
+   * The apply pipeline can actually perform this one.
+   *
+   * Set only on the object kinds the applier writes. Without it an API action
+   * is a description of a call somebody else has to make — which is fine, and
+   * is most of them, but it is not automation and a step must not be counted
+   * as automatable on the strength of it.
+   */
+  writable?: boolean;
 }
 
 export interface PlanStep {

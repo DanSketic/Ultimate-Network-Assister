@@ -25,6 +25,8 @@ const OUT = join(tmpdir(), 'dryrun-bundle-' + process.pid + '.mjs').replace(/\\/
 await build({
   stdin: {
     contents: `export { dryRun, writableDiffs } from '${ROOT}/src/apply/dryRun';
+               export { compileFirewallOperations } from '${ROOT}/src/apply/firewall';
+               export { parseLiveFirewall } from '${ROOT}/src/survey/liveFirewall';
                export { dict } from '${ROOT}/src/i18n/index';`,
     resolveDir: ROOT,
     loader: 'ts',
@@ -32,7 +34,8 @@ await build({
   bundle: true, format: 'esm', outfile: OUT, platform: 'neutral',
   alias: { '@': `${ROOT}/src` }, logLevel: 'error',
 });
-const { dryRun, writableDiffs, dict } = await import(`file://${OUT}`);
+const { dryRun, writableDiffs, compileFirewallOperations, parseLiveFirewall, dict } =
+  await import(`file://${OUT}`);
 
 let failures = 0;
 const check = (name, ok, detail = '') => {
@@ -157,6 +160,140 @@ check('the counts add up to the operations',
   Object.values(counted.counts).reduce((a, b) => a + b, 0) === counted.diffs.length,
   JSON.stringify(counted.counts),
 );
+
+/* ============================ the firewall, end to end ==================== */
+
+/*
+ * From the target state to a verdict, through the guard.
+ *
+ * What is measured is not that rules can be written but that the ones which
+ * could close the path this application is standing on are refused before
+ * anything is sent — and that the refusal survives the whole pipeline rather
+ * than living only in the module that computes it.
+ */
+
+const ZONE_TEMPLATE = JSON.stringify({
+  _id: 'z-existing', site_id: 's', name: 'LAN', network_ids: ['n-lan'],
+});
+const POLICY_TEMPLATE = JSON.stringify({
+  _id: 'p-existing', site_id: 's', name: 'Existing', action: 'ALLOW', enabled: true,
+  index: 2000, protocol: 'all', logging: false,
+  source: { zone_id: 'z-existing', matching_target: 'ANY' },
+  destination: { zone_id: 'z-guest', matching_target: 'ANY' },
+});
+
+const fwUnifi = {
+  networks: [
+    { id: 'n-lan', name: 'MGMT', vlan: null, subnet: '192.168.2.1/24', purpose: 'corporate', enabled: true, dhcpEnabled: true },
+    { id: 'n-guest', name: 'GUEST', vlan: 30, subnet: '192.168.30.1/24', purpose: 'guest', enabled: true, dhcpEnabled: true },
+    { id: 'n-iot', name: 'IOT', vlan: 71, subnet: '192.168.71.1/24', purpose: 'corporate', enabled: true, dhcpEnabled: true },
+  ],
+  wlans: [], firewallRules: [], clients: [], portProfiles: [],
+  zones: [
+    { id: 'z-existing', name: 'LAN', networkIds: ['n-lan'] },
+    { id: 'z-guest', name: 'GUEST', networkIds: ['n-guest'] },
+    { id: 'z-iot', name: 'IOT', networkIds: ['n-iot'] },
+  ],
+  zoneEndpoint: 'firewall/zones',
+  policyEndpoint: 'firewall-policies',
+  zoneTemplate: ZONE_TEMPLATE,
+  policyTemplate: POLICY_TEMPLATE,
+};
+
+const resolved = {
+  zones: [
+    { name: 'GUEST', purpose: '', vlans: [30], moduleId: 'firewall' },
+    { name: 'IOT', purpose: '', vlans: [71], moduleId: 'firewall' },
+  ],
+  policies: [
+    { order: 800, from: 'GUEST', to: 'IOT', action: 'block', log: true, purpose: '', moduleId: 'firewall' },
+    { order: 300, from: 'IOT', to: 'GUEST', action: 'allow', log: false, purpose: '', moduleId: 'firewall' },
+    { order: 810, from: 'GUEST', to: 'LAN', action: 'block', log: true, purpose: '', moduleId: 'firewall' },
+    { order: 900, from: 'GUEST', to: 'every zone', action: 'block', log: true, purpose: '', moduleId: 'firewall' },
+  ],
+};
+
+const built = compileFirewallOperations(resolved, fwUnifi);
+const kinds = built.operations.map((o) => `${o.kind.split('.')[1]}:${o.label}`);
+console.log(`   firewall operations: ${built.operations.length}`);
+for (const k of kinds) console.log(`     ${k}`);
+
+check('the zones come first', built.operations.slice(0, 2).every((o) => o.kind === 'unifi.firewallzone'));
+check(
+  'and the allow comes before both blocks',
+  built.operations.findIndex((o) => o.label.includes('allow')) <
+    built.operations.findIndex((o) => o.label.includes('block')),
+);
+check(
+  'a rule target written as prose is not compiled',
+  !built.operations.some((o) => o.label.includes('every zone')),
+  kinds.join(', '),
+);
+check(
+  'the created object carries the controller shape, not ours',
+  built.operations.some((o) => o.kind === 'unifi.firewallpolicy' && 'protocol' in o.createOnly),
+);
+check(
+  'and never the id of the object it was copied from',
+  built.operations.every((o) => !('_id' in o.createOnly) && !('site_id' in o.createOnly)),
+);
+
+const noSurvey = compileFirewallOperations(resolved, null);
+check('with no survey there is nothing to write', noSurvey.operations.length === 0);
+const noEndpoint = compileFirewallOperations(resolved, { ...fwUnifi, policyEndpoint: '' });
+check('and none where the controller never answered', noEndpoint.operations.length === 0);
+const noTemplate = compileFirewallOperations(resolved, { ...fwUnifi, policyTemplate: '' });
+check('nor where there is no object to copy', noTemplate.operations.length === 0);
+
+/* ------------------------------------------------ and now through the guard */
+
+const fwLive = parseLiveFirewall(`*filter
+:FORWARD DROP [0:0]
+-A UBIOS_FORWARD_IN_USER -i br0 -j UBIOS_LAN_IN_USER
+-A UBIOS_FORWARD_IN_USER -i br30 -j UBIOS_GUEST_IN_USER
+-A UBIOS_FORWARD_IN_USER -i br71 -j UBIOS_IOT_IN_USER
+-A UBIOS_GUEST_LAN_USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A UBIOS_GUEST_LAN_USER -j DROP
+-A UBIOS_GUEST_IOT_USER -j RETURN
+-A UBIOS_IOT_GUEST_USER -j RETURN
+COMMIT
+`);
+
+const fwReport = dryRun(
+  {
+    operations: built.operations,
+    snapshot: { id: 's1', unifi: fwUnifi },
+    controllerHost: '192.168.2.10',
+    live: fwLive,
+  },
+  x,
+);
+const diffFor = (needle) => fwReport.diffs.find((d) => d.operation.label.includes(needle));
+
+check('the block onto the admin zone is refused', diffFor('GUEST → LAN')?.verdict === 'conflict',
+  String(diffFor('GUEST → LAN')?.verdict));
+check('and says which zone it is about',
+  (diffFor('GUEST → LAN')?.blockedReason ?? '').includes('LAN'));
+check('the block between two other zones is written', diffFor('GUEST → IOT')?.verdict === 'create',
+  String(diffFor('GUEST → IOT')?.verdict));
+check('and so is the allow', diffFor('IOT → GUEST')?.verdict === 'create',
+  String(diffFor('IOT → GUEST')?.verdict));
+check('nothing refused reaches the writable set',
+  writableDiffs(fwReport).every((d) => !d.operation.label.includes('GUEST → LAN')));
+
+// Without the ruleset there is no instrument, so no block may be written at all.
+const blindReport = dryRun(
+  { operations: built.operations, snapshot: { id: 's1', unifi: fwUnifi }, controllerHost: '192.168.2.10' },
+  x,
+);
+const blindBlocks = blindReport.diffs.filter((d) => d.operation.policy?.action === 'block');
+check('with no ruleset read, every block is refused',
+  blindBlocks.length > 0 && blindBlocks.every((d) => d.verdict === 'conflict'),
+  `${blindBlocks.filter((d) => d.verdict === 'conflict').length}/${blindBlocks.length}`);
+check('while the allows still go through',
+  blindReport.diffs
+    .filter((d) => d.operation.policy?.action === 'allow')
+    .every((d) => d.verdict === 'create'));
 
 rmSync(OUT, { force: true });
 console.log(failures === 0 ? '\nOK' : `\n${failures} FAILED`);

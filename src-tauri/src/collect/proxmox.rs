@@ -432,6 +432,25 @@ async fn collect_certificates(
     }
 }
 
+/// Parses `/nodes/<node>/apt/update` into the pending package list.
+///
+/// Shared with the ssh read for the same reason the backup parser is: one set
+/// of field names, so two ways in cannot disagree about what came back.
+pub fn parse_updates(v: &Value, node: &str, snap: &mut ProxmoxSnapshot) -> usize {
+    let before = snap.updates.len();
+    for u in array(v) {
+        snap.updates.push(PveUpdate {
+            node: node.to_string(),
+            package: as_str(&u, "Package"),
+            current: as_str(&u, "OldVersion"),
+            candidate: as_str(&u, "Version"),
+            priority: as_str(&u, "Priority"),
+            title: as_str(&u, "Title"),
+        });
+    }
+    snap.updates.len() - before
+}
+
 /// Packages with a newer version waiting.
 ///
 /// Proxmox guards this endpoint more tightly than the rest of the audit surface,
@@ -449,16 +468,7 @@ async fn collect_updates(
     match get(client, base, token, &format!("/nodes/{node}/apt/update")).await {
         Ok(v) => {
             snap.updates_readable = true;
-            for u in array(&v) {
-                snap.updates.push(PveUpdate {
-                    node: node.to_string(),
-                    package: as_str(&u, "Package"),
-                    current: as_str(&u, "OldVersion"),
-                    candidate: as_str(&u, "Version"),
-                    priority: as_str(&u, "Priority"),
-                    title: as_str(&u, "Title"),
-                });
-            }
+            parse_updates(&v, node, snap);
             log.push(LogEntry::ok(
                 SOURCE,
                 format!(
@@ -474,24 +484,15 @@ async fn collect_updates(
     }
 }
 
-/// Backup jobs and the files they left behind.
+/// Parses `/cluster/backup` into jobs.
 ///
-/// Both halves matter and neither substitutes for the other: a job proves
-/// intent, a file proves it ran. The view compares them, so a job that has
-/// silently stopped producing anything is visible instead of reassuring.
-///
-/// Failures here never abort the survey — a token scoped narrowly enough to
-/// read guests but not `/cluster/backup` is a normal, sensible setup.
-async fn collect_backups(
-    client: &reqwest::Client,
-    base: &str,
-    token: &str,
-    snap: &mut ProxmoxSnapshot,
-    log: &mut Vec<LogEntry>,
-) {
-    match get(client, base, token, "/cluster/backup").await {
-        Ok(v) => {
-            for j in array(&v) {
+/// Shared by the API read and the ssh one: `pvesh get` returns the same objects
+/// the API does, so the difference between them is how the bytes arrived and
+/// nothing else. One parser means a job read over ssh cannot come out subtly
+/// different from the same job read over HTTPS.
+pub fn parse_backup_jobs(v: &Value, snap: &mut ProxmoxSnapshot) -> usize {
+    let before = snap.backup_jobs.len();
+    for j in array(v) {
                 let all = as_bool(&j, "all");
                 snap.backup_jobs.push(PveBackupJob {
                     id: as_str(&j, "id"),
@@ -534,6 +535,27 @@ async fn collect_backups(
                     comment: as_str(&j, "comment"),
                 });
             }
+    snap.backup_jobs.len() - before
+}
+
+/// Backup jobs and the files they left behind.
+///
+/// Both halves matter and neither substitutes for the other: a job proves
+/// intent, a file proves it ran. The view compares them, so a job that has
+/// silently stopped producing anything is visible instead of reassuring.
+///
+/// Failures here never abort the survey — a token scoped narrowly enough to
+/// read guests but not `/cluster/backup` is a normal, sensible setup.
+async fn collect_backups(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    snap: &mut ProxmoxSnapshot,
+    log: &mut Vec<LogEntry>,
+) {
+    match get(client, base, token, "/cluster/backup").await {
+        Ok(v) => {
+            parse_backup_jobs(&v, snap);
             snap.backup_jobs_readable = true;
             log.push(LogEntry::ok(
                 SOURCE,

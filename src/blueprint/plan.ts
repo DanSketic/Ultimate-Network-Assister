@@ -46,12 +46,26 @@ const ui = (label: string, body: string): PlanAction => ({
   destructive: false,
 });
 
-const api = (label: string, body: string, target: PlanAction['target']): PlanAction => ({
+/**
+ * An API call the plan describes.
+ *
+ * `writable` says whether this application is the one that can make it. Only
+ * the two object kinds the applier writes — UniFi networks and port profiles —
+ * pass it; everything else is an exact description of a call for a person to
+ * make in the controller, and the step is counted accordingly.
+ */
+const api = (
+  label: string,
+  body: string,
+  target: PlanAction['target'],
+  writable = false,
+): PlanAction => ({
   kind: 'api',
   label,
   body,
   target,
   destructive: false,
+  ...(writable ? { writable: true } : {}),
 });
 
 const cmd = (
@@ -78,6 +92,7 @@ const BUILDERS: Record<string, StepBuilder> = {
             `${n.name} (VLAN ${n.vlan})`,
             p.networkBody(n.name, n.vlan, n.cidr, n.gateway),
             'unifi',
+            true,
           ),
         ),
         verification: p.networksVerify,
@@ -124,6 +139,7 @@ const BUILDERS: Record<string, StepBuilder> = {
               profile.taggedVlans.length > 0 ? profile.taggedVlans.join(', ') : '—',
             ),
             'unifi',
+            true,
           ),
         ),
         verification: p.portProfilesVerify,
@@ -476,16 +492,31 @@ const BUILDERS: Record<string, StepBuilder> = {
     ];
   },
 
+  /*
+   * Start-up order, as commands rather than as a table to copy by hand.
+   *
+   * It read as an API action and asked to be automated, which was a promise
+   * nothing could keep: the applier writes UniFi objects and has never written
+   * anything to Proxmox. The values were the same either way, so the difference
+   * was entirely in whether the plan overstated what would happen. As `qm set`
+   * and `pct set` they are commands the application can actually run, one
+   * approval at a time, and the ones it cannot are still exactly what to type.
+   */
   'boot-order': (r, p) => [
     {
       id: 'boot',
       title: p.bootTitle,
       detail: p.bootDetail,
-      requested: 'auto',
+      requested: 'assisted',
       risk: 'low',
       minutes: 20,
       actions: bootOrder(r).map(({ guest, order, delay }) =>
-        api(guest.name, p.bootBody(guest.kind.toUpperCase(), guest.vmid, order, delay), 'proxmox'),
+        cmd(
+          `${guest.name} (${guest.vmid})`,
+          `${guest.kind === 'lxc' ? 'pct' : 'qm'} set ${guest.vmid} --startup order=${order}` +
+            (delay > 0 ? `,up=${delay}` : ''),
+          'proxmox',
+        ),
       ),
       verification: p.bootVerify,
     },
@@ -500,7 +531,7 @@ const BUILDERS: Record<string, StepBuilder> = {
       risk: 'medium',
       minutes: 25,
       actions: r.networks.map((n) =>
-        api(`${n.name} (VLAN ${n.vlan})`, p.k8sNetBody(n.name, n.vlan, n.cidr, n.gateway), 'unifi'),
+        api(`${n.name} (VLAN ${n.vlan})`, p.k8sNetBody(n.name, n.vlan, n.cidr, n.gateway), 'unifi', true),
       ),
       verification: p.k8sNetVerify,
     },

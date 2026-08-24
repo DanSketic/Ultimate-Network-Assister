@@ -32,6 +32,23 @@ export function ApplyPanel({ api, palette }: { api: ApplyApi; palette: Palette }
     );
   }
 
+  /*
+   * Nothing to write, said before a target is asked for.
+   *
+   * A blueprint that describes no UniFi object — the single-host preset is the
+   * whole of one — would otherwise be told to add a UniFi profile and accept
+   * its certificate, which is advice for a plan it does not have.
+   */
+  if (api.operationCount === 0) {
+    return (
+      <div className="panel" style={{ padding: '18px 20px', maxWidth: 680 }}>
+        <div className="pretty" style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
+          {t.apply.nothingToApply}
+        </div>
+      </div>
+    );
+  }
+
   if (api.targets.length === 0) {
     return (
       <div className="panel" style={{ padding: '18px 20px', maxWidth: 680 }}>

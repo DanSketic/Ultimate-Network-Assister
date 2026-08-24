@@ -57,13 +57,59 @@ compile → dry run (token) → gates → apply → journal → rollback
 
 Only the deployment planner writes anything, and only through
 `src-tauri/src/apply.rs::endpoint_for`, which maps an operation kind to a URL.
-That function is the allowlist: two entries, UniFi networks and UniFi port
-profiles. Anything not in it cannot be written, whatever the plan says.
+That function is the allowlist: UniFi networks, port profiles, firewall zones
+and firewall policies. Anything not in it cannot be written, whatever the plan
+says. The firewall entries carry no fixed path — those endpoints have moved
+between releases, so `resolve_endpoint` finds the one this controller answers a
+GET on and writes only there. A path that cannot be read is a path whose objects
+this application has never seen.
 
 Per-port overrides are excluded on purpose. The plan carries the exact per-port
 values and shows them to you, but the application writes port *profiles* — a
 wrong override cuts the controller's own uplink, and there is no recovery from
 inside the application.
+
+## Writing the firewall
+
+The firewall has been outside the writable set from the start, and the reason
+was never that rules are complicated. It is that **the undo is not symmetric
+with the do**: a change that closes the path to the controller cannot be rolled
+back through that path. Every other safety device in this application — the
+backup gate, the dry run, the journal, the rollback — assumes the controller is
+still reachable when it runs, and that is exactly the assumption a bad rule
+removes.
+
+The obvious remedy, a dead man's switch armed on the gateway, does not work
+here. On UniFi the gateway does not own its ruleset; the controller provisions
+it. A scheduled `iptables-restore` would be fighting the thing that is about to
+overwrite it, and losing.
+
+So the defence has to be refusal in advance, and a refusal is only as good as
+what it is computed from. `src/apply/reachability.ts` computes it:
+
+- **Where the application is standing.** The network containing the controller,
+  found by masked containment rather than by comparing three octets — a
+  controller on a /22 used to fall outside its own network — and the firewall
+  zone that network sits in, taken from the ruleset the gateway actually holds.
+- **What may be written.** An allow passes on any pair: permitting cannot cut
+  anyone off. A block is refused if the ruleset was never read, if either end is
+  the zone the controller is reached through, or if either end is a zone the
+  ruleset never named — unknown is not the same as harmless.
+- **What may be confirmed afterwards.** The same instrument that permitted the
+  change reports whether the path still stands, and it withholds an answer
+  rather than guessing: a chain that ends in a `RETURN` decides nothing, so
+  reading it as "still open" would be a reassurance about a chain nobody looked
+  at.
+
+`scripts/checks/reachability.mjs` measures those properties against a parsed
+sample ruleset.
+
+Two things follow for whatever eventually performs the write. It may only use
+the endpoint the survey actually answered on — recorded as `zoneEndpoint` and
+`policyEndpoint`, because those paths have carried several names across releases
+and a guess is a request whose effect nobody can predict. And it must apply
+allows before blocks, re-reading the loaded ruleset between them, so that the
+step which could close a path is the last one taken and the first one checked.
 
 ## SSH
 

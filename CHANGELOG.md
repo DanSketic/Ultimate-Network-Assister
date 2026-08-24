@@ -11,6 +11,89 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.8.0] — 2026-08-19
+
+### Added
+
+- **The firewall can be written, and the reason it could not be is what decides
+  how.** Zones and rules from the target state are now applied objects rather
+  than instructions to a person. What kept them out was never that rules are
+  hard to compose; it was that a wrong one closes the path the correction would
+  have to travel. Every other safety device here — the backup gate, the dry run,
+  the journal, the rollback — assumes the controller is still reachable when it
+  runs, which is precisely the assumption a bad rule removes. The obvious
+  remedy, a dead man's switch armed on the gateway, does not work on UniFi: the
+  gateway does not own its ruleset, the controller provisions it, so a scheduled
+  restore would be fighting the thing about to overwrite it.
+
+  So the defence is refusal in advance, computed rather than asserted. The
+  application works out which network and which firewall zone carry its own
+  session — by masked containment, so a controller on a /22 is inside its own
+  network — and refuses accordingly. A rule that only permits passes on any
+  pair, because permitting cannot close anything. A rule that denies is refused
+  where the loaded ruleset was never read, where either end is the zone the
+  controller is reached through, and where either end is a zone the ruleset
+  never named, since unknown is not the same as harmless. What survives is the
+  large, dull majority: guests kept off the cameras, sensors kept off the
+  servers — the rules worth having, which cannot reach the person applying them.
+
+  Two more things make it defensible in practice. The object's shape is copied
+  rather than invented: a controller may accept a request that omits fields and
+  fill them with defaults nobody chose, so a new zone or rule is built by
+  cloning one this controller already holds — the survey now keeps one of each
+  verbatim — with only the fields we own replaced, and even the key names read
+  off the template, since releases disagree about `zone_id` and `zoneId`. And
+  the endpoint is found by reading from it first: those paths have carried
+  several names, the frontend still names only an object kind, and the native
+  side writes solely where a GET answered.
+
+  Ordering carries the rest of the argument. Networks, then zones, then allows,
+  then blocks, so the operations that could close a path are the last taken. And
+  after each rule that denies, the controller is asked whether it is still
+  there; a read that fails immediately after a write is the write having cut
+  something, so the run stops at once — while the journal and the rollback can
+  still be used, which is only true for as long as the controller answers.
+
+- **The survey fills its own gaps over SSH.** A read-only Proxmox token is
+  legitimately refused some endpoints, and the application has been honest about
+  that rather than reporting an absence it never established — honest and
+  unhelpful, since the same facts are sitting on the machine. Where the profile
+  can reach it, the backup jobs and the pending updates are now read with
+  `pvesh get` instead. It asks only about a gap the API actually left, so a
+  token that can read everything sends nothing at all, and it parses the answer
+  with the same parser the API path uses, so a fact read over SSH cannot come
+  out subtly different from the same fact read over HTTPS.
+
+- **The Apply tab says when a blueprint has nothing for it to write.** The
+  single-host preset describes no UniFi object at all, and was being told to add
+  a UniFi profile and accept its certificate — advice for a plan it does not
+  have.
+
+### Changed
+
+- **"Automatable" now means this application can do it.** The plan counted a
+  step as automatable whenever it described an API call, which put nine of them
+  on the counter while the applier could write two kinds of object. Describing a
+  call is not making one. A step qualifies only if it carries an action the
+  apply pipeline actually writes, and `scripts/checks/plan-claims.mjs` measures
+  that against the apply layer's own list rather than a restatement of it.
+
+- **Start-up order is a command rather than a table to copy.** It read as an API
+  action and asked to be automated, which nothing could keep: the applier has
+  never written anything to Proxmox. As `qm set` and `pct set` it is a command
+  the application can genuinely run, one approval at a time.
+
+### Fixed
+
+- **The management-network guard was comparing three octets.** A /22 holds four
+  /24s, and a controller in any but the first of them fell outside its own
+  network — so the one guard whose job is to protect the session was blind in
+  the one case where being approximately right costs it. Containment is now
+  masked properly, and creating a network *onto* the admin range is checked too,
+  which it never was.
+
+---
+
 ## [1.7.0] — 2026-08-19
 
 ### Added

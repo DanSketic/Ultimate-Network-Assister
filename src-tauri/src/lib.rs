@@ -260,6 +260,43 @@ mod profile_tests {
         );
     }
 
+    /// A profile whose ssh half is set up but whose host key was never accepted.
+    fn unpinned_proxmox() -> Profile {
+        let mut p = api_profile();
+        p.ssh_enabled = true;
+        p.ssh_host = "10.0.1.10".into();
+        p.ssh_username = "root".into();
+        p.ssh_fingerprint = None;
+        p
+    }
+
+    #[tokio::test]
+    async fn the_ssh_reads_only_ask_about_a_gap() {
+        // Nothing was refused, so nothing is asked: a survey that sent commands
+        // it did not need would be doing more than it said it does.
+        let mut snap = collect::proxmox::ProxmoxSnapshot {
+            backup_jobs_readable: true,
+            updates_readable: true,
+            ..Default::default()
+        };
+        let mut log = Vec::new();
+        collect_proxmox_ssh_reads(&unpinned_proxmox(), &mut snap, &mut log).await;
+        assert!(log.is_empty(), "no gap, no commands and nothing to report");
+    }
+
+    #[tokio::test]
+    async fn an_unpinned_host_key_stops_the_ssh_reads() {
+        // A gap exists, but the key was never accepted. It says so and stops;
+        // the gap stays a gap rather than becoming a claim either way.
+        let mut snap = collect::proxmox::ProxmoxSnapshot::default();
+        let mut log = Vec::new();
+        collect_proxmox_ssh_reads(&unpinned_proxmox(), &mut snap, &mut log).await;
+        assert_eq!(log.len(), 1);
+        assert!(!log[0].ok);
+        assert!(!snap.backup_jobs_readable);
+        assert!(!snap.updates_readable);
+    }
+
     #[test]
     fn ssh_needs_a_username_and_a_bare_host() {
         let mut p = api_profile();
@@ -616,6 +653,121 @@ async fn collect_live_reads(profile: &Profile, log: &mut Vec<LogEntry>) -> [Stri
     out
 }
 
+/// What the API half could not tell us, asked of the machine instead.
+///
+/// A read-only token is legitimately refused some endpoints — `/cluster/backup`
+/// and the apt list are the two that come up — and the survey has been honest
+/// about that rather than reporting an absence it never established. Honest and
+/// unhelpful: the same facts are sitting on the machine, and where the profile
+/// can reach it over ssh, they can simply be read.
+///
+/// Two rules keep this from becoming a second, quieter collector. It only asks
+/// about a gap the API actually left, so a token that can read everything sends
+/// nothing at all. And it parses what comes back with the same parser the API
+/// path uses, so a fact read over ssh cannot come out subtly different from the
+/// same fact read over HTTPS. Every command is a `pvesh get`, which the policy
+/// classifies read-only; a later edit that tried to collect something mutating
+/// would be refused at the gate rather than here.
+async fn collect_proxmox_ssh_reads(
+    profile: &Profile,
+    snap: &mut collect::proxmox::ProxmoxSnapshot,
+    log: &mut Vec<LogEntry>,
+) {
+    if snap.backup_jobs_readable && snap.updates_readable {
+        return;
+    }
+    let Some(pinned) = profile.ssh_fingerprint.clone() else {
+        log.push(LogEntry::fail(
+            "proxmox",
+            "a hiányzó olvasások kimaradtak: a gazdagép kulcsa nincs elfogadva",
+        ));
+        return;
+    };
+
+    if !snap.backup_jobs_readable {
+        match ssh_read_json(profile, &pinned, "pvesh get /cluster/backup --output-format json").await
+        {
+            Ok(v) => {
+                let n = collect::proxmox::parse_backup_jobs(&v, snap);
+                snap.backup_jobs_readable = true;
+                log.push(LogEntry::ok(
+                    "proxmox",
+                    format!("SSH: pvesh get /cluster/backup → {n} mentési feladat"),
+                ));
+            }
+            Err(e) => log.push(LogEntry::fail(
+                "proxmox",
+                format!("a mentési feladatok SSH-n sem olvashatók: {e}"),
+            )),
+        }
+    }
+
+    if !snap.updates_readable {
+        let nodes: Vec<String> = snap.nodes.iter().map(|n| n.name.clone()).collect();
+        let mut any = false;
+        for node in nodes {
+            match ssh_read_json(
+                profile,
+                &pinned,
+                &format!("pvesh get /nodes/{node}/apt/update --output-format json"),
+            )
+            .await
+            {
+                Ok(v) => {
+                    let n = collect::proxmox::parse_updates(&v, &node, snap);
+                    any = true;
+                    log.push(LogEntry::ok(
+                        "proxmox",
+                        format!("SSH: pvesh get /nodes/{node}/apt/update → {n} frissítés"),
+                    ));
+                }
+                Err(e) => log.push(LogEntry::fail(
+                    "proxmox",
+                    format!("a(z) {node} frissítései SSH-n sem olvashatók: {e}"),
+                )),
+            }
+        }
+        // Only claimed once something was actually read: a node that refused
+        // leaves the question open rather than answered with an empty list.
+        snap.updates_readable = any;
+    }
+}
+
+/// One `pvesh get`, parsed as JSON.
+///
+/// The output is the evidence and the exit status is corroboration, the same
+/// way the gateway reads treat it — but here the output also has to parse,
+/// since a shell that printed a login banner in front of the JSON has not
+/// answered the question.
+async fn ssh_read_json(
+    profile: &Profile,
+    pinned: &str,
+    command: &str,
+) -> Result<serde_json::Value, String> {
+    let auth = ssh_auth_for(profile)?;
+    let res = ssh::run_command(
+        &profile.ssh_host,
+        profile.ssh_port_or_default(),
+        &profile.ssh_username,
+        pinned,
+        auth,
+        command,
+        false,
+    )
+    .await?;
+
+    if !live_read_kept(res.exit_status, &res.stdout) {
+        return Err(match (res.exit_status, res.stderr.lines().next()) {
+            (_, Some(line)) if !line.trim().is_empty() => line.trim().to_string(),
+            (Some(code), _) if code != 0 => format!("kilépési kód {code}"),
+            _ => "a parancs nem írt ki semmit".to_string(),
+        });
+    }
+
+    serde_json::from_str(res.stdout.trim())
+        .map_err(|e| format!("a válasz nem értelmezhető JSON: {e}"))
+}
+
 /// Runs a read-only survey across the given profiles.
 ///
 /// A failing profile does not abort the run: its error is recorded and the
@@ -719,6 +871,42 @@ async fn run_survey(db: State<'_, Db>, profile_ids: Vec<String>) -> Result<Surve
      * one gateway's ruleset to another site would be a wrong answer rather
      * than a missing one.
      */
+    /*
+     * The same idea on the Proxmox side, and the same reasoning: what the token
+     * was refused is often sitting on the machine, and a profile that can reach
+     * it over ssh can simply read it. Only the gaps are asked about.
+     *
+     * The profile's own ssh is preferred; a separate ssh entry marked as a
+     * Proxmox host is used otherwise, and which one was read is logged, because
+     * attributing one cluster's backup jobs to another would be a wrong answer
+     * rather than a missing one.
+     */
+    if let Some(pve) = snapshot.proxmox.as_mut() {
+        if !pve.backup_jobs_readable || !pve.updates_readable {
+            let reader = selected
+                .iter()
+                .find(|p| p.kind == "proxmox" && p.ssh_enabled)
+                .or_else(|| {
+                    selected
+                        .iter()
+                        .find(|p| p.kind == "ssh" && p.flavour == "proxmox" && p.ssh_enabled)
+                });
+            match reader {
+                Some(p) => {
+                    log.push(LogEntry::ok(
+                        "proxmox",
+                        format!("a hiányzó olvasások SSH-n, a(z) „{}” profilról", p.label),
+                    ));
+                    collect_proxmox_ssh_reads(p, pve, &mut log).await;
+                }
+                None => log.push(LogEntry::fail(
+                    "proxmox",
+                    "amit a token nem olvashatott, az kimaradt: a kiválasztott profilok közt nincs SSH elérés a hoszthoz",
+                )),
+            }
+        }
+    }
+
     if let Some(unifi) = snapshot.unifi.as_mut() {
         let reader = selected
             .iter()

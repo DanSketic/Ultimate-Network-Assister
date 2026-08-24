@@ -866,6 +866,8 @@ export const en: Dict = {
       noApi: 'No API for this: the application prepares the exact values and you type them in.',
       commandOnly:
         'No API call in this step, only a command: the application prepares it, and where an SSH connection is set up it runs it on your approval.',
+      notWritten:
+        'The application does not write this kind of object. A wrong firewall rule or port assignment can lock you out of the controller that would fix it, so the values are prepared exactly and entered by you.',
     },
     issue: {
       moduleMissingDeps: (title: string, missing: string) =>
@@ -1275,8 +1277,6 @@ export const en: Dict = {
     bootTitle: 'Set the start-up order',
     bootDetail:
       'Name resolution and storage start first, then the services built on them. Without an order, dependent machines start with errors.',
-    bootBody: (kind: string, vmid: number, order: number, delay: number) =>
-      `${kind} ${vmid} · start order: ${order} · delay: ${delay} s`,
     bootVerify: ['After a full restart every service becomes reachable on its own.'],
 
     k8sNetTitle: 'Create the cluster VLAN',
@@ -1507,12 +1507,16 @@ export const en: Dict = {
     noTarget:
       'No UniFi profile has an accepted certificate. Add one in the Survey view, accept its fingerprint and run a survey — Apply compares the target state against the live one.',
     target: 'Target controller',
+    nothingToApply:
+      'This blueprint has nothing for Apply to write: it describes no UniFi networks or port profiles. Its work is in the plan, where the commands can be run over SSH on a saved profile.',
     operationCount: (n: number) => `${n} operations from the target state`,
     scopeNote:
       'Apply currently writes networks (VLANs) only. SSIDs and firewall rules stay prepared: a wrong rule order can lock you out of the controller itself, and that could no longer be fixed from here.',
     operationKind: {
       'unifi.network': 'Network',
       'unifi.portconf': 'Port profile',
+      'unifi.firewallzone': 'Firewall zone',
+      'unifi.firewallpolicy': 'Firewall rule',
     },
     blocker: {
       noBackup: 'No recent site backup. It is required before writing.',
@@ -1530,6 +1534,12 @@ export const en: Dict = {
         `A network called “${name}” already exists on another VLAN (${vlan}). Rename one of them.`,
       subnetClash: (subnet: string, name: string) =>
         `The ${subnet} range is already used by the “${name}” network.`,
+      adminZone: (zone: string) =>
+        `This rule names the “${zone}” zone, which is the zone this application reaches the controller through. A rule that closes that path cannot be undone through it, so it is prepared here and applied by you — from somewhere that would survive it.`,
+      rulesetUnread:
+        'The ruleset the gateway actually holds was not read, so nothing here could be confirmed afterwards. Give the gateway profile SSH access and survey again, and rules that deny become writable.',
+      unknownZone: (zone: string) =>
+        `The loaded ruleset never mentioned the “${zone}” zone, so what a rule there would close cannot be worked out. Unknown is not the same as harmless, and this is refused on that ground.`,
       vpnServerNetwork: (name: string) =>
         `The gateway's VPN server already serves this range as the “${name}” network. The application leaves it alone: that network belongs to the VPN server, and a second one on the same range would clash with it.`,
     },

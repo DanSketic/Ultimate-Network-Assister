@@ -70,10 +70,20 @@ rather than in the documentation.
 Proxmox token (`PVEAuditor` is enough) and a read-only UniFi account are all it
 asks for.
 
-**Writing has an allowlist of two.** The apply pipeline can write UniFi networks
-and port *profiles*, and nothing else. It never writes per-port overrides: a
-wrong override cuts the controller's own uplink, and there is no way back from
-inside the application.
+**Writing has an allowlist.** The apply pipeline writes UniFi networks, port
+*profiles*, firewall zones and firewall rules, and nothing else. It never writes
+per-port overrides: a wrong override cuts the controller's own uplink, and there
+is no way back from inside the application.
+
+**A rule that could cut your own connection is refused, not undone.** The undo
+is not symmetric with the do — a change that closes the path to the controller
+cannot be rolled back through it — so the application works out which network
+and which firewall zone carry its own session and refuses any rule that could
+close them. A rule that only permits passes on any pair; one that denies is
+refused where the ruleset was never read, where either end is the zone the
+controller is reached through, or where either end is a zone the ruleset never
+named. After each rule that denies, the controller is asked whether it is still
+there, and the run stops at once if it is not.
 
 **SSH commands are classified natively.** Read-only commands run freely. A
 mutating command requires you to confirm that exact command text. Destructive

@@ -893,6 +893,8 @@ export const hu = {
       noApi: 'Nincs hozzá API: az alkalmazás előkészíti a pontos értékeket, a beírás kézzel történik.',
       commandOnly:
         'Nincs API-hívás a lépésben, csak parancs: az alkalmazás előkészíti, és ahol van beállított SSH-kapcsolat, a jóváhagyásoddal le is futtatja.',
+      notWritten:
+        'Ilyen objektumot az alkalmazás nem ír. Egy rossz tűzfalszabály vagy portkiosztás kizárhat abból a vezérlőből, amivel javítani lehetne, ezért az értékek pontosan elő vannak készítve, de te viszed be őket.',
     },
     /** Contradictions the resolver finds between modules and parameters. */
     issue: {
@@ -1313,8 +1315,6 @@ export const hu = {
     bootTitle: 'Indulási sorrend beállítása',
     bootDetail:
       'A névfeloldás és a tárhely indul először, utána az azokra épülő szolgáltatások. A sorrend nélkül a függő gépek hibával indulnak.',
-    bootBody: (kind: string, vmid: number, order: number, delay: number) =>
-      `${kind} ${vmid} · indulási sorrend: ${order} · késleltetés: ${delay} mp`,
     bootVerify: ['Teljes újraindítás után minden szolgáltatás magától elérhetővé válik.'],
 
     k8sNetTitle: 'Fürt VLAN létrehozása',
@@ -1560,12 +1560,16 @@ export const hu = {
     noTarget:
       'Nincs olyan UniFi profil, amelynek a tanúsítványa el van fogadva. Vedd fel a Felmérés nézetben, fogadd el az ujjlenyomatát, és futtass egy felmérést — az alkalmazás az élő állapothoz hasonlítja a célállapotot.',
     target: 'Cél vezérlő',
+    nothingToApply:
+      'Ebben a tervben nincs mit alkalmazni: nem ír le UniFi hálózatot és port-profilt. A munkája a terv fülön van, ahol a parancsok egy mentett profilon, SSH-n futtathatók.',
     operationCount: (n: number) => `${n} művelet a célállapotból`,
     scopeNote:
       'Az alkalmazás jelenleg csak hálózatokat (VLAN-okat) ír. Az SSID-k és a tűzfalszabályok előkészítve maradnak: egy rossz szabálysorrend a vezérlőtől is elzárhat, és azt már nem lehetne innen javítani.',
     operationKind: {
       'unifi.network': 'Hálózat',
       'unifi.portconf': 'Port profil',
+      'unifi.firewallzone': 'Tűzfalzóna',
+      'unifi.firewallpolicy': 'Tűzfalszabály',
     },
     /** Why the apply button is not available yet. */
     blocker: {
@@ -1584,6 +1588,12 @@ export const hu = {
         `Már van „${name}” nevű hálózat más VLAN-on (${vlan}). Nevezd át valamelyiket.`,
       subnetClash: (subnet: string, name: string) =>
         `A ${subnet} tartományt már használja a(z) „${name}” hálózat.`,
+      adminZone: (zone: string) =>
+        `Ez a szabály a(z) „${zone}” zónát nevezi meg, és ezen a zónán át éri el az alkalmazás a vezérlőt. Egy olyan szabályt, ami ezt az utat lezárja, nem lehet ugyanezen az úton visszavonni — ezért itt elkészül, de te alkalmazod, onnan, ami túlélné.`,
+      rulesetUnread:
+        'Az átjáró által ténylegesen tartott szabálykészletet nem olvastuk ki, tehát itt semmit nem lehetne utólag igazolni. Adj SSH-elérést az átjáró profiljához, mérj fel újra, és a tiltó szabályok írhatóvá válnak.',
+      unknownZone: (zone: string) =>
+        `A betöltött szabálykészlet soha nem említette a(z) „${zone}” zónát, így nem lehet kiszámolni, mit zárna le ott egy szabály. Az ismeretlen nem ugyanaz, mint az ártalmatlan — ezen az alapon utasítjuk el.`,
       vpnServerNetwork: (name: string) =>
         `Ezt a tartományt az átjáró VPN-szervere már kiszolgálja, „${name}” néven. Az alkalmazás nem nyúl hozzá: az a hálózat a VPN-szerveré, és egy másik ugyanezen a tartományon ütközne vele.`,
     },
