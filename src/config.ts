@@ -2,6 +2,7 @@ import type { LangPref } from '@/i18n';
 import { DEFAULT_ACCENT, type ThemePref } from '@/lib/palette';
 
 export const VIEWS = [
+  'guided',
   'overview',
   'topology',
   'survey',

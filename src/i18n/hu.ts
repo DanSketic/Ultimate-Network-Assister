@@ -128,7 +128,103 @@ export const hu = {
     manage: 'Profilok és felmérés…',
   },
 
+  guided: {
+    title: 'Végigviszlek rajta',
+    subtitle: 'Csatlakozás, megnézzük, aztán megcsináljuk, amit érdemes',
+    desktopOnly:
+      'Ez a böngészős előnézet: megmutatni tud, hozzányúlni nem. Az asztali alkalmazás az, amelyik csatlakozik.',
+    steps: {
+      connect: 'Csatlakozás',
+      look: 'Megnézzük',
+      prepare: 'Előkészítés',
+      confirm: 'Döntés',
+      done: 'Kész',
+    },
+
+    connectTitle: 'Először is: hogyan érjük el',
+    connectBody:
+      'Amíg az alkalmazás nem éri el a gépedet, nincs mit megnézni. Három dolog kell hozzá: hol van, ki vagy, és — ha már válaszol — egy pillantás arra a tanúsítványra, amit mutat.',
+    connectAction: 'Kapcsolat beállítása',
+    kindUnifi: 'UniFi vezérlő',
+    kindProxmox: 'Proxmox szerver',
+    fieldAddress: 'A címe',
+    fieldAddressHint: (kind: string): string =>
+      kind === 'unifi'
+        ? 'Az a cím, amin a vezérlőt szoktad megnyitni. Általában maga az átjáró.'
+        : 'A Proxmox gép címe. A 8006-os portot hozzátesszük.',
+    fieldUser: 'Felhasználónév',
+    fieldUserHint: (kind: string): string =>
+      kind === 'unifi'
+        ? 'Nézelődéshez elég egy csak olvasó fiók; íráshoz olyan kell, ami módosíthat.'
+        : 'Egy API-token azonosítója, user@pam!tokennev alakban. Nézelődéshez a PVEAuditor elég.',
+    fieldPassword: 'Jelszó',
+    fieldPasswordHint: (kind: string): string =>
+      kind === 'unifi' ? '' : 'A token titka — az, amit egyszer mutatott meg a létrehozáskor.',
+    connecting: 'Csatlakozom…',
+    connectAdvanced: 'Inkább részletesen állítanám be',
+    secretFailed: 'A jelszót nem sikerült eltárolni. Semmi nem lett elmentve.',
+    unreachable:
+      'Erre a címre nem jött válasz. Nézd meg a címet, és azt is, hogy ez a gép eléri-e a hálózaton.',
+    secretNote:
+      'A jelszó egyenesen az operációs rendszer saját tárolójába kerül. Ez az alkalmazás nem őrzi meg és nem is tudja visszaolvasni.',
+
+    certTitle: 'Ez a te géped?',
+    certBody:
+      'A gép ezt a tanúsítványt mutatta. Innen senki nem tudja megmondani, hogy tényleg a tiéd-e, ezért hasonlítsd össze azzal, amit maga a gép mutat — a vezérlő beállításaiban vagy a konzolján. Ha elfogadod, ezután mindennek ugyanezt kell mutatnia, és ha megváltozik, azt jelezzük, nem nyeljük le.',
+    certAccept: 'Igen, ez az enyém',
+    sshOffer: 'Van shell-hozzáférésem is ehhez a géphez',
+    sshWhy:
+      'Nem kötelező, de megéri. Ezzel ki tudjuk olvasni, milyen szabályokat tart valóban az átjáró — nem azt, amit mondtak neki —, és tiltó szabályt csak akkor tudunk írni, ha ez az olvasás megvan.',
+    sshUser: 'Shell felhasználónév',
+    sshUserHint: (host: string): string =>
+      `Ezzel lépünk be SSH-n a(z) ${host} gépre, a szokásos porton.`,
+    sshPassword: 'Shell jelszó',
+    sshUnreachable:
+      'A gép SSH-n nem válaszolt. A többi be van állítva és működik; a shell-hozzáférést később a részletes nézetben is fel lehet venni.',
+
+    hostTitle: 'És maga a gép?',
+    hostBody:
+      'Az SSH nem tanúsítvánnyal, hanem kulccsal azonosít egy gépet — ezt a kulcsot ajánlotta fel. Hasonlítsd össze azzal, amit a gép mond magáról: `ssh-keygen -lf` a saját gazdakulcsain, vagy amit a konzol kiírt, amikor először beléptél. Ha elfogadod, egy későbbi kulcsváltás megállítja a kapcsolatot ahelyett, hogy szó nélkül elmenne.',
+
+    lookTitle: 'Most nézzük meg, mi van',
+    lookBody:
+      'Amit itt csinálunk, az csupa olvasás. Semmi nem változik, semmi nem íródik, és ami visszajön, azt a géped mondja magáról — nem azt, aminek valaha beállították.',
+    lookAction: 'Nézzük meg a hálózatomat',
+    looking: 'Nézzük…',
+
+    prepareTitle: 'Előkészítés',
+    prepareBody:
+      'Mentést készítünk a vezérlőről, és kiszámoljuk, mi változna. Mindkettő kell, mielőtt bármi más történne, és egyik sem változtat semmin.',
+
+    confirmTitle: 'Ezt csinálnám',
+    confirmBody: 'Ha ez így jó, egy gomb elvégzi az egészet. Ha nem, akkor nem történik semmi.',
+    nothingToDo:
+      'Nincs mit változtatni: amit beállítottál, az már megegyezik azzal, amit ez a terv csinálna. Ez a jó kimenet.',
+    willCreate: (n: number) => `${n} dolog jönne létre, ami most nincs meg.`,
+    willUpdate: (n: number) => `${n} dolog módosulna.`,
+    alreadyRight: (n: number) => `${n} dolog már jó, ahhoz nem nyúlnánk.`,
+    elsewhere: (n: number) => `${n} dolgot már más biztosít, azt békén hagyjuk.`,
+    refused: (n: number) =>
+      `${n} dolgot szándékosan visszatartunk — elvághatná azt a kapcsolatot, amin ez fut, ezért ezeket neked kell kézzel megcsinálnod.`,
+    backupTaken: 'A vezérlőről készült mentés, és el van mentve.',
+    applyAction: (n: number) => `Csináld meg (${n})`,
+    applying: 'Csinálom…',
+    seeDetail: 'Mutasd a részleteket',
+    heldBack: 'Egy része így nem mehet tovább. A részletes nézet megmondja, melyik és miért.',
+
+    doneTitle: 'Kész',
+    doneBody: (applied: number, failed: number) =>
+      failed > 0
+        ? `${applied} változtatás ment át, ${failed} nem. A futás az első hibánál megállt, és ami addig történt, visszaállítható.`
+        : `${applied} változtatás ment át. Semmi nem maradt félbe.`,
+    undo: 'Állítsd vissza',
+
+    footnote:
+      'Itt ugyanaz a gépezet fut, mint a többi nézetben, csak abban a sorrendben, ahogy történnie kell. Mentés nélkül semmi nem íródik, olyat nem írunk, amit utána ne tudnánk visszaolvasni, és amit elvághatná a saját kapcsolatodat, azt inkább elutasítjuk, mint megpróbáljuk.',
+  },
+
   nav: {
+    guided: ['Vezetett', 'út'],
     overview: ['Áttekintés'],
     topology: ['Topológia', '& policy'],
     survey: ['Felmérés'],

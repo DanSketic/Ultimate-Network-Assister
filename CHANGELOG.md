@@ -11,6 +11,63 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.9.0] — 2026-08-19
+
+### Added
+
+- **A guided path, for the person who does not already know what they want.**
+  Everything here has been an instrument panel, and an instrument assumes
+  somebody who knows which reading they are looking for. That is right for the
+  person who came on purpose and wrong for the person who has a network, a
+  suspicion it could be better, and no vocabulary for VLANs or zones or dry
+  runs. What was missing was never a feature; it was a path — the application
+  had no answer to "what now".
+
+  So: one screen, five steps, and at each step exactly one thing to press.
+  Connect, look, prepare, decide, done. It drives the machinery the other views
+  drive — the same survey, the same blueprint, the same guarded write path — and
+  adds nothing of its own except an order and plainer words. Counts become
+  sentences: not "17 operations, 3 conflicts" but "3 things would be created
+  that are not there yet, 12 are already right and would be left alone, 1 is
+  being held back on purpose because it could cut off the connection this is
+  running over".
+
+  The backup and the dry run happen without being asked for, because they change
+  nothing and because anybody who needs this screen does not know to ask. The
+  change itself does not. And the confirmation is still bound to the token of
+  the exact dry run being shown, which is the same binding the expert path
+  enforces — what disappears is the clicking, not the reviewing.
+
+- **Connecting is four fields, on the screen that needs it.** The detailed
+  screen asks for eleven, because a profile can be an API endpoint, an ssh host,
+  both, with a site name and an auth method and a port. Someone connecting for
+  the first time has none of those distinctions in their head, and asking for
+  them is asking them to learn the model before they are allowed to use the
+  application. Now: what kind of machine, where, who you are. Everything else
+  takes a default and stays changeable on the screen built for changing it.
+
+  Shell access is offered rather than assumed — folded away under one sentence
+  about what it buys, since without it the rules the gateway is really holding
+  cannot be read and nothing that denies can be written. Turning it on adds two
+  fields and reuses the address rather than asking for it twice.
+
+  The certificate is not smoothed over. It is the one moment where a person is
+  asked to vouch for something this cannot check for them, so it says exactly
+  that and asks them to compare it against what the machine itself shows. Where
+  ssh was asked for, the host key follows as a second question rather than being
+  bundled into the first: two promises about two protocols, and presenting them
+  together would invite one glance and two acceptances. A host key that cannot
+  be reached leaves the working half alone rather than unwinding it.
+
+### Changed
+
+- **A first run opens on the guided path.** There is no session to restore only
+  before the application has ever been used here, which is exactly the person it
+  is for. Afterwards the saved view wins and it never appears again unless it is
+  chosen from the navigation.
+
+---
+
 ## [1.8.0] — 2026-08-19
 
 ### Added

@@ -6,6 +6,7 @@ import { NavIcon } from './icons';
 
 /** Design order differs from VIEWS: the topology map is the landing view. */
 const NAV_ORDER: ViewId[] = [
+  'guided',
   'overview',
   'topology',
   'survey',

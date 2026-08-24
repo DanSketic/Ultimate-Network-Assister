@@ -102,7 +102,15 @@ export function useAppState(config: AppConfig): AppStateApi {
     ...loadPrefs({ themePref: config.initialThemePref, langPref: config.initialLangPref }),
     ...(link.theme ? { themePref: link.theme } : {}),
     ...(link.lang ? { langPref: link.lang } : {}),
-    view: link.view ?? restored?.view ?? config.startView,
+    /*
+     * A first run opens on the guided path.
+     *
+     * `restored` is null only before this application has ever been used here,
+     * which is exactly the person the guided path is for. Once there is a
+     * session to restore, the saved view wins and this never appears again
+     * unless it is chosen.
+     */
+    view: link.view ?? restored?.view ?? (restored ? config.startView : 'guided'),
     sub: link.sub ?? restored?.sub ?? 'map',
     tab: restored?.tab ?? 'overview',
     selected: restored?.selected || 'pve',

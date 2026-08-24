@@ -119,7 +119,103 @@ export const en: Dict = {
     manage: 'Profiles and survey…',
   },
 
+  guided: {
+    title: 'Let me walk you through it',
+    subtitle: 'Connect, look, and change what is worth changing',
+    desktopOnly:
+      'This is the browser preview, which can show but not touch a live system. The desktop application is the one that connects.',
+    steps: {
+      connect: 'Connect',
+      look: 'Look',
+      prepare: 'Prepare',
+      confirm: 'Decide',
+      done: 'Done',
+    },
+
+    connectTitle: 'First, a way in',
+    connectBody:
+      'Nothing can be looked at until this application can reach your equipment. Three things are needed: where it is, who you are, and — once it answers — a look at the certificate it presents.',
+    connectAction: 'Set up the connection',
+    kindUnifi: 'UniFi controller',
+    kindProxmox: 'Proxmox server',
+    fieldAddress: 'Its address',
+    fieldAddressHint: (kind: string): string =>
+      kind === 'unifi'
+        ? 'The address you open the controller on. Usually the gateway itself.'
+        : 'The address of the Proxmox machine. Port 8006 is added for you.',
+    fieldUser: 'User name',
+    fieldUserHint: (kind: string): string =>
+      kind === 'unifi'
+        ? 'A read-only account is enough to look; writing needs one allowed to change settings.'
+        : 'An API token id, in the form user@pam!tokenname. PVEAuditor is enough to look.',
+    fieldPassword: 'Password',
+    fieldPasswordHint: (kind: string): string =>
+      kind === 'unifi' ? '' : 'The token’s secret, the one shown once when it was created.',
+    connecting: 'Connecting…',
+    connectAdvanced: 'I would rather set it up in detail',
+    secretFailed: 'The password could not be stored. Nothing was saved.',
+    unreachable:
+      'That address did not answer. Check it, and that this machine can reach it on the network.',
+    secretNote:
+      'The password goes straight into the operating system’s own credential store. This application never keeps it and cannot read it back.',
+
+    certTitle: 'Is this your machine?',
+    certBody:
+      'The machine presented this certificate. Nobody can tell from here whether it is really yours, so compare it against what the machine itself shows — in the controller’s settings, or on its console. Accepting it means everything afterwards must present the same one, and a change will be reported rather than waved through.',
+    certAccept: 'Yes, that is mine',
+    sshOffer: 'I also have shell access to this machine',
+    sshWhy:
+      'Optional, and worth it. With it this can read the rules the gateway is really holding rather than the ones it was told to hold — and rules that block something can only be written when that reading exists.',
+    sshUser: 'Shell user name',
+    sshUserHint: (host: string): string => `Used to log in to ${host} over SSH, on the usual port.`,
+    sshPassword: 'Shell password',
+    sshUnreachable:
+      'The machine did not answer over SSH. The rest is set up and works; shell access can be added later in the detailed view.',
+
+    hostTitle: 'And the machine itself?',
+    hostBody:
+      'SSH identifies a machine by a key rather than a certificate, and this is the key it offered. Compare it with what the machine reports about itself — `ssh-keygen -lf` on its host keys, or what its console printed the first time you logged in. Accepting it means a later change of key stops the session instead of being ignored.',
+
+    lookTitle: 'Now let us see what is there',
+    lookBody:
+      'Everything this reads is a read. Nothing changes, nothing is written, and what comes back is what your equipment says about itself rather than what it was once configured to be.',
+    lookAction: 'Look at my network',
+    looking: 'Looking…',
+
+    prepareTitle: 'Getting ready',
+    prepareBody:
+      'Taking a backup of the controller and working out what would change. Both are needed before anything else, and neither of them changes anything.',
+
+    confirmTitle: 'Here is what I would do',
+    confirmBody: 'If that sounds right, one button does all of it. If it does not, nothing happens.',
+    nothingToDo:
+      'Nothing needs changing: what you have already matches what this would set up. That is the good outcome.',
+    willCreate: (n: number) => `${n} things would be created that are not there yet.`,
+    willUpdate: (n: number) => `${n} things would be adjusted.`,
+    alreadyRight: (n: number) => `${n} things are already right and would be left alone.`,
+    elsewhere: (n: number) => `${n} are already provided by something else and are left alone.`,
+    refused: (n: number) =>
+      `${n} are being held back on purpose — they could cut off the connection this is running over, so they are yours to do by hand.`,
+    backupTaken: 'A backup of the controller has been taken and saved.',
+    applyAction: (n: number) => `Do it (${n})`,
+    applying: 'Doing it…',
+    seeDetail: 'Show me the detail',
+    heldBack:
+      'Some of it cannot go ahead as it stands. The detail view says which and why.',
+
+    doneTitle: 'Done',
+    doneBody: (applied: number, failed: number) =>
+      failed > 0
+        ? `${applied} changes went through and ${failed} did not. The run stopped at the first failure, and everything before it can be put back.`
+        : `${applied} changes went through. Nothing was left half-finished.`,
+    undo: 'Put it back',
+
+    footnote:
+      'Everything here is the same machinery the other views use, in the order it is meant to happen. Nothing is written without a backup taken first, nothing is written that this could not read back afterwards, and anything that could cut off your own connection is refused rather than attempted.',
+  },
+
   nav: {
+    guided: ['Guided', 'setup'],
     overview: ['Overview'],
     topology: ['Topology', '& policy'],
     survey: ['Survey'],

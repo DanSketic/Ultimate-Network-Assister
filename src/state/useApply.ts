@@ -40,6 +40,10 @@ export interface ApplyApi {
   writableCount: number;
 
   takeBackup: () => Promise<void>;
+  /** Backup and dry run in one step, for the guided path. */
+  prepare: () => Promise<void>;
+  /** Applies exactly the run the user was shown, with no separate gate clicks. */
+  applyShown: () => Promise<void>;
   review: () => void;
   confirm: () => void;
   unconfirm: () => void;
@@ -201,6 +205,80 @@ export function useApply(input: {
     }
   }, [selected, report, gates, fail, t]);
 
+  /*
+   * The guided path's two steps, where the expert path has four gates.
+   *
+   * The gates are not being relaxed — they are being done for you in the right
+   * order. `prepare` takes the backup and runs the dry run in one go, because a
+   * person who has not asked for a backup still needs one, and because the diff
+   * is what they are about to be shown. `applyShown` then applies exactly the
+   * run they were shown: the confirmation token is that report's own, so the
+   * binding between "what a human reviewed" and "what is written" is the same
+   * one the expert path enforces. What disappears is the clicking, not the
+   * reviewing.
+   */
+  const prepare = useCallback(async () => {
+    if (!selected) return;
+    setBusy(t.apply.busyBackup);
+    setError(null);
+    try {
+      const result = await api.takeSiteBackup(selected.id);
+      const next = dryRun(
+        {
+          operations,
+          snapshot: { id: snapshot?.id ?? '', unifi: snapshot?.unifi ?? null },
+          controllerHost: hostOf(selected.baseUrl),
+          live,
+        },
+        t.apply.blocker,
+      );
+      setReport(next);
+      setGates({
+        backup: { ready: true, path: result.path, takenAt: result.takenAt },
+        dryRun: {
+          ready: next.blockers.length === 0,
+          token: next.token,
+          createdAt: next.createdAt,
+        },
+        // Still unconfirmed: the confirmation is the button the user is about
+        // to be shown, not something this granted on their behalf.
+        confirmed: { ready: false },
+      });
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(null);
+    }
+  }, [selected, operations, snapshot, live, fail, t]);
+
+  const applyShown = useCallback(async () => {
+    if (!selected || !report || report.blockers.length > 0) return;
+    if (!gates.backup.ready) {
+      setError(t.apply.blocker.noBackup);
+      return;
+    }
+
+    setBusy(t.apply.busyApply);
+    setError(null);
+    try {
+      const result = await api.applyOperations({
+        profileId: selected.id,
+        dryRunToken: report.token,
+        // The report the user is looking at is the one being authorised.
+        confirmToken: report.token,
+        backupPath: gates.backup.path ?? '',
+        diffs: writableDiffs(report),
+      });
+      setRun(result);
+      setGates((g) => ({ ...g, confirmed: { ready: false } }));
+      if (result.abortedReason) setError(t.apply.aborted(result.abortedReason));
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(null);
+    }
+  }, [selected, report, gates, fail, t]);
+
   const rollback = useCallback(async () => {
     if (!selected || !run) return;
     setBusy(t.apply.busyRollback);
@@ -234,6 +312,8 @@ export function useApply(input: {
     operationCount: operations.length,
     writableCount: report ? writableDiffs(report).length : 0,
     takeBackup,
+    prepare,
+    applyShown,
     review,
     confirm,
     unconfirm,

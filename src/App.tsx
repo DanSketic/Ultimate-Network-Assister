@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { dict, I18nProvider, useI18n } from '@/i18n';
 import { saveSession } from '@/lib/session';
 import { BlueprintView } from '@/components/blueprint/BlueprintView';
+import { GuidedView } from '@/components/views/GuidedView';
 import { NavRail } from '@/components/NavRail';
 import { StatusBar } from '@/components/StatusBar';
 import { TitleBar } from '@/components/TitleBar';
@@ -15,6 +16,9 @@ import { SshView } from '@/components/views/SshView';
 import { SurveyView } from '@/components/views/SurveyView';
 import { DEFAULT_CONFIG, type AppConfig, type InspectorTab, type ViewId } from '@/config';
 import { useAppState, useCopyFeedback } from '@/state/useAppState';
+import type { ResolvedBlueprint } from '@/blueprint/model';
+import type { Palette } from '@/lib/palette';
+import { useApply } from '@/state/useApply';
 import { useBlueprints } from '@/state/useBlueprints';
 import { useEstateSource } from '@/state/useEstate';
 import { useSsh } from '@/state/useSsh';
@@ -159,6 +163,16 @@ function Shell({ app, config }: { app: ReturnType<typeof useAppState>; config: A
             <SurveyView api={estateApi} palette={palette} accent={accent} />
           ) : null}
 
+          {state.view === 'guided' ? (
+            <GuidedTab
+              estate={estateApi}
+              resolved={blueprints.resolved}
+              palette={palette}
+              accent={accent}
+              goTo={(view) => patch({ view })}
+            />
+          ) : null}
+
           {state.view === 'advice' ? (
             <AdviceView
               estate={estate}
@@ -210,5 +224,55 @@ function Shell({ app, config }: { app: ReturnType<typeof useAppState>; config: A
 
       <StatusBar palette={palette} estate={estate} />
     </div>
+  );
+}
+
+/**
+ * Owns the guided path's write state.
+ *
+ * Its own component for the same reason the planner's apply tab is: the hook
+ * must not be called from a branch of the parent's render, and leaving the view
+ * drops a half-finished preparation rather than leaving it armed.
+ */
+function GuidedTab({
+  estate,
+  resolved,
+  palette,
+  accent,
+  goTo,
+}: {
+  estate: ReturnType<typeof useEstateSource>;
+  resolved: ResolvedBlueprint | undefined;
+  palette: Palette;
+  accent: string;
+  goTo: (view: ViewId) => void;
+}) {
+  // Before a blueprint has been resolved there is nothing to propose. It is a
+  // moment at startup, not a state anyone sits in.
+  if (!resolved) return null;
+  return <GuidedBody estate={estate} resolved={resolved} palette={palette} accent={accent} goTo={goTo} />;
+}
+
+function GuidedBody({
+  estate,
+  resolved,
+  palette,
+  accent,
+  goTo,
+}: {
+  estate: ReturnType<typeof useEstateSource>;
+  resolved: ResolvedBlueprint;
+  palette: Palette;
+  accent: string;
+  goTo: (view: ViewId) => void;
+}) {
+  const apply = useApply({
+    resolved,
+    snapshot: estate.snapshot,
+    profiles: estate.profiles,
+  });
+
+  return (
+    <GuidedView estate={estate} apply={apply} palette={palette} accent={accent} goTo={goTo} />
   );
 }

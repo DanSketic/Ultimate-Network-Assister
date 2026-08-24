@@ -9,6 +9,13 @@ const strokeProps = {
 } as const;
 
 const NAV_PATHS: Record<ViewId, ReactElement> = {
+  guided: (
+    <>
+      <path d="M3.5 15.5c4-0 4-5.5 8-5.5s4-5.5 4-5.5" />
+      <circle cx="15.5" cy="4.5" r="1.8" />
+      <circle cx="3.5" cy="15.5" r="1.8" />
+    </>
+  ),
   overview: (
     <>
       <rect x="2.5" y="2.5" width="6" height="6" rx="1.2" />
