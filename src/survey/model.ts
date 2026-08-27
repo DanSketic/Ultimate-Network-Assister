@@ -161,6 +161,28 @@ export interface PveGuest {
   memTotal: number;
   diskTotal: number;
   tags: string;
+  /**
+   * What the guest is plugged into.
+   *
+   * Optional: absent from surveys taken before it was collected, and empty
+   * where the token could not read the guest's config. Both mean "not
+   * measured" — never "the guest is on no network".
+   */
+  nics?: PveGuestNic[];
+}
+
+/** One virtual interface of a guest, as its configuration has it. */
+export interface PveGuestNic {
+  /** "net0", as Proxmox numbers them. */
+  name: string;
+  /** The device model — "virtio", "e1000" — or "veth" for a container. */
+  model: string;
+  mac: string;
+  /** The bridge it is plugged into, e.g. "vmbr0". */
+  bridge: string;
+  /** The VLAN it is tagged into; null where the bridge passes it untagged. */
+  vlan: number | null;
+  firewall: boolean;
 }
 
 export interface PveInterface {
@@ -418,6 +440,42 @@ export interface UnifiClient {
   switchPort: number;
 }
 
+/**
+ * One WAN link — the estate's way out.
+ *
+ * Joined from two sources: the gateway's own WAN interface, which knows the
+ * address, the mode and the port, and the controller's health summary, which
+ * knows the ISP and whatever a speedtest last measured. Either can answer
+ * without the other, so every field has a value that means "not measured":
+ * empty for text, -1 for a figure, 0 for a port index.
+ */
+export interface UnifiWan {
+  /** The gateway it belongs to; empty where only the health summary saw it. */
+  deviceMac: string;
+  /** "WAN" or "WAN2", as the controller labels the link. */
+  name: string;
+  ifname: string;
+  /** How the address is obtained: "dhcp", "static", "pppoe". */
+  kind: string;
+  ip: string;
+  gatewayIp: string;
+  nameservers: string[];
+  up: boolean;
+  /** Negotiated speed in Mbit/s; 0 where the controller did not say. */
+  speed: number;
+  uptimeSecs: number;
+  isp: string;
+  /** Round-trip time in ms; -1 where nothing measured it. */
+  latencyMs: number;
+  /** The last speedtest in Mbit/s; -1 where none has ever run. */
+  xputDown: number;
+  xputUp: number;
+  /** Unix seconds of that speedtest; -1 where there has never been one. */
+  speedtestAt: number;
+  /** The physical port carrying it, where the device names one. */
+  portIdx: number;
+}
+
 export interface UnifiSnapshot {
   site: string;
   devices: UnifiDevice[];
@@ -426,6 +484,14 @@ export interface UnifiSnapshot {
   firewallRules: UnifiRule[];
   clients: UnifiClient[];
   portProfiles: UnifiPortProfile[];
+  /**
+   * The estate's way out.
+   *
+   * Optional because surveys taken before it was collected have no such field;
+   * see the note on stored shapes — a missing default is how a kept survey
+   * stops loading.
+   */
+  wans?: UnifiWan[];
   /**
    * The firewall endpoints this controller answered on, if any.
    *

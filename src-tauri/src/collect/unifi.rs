@@ -86,6 +86,56 @@ pub struct UnifiSnapshot {
     pub live_firewall_v6: String,
     #[serde(default)]
     pub live_addresses: String,
+    /*
+     * The estate's way out, as the gateway and the controller report it.
+     *
+     * Everything else here is inside the estate; this is the one link that
+     * leaves it, and it was the one thing never collected. Two sources are read
+     * and joined: the gateway's own WAN interface, which knows the address, the
+     * mode and the port, and the controller's health summary, which knows the
+     * ISP and whatever a speedtest last measured. Either can be present without
+     * the other.
+     */
+    #[serde(default)]
+    pub wans: Vec<UnifiWan>,
+}
+
+/// One WAN link.
+///
+/// Measurements the controller did not report come back as -1, not 0, on the
+/// same reasoning as `UnifiRadio`: a link nobody has speed-tested is a
+/// different thing from one measured at zero, and only the second is worth
+/// saying anything about.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UnifiWan {
+    /// The gateway this WAN belongs to. Empty where only the health summary
+    /// saw it, which happens on releases that keep the detail to themselves.
+    pub device_mac: String,
+    /// "WAN" or "WAN2", as the controller labels the link.
+    pub name: String,
+    /// The interface carrying it: "eth8", "ppp0".
+    pub ifname: String,
+    /// How the address is obtained: "dhcp", "static", "pppoe".
+    pub kind: String,
+    pub ip: String,
+    pub gateway_ip: String,
+    pub nameservers: Vec<String>,
+    pub up: bool,
+    /// Negotiated speed in Mbit/s; 0 where the controller did not say.
+    pub speed: u64,
+    pub uptime_secs: u64,
+    /// The ISP as the controller resolved it. Empty where it did not.
+    pub isp: String,
+    /// Round-trip time in ms; -1 where nothing measured it.
+    pub latency_ms: i64,
+    /// The last speedtest, in Mbit/s; -1 where none has ever run.
+    pub xput_down: f64,
+    pub xput_up: f64,
+    /// Unix seconds of that speedtest; -1 where there has never been one.
+    pub speedtest_at: i64,
+    /// The physical port carrying the link, where the device names one.
+    pub port_idx: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -409,6 +459,127 @@ fn ports_of(device: &Value) -> Vec<UnifiPort> {
         .unwrap_or_default()
 }
 
+/// A measurement, where -1 means the controller reported none.
+fn as_measure(v: &Value, key: &str) -> f64 {
+    v.get(key).and_then(Value::as_f64).unwrap_or(-1.0)
+}
+
+/// A list of strings, however this release spells the key's contents.
+fn as_strings(v: &Value, key: &str) -> Vec<String> {
+    v.get(key)
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/*
+ * The WAN links one gateway reports about itself.
+ *
+ * A gateway keeps them under `wan1` and `wan2`, and older firmware puts the
+ * only one it has in `uplink` instead — the same object shape a switch uses for
+ * the port it hangs off, which is why it is read last and only when the named
+ * ones said nothing. Anything with neither an interface nor an address is not a
+ * WAN this gateway has; a second WAN that was never wired is left out rather
+ * than reported as a link that is down.
+ */
+fn wans_of(device: &Value) -> Vec<UnifiWan> {
+    let mac = as_str(device, "mac");
+    let ports = device
+        .get("port_table")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let one = |label: &str, w: &Value| -> Option<UnifiWan> {
+        let ifname = as_str(w, "ifname");
+        let ip = as_str(w, "ip");
+        if ifname.is_empty() && ip.is_empty() {
+            return None;
+        }
+
+        // Nameservers are an array on some releases and numbered keys on
+        // others; both are read, and duplicates are of no consequence here.
+        let mut nameservers = as_strings(w, "nameservers");
+        if nameservers.is_empty() {
+            nameservers = as_strings(w, "dns");
+        }
+        for key in ["nameserver1", "nameserver2"] {
+            let value = as_str(w, key);
+            if !value.is_empty() && !nameservers.contains(&value) {
+                nameservers.push(value);
+            }
+        }
+
+        let gateway_ip = {
+            let named = as_str(w, "gateway");
+            if named.is_empty() {
+                as_strings(w, "gateways").into_iter().next().unwrap_or_default()
+            } else {
+                named
+            }
+        };
+
+        // Which socket it comes in on. The device says so directly on newer
+        // firmware; otherwise the port table is matched on the interface name,
+        // which is the same join the port view already relies on.
+        let port_idx = match as_u64(w, "port_idx") {
+            0 => ports
+                .iter()
+                .find(|p| !ifname.is_empty() && as_str(p, "ifname") == ifname)
+                .map(|p| as_u64(p, "port_idx"))
+                .unwrap_or(0),
+            idx => idx,
+        };
+
+        Some(UnifiWan {
+            device_mac: mac.clone(),
+            name: label.to_uppercase(),
+            ifname,
+            kind: as_str(w, "type"),
+            ip,
+            gateway_ip,
+            nameservers,
+            // A WAN with an address and no explicit state is up: the gateway
+            // does not hand out an address for a link it is not carrying.
+            up: match w.get("up") {
+                Some(Value::Bool(b)) => *b,
+                Some(Value::Number(n)) => n.as_i64().unwrap_or(0) != 0,
+                _ => !as_str(w, "ip").is_empty(),
+            },
+            speed: as_u64(w, "speed"),
+            uptime_secs: as_u64(w, "uptime"),
+            isp: String::new(),
+            latency_ms: as_measure(w, "latency") as i64,
+            xput_down: as_measure(w, "xput_down"),
+            xput_up: as_measure(w, "xput_up"),
+            speedtest_at: as_measure(w, "speedtest_lastrun") as i64,
+            port_idx,
+        })
+    };
+
+    let named: Vec<UnifiWan> = ["wan1", "wan2"]
+        .iter()
+        .filter_map(|key| device.get(*key).and_then(|w| one(key, w)))
+        .collect();
+
+    if !named.is_empty() {
+        return named;
+    }
+
+    device
+        .get("uplink")
+        .filter(|u| as_str(u, "type") == "wan")
+        .and_then(|u| one("wan1", u))
+        .into_iter()
+        .collect()
+}
+
 fn as_bool(v: &Value, key: &str) -> bool {
     match v.get(key) {
         Some(Value::Bool(b)) => *b,
@@ -682,6 +853,127 @@ async fn collect_zone_policies(
     ));
 }
 
+/*
+ * What the controller knows about the way out that the gateway does not.
+ *
+ * `stat/health` carries the WAN subsystem: the ISP the address resolves to, the
+ * latency the controller measures, and whatever a speedtest last recorded. None
+ * of it can be read off the gateway's own interface, and the ISP name is the
+ * one line that tells somebody looking at the map which of their two links they
+ * are looking at.
+ *
+ * It is also the fallback. Some releases answer `stat/device` without a `wan1`
+ * object at all, and on those this is the only place the way out shows up — so
+ * a summary that names an address nothing else claimed becomes a link in its
+ * own right, with no gateway attributed to it rather than a guessed one.
+ */
+async fn collect_wan_health(
+    client: &reqwest::Client,
+    profile: &Profile,
+    secret: &str,
+    api: &str,
+    snap: &mut UnifiSnapshot,
+    log: &mut Vec<LogEntry>,
+) {
+    let path = format!("{api}/stat/health");
+    let items = match get(client, profile, secret, &path).await {
+        Ok(items) => items,
+        Err(e) => {
+            log.push(LogEntry::fail(SOURCE, e));
+            return;
+        }
+    };
+
+    let Some(wan) = items
+        .iter()
+        .find(|s| as_str(s, "subsystem") == "wan")
+    else {
+        log.push(LogEntry::ok(
+            SOURCE,
+            "GET stat/health → nincs WAN alrendszer a válaszban".to_string(),
+        ));
+        return;
+    };
+
+    let ip = as_str(wan, "wan_ip");
+    let isp = {
+        let name = as_str(wan, "isp_name");
+        if name.is_empty() {
+            as_str(wan, "isp_organization")
+        } else {
+            name
+        }
+    };
+    let latency = as_measure(wan, "latency") as i64;
+    let xput_down = as_measure(wan, "xput_down");
+    let xput_up = as_measure(wan, "xput_up");
+    let speedtest_at = as_measure(wan, "speedtest_lastrun") as i64;
+    let uptime = as_u64(wan, "uptime");
+
+    // The address decides which link this describes; with nothing to match on,
+    // a single WAN is unambiguous and several are not, so several are left
+    // alone rather than all told the same story.
+    let target = snap
+        .wans
+        .iter()
+        .position(|w| !ip.is_empty() && w.ip == ip)
+        .or(if snap.wans.len() == 1 { Some(0) } else { None });
+
+    match target {
+        Some(i) => {
+            let w = &mut snap.wans[i];
+            if w.isp.is_empty() {
+                w.isp = isp.clone();
+            }
+            if w.latency_ms < 0 {
+                w.latency_ms = latency;
+            }
+            if w.xput_down < 0.0 {
+                w.xput_down = xput_down;
+            }
+            if w.xput_up < 0.0 {
+                w.xput_up = xput_up;
+            }
+            if w.speedtest_at <= 0 {
+                w.speedtest_at = speedtest_at;
+            }
+            if w.uptime_secs == 0 {
+                w.uptime_secs = uptime;
+            }
+        }
+        None if !ip.is_empty() => snap.wans.push(UnifiWan {
+            name: "WAN".to_string(),
+            ip: ip.clone(),
+            gateway_ip: as_strings(wan, "gateways").into_iter().next().unwrap_or_default(),
+            nameservers: as_strings(wan, "nameservers"),
+            // The controller's own verdict on the subsystem, which is the only
+            // statement about the link this endpoint makes.
+            up: as_str(wan, "status") == "ok",
+            uptime_secs: uptime,
+            isp: isp.clone(),
+            latency_ms: latency,
+            xput_down,
+            xput_up,
+            speedtest_at,
+            ..Default::default()
+        }),
+        None => {}
+    }
+
+    log.push(LogEntry::ok(
+        SOURCE,
+        format!(
+            "GET stat/health → WAN {} {}",
+            if ip.is_empty() { "cím nélkül".to_string() } else { ip },
+            if isp.is_empty() {
+                "(szolgáltató ismeretlen)".to_string()
+            } else {
+                format!("({isp})")
+            }
+        ),
+    ));
+}
+
 pub async fn collect(
     client: &reqwest::Client,
     profile: &Profile,
@@ -727,6 +1019,7 @@ pub async fn collect(
             ports: ports_of(d),
             radios: radios_of(d),
         });
+        snap.wans.extend(wans_of(d));
     }
     let offline = snap.devices.iter().filter(|d| d.state == 0).count();
     log.push(LogEntry::ok(
@@ -736,6 +1029,15 @@ pub async fn collect(
             snap.devices.len()
         ),
     ));
+    if !snap.wans.is_empty() {
+        let down = snap.wans.iter().filter(|w| !w.up).count();
+        log.push(LogEntry::ok(
+            SOURCE,
+            format!("stat/device → {} WAN kapcsolat ({down} nem él)", snap.wans.len()),
+        ));
+    }
+
+    collect_wan_health(client, profile, secret, &api, &mut snap, log).await;
 
     match get(client, profile, secret, &format!("{api}/rest/networkconf")).await {
         Ok(items) => {
@@ -878,4 +1180,111 @@ pub async fn collect(
     }
 
     Ok(snap)
+}
+
+/// What a gateway says about its way out, across the shapes it says it in.
+///
+/// The WAN is the one link where the releases disagree most: two named objects
+/// on current firmware, a single `uplink` on older, an array of nameservers
+/// here and numbered keys there. Parsing it wrong is not visible in the
+/// interface — a missing address reads as "no WAN", which is a false statement
+/// about somebody's estate — so each shape is pinned here.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn device(body: &str) -> Value {
+        serde_json::from_str(body).unwrap()
+    }
+
+    #[test]
+    fn both_wans_of_a_dual_wan_gateway_are_read() {
+        let d = device(
+            r#"{
+                "mac": "gw", "type": "udm",
+                "wan1": { "ifname": "eth8", "ip": "81.2.3.4", "netmask": "255.255.255.0",
+                          "gateway": "81.2.3.1", "type": "dhcp", "up": true, "speed": 1000,
+                          "uptime": 86400, "nameservers": ["1.1.1.1", "9.9.9.9"] },
+                "wan2": { "ifname": "eth9", "ip": "10.64.0.7", "type": "dhcp", "up": false }
+            }"#,
+        );
+        let wans = wans_of(&d);
+        assert_eq!(wans.len(), 2);
+        assert_eq!(wans[0].name, "WAN1");
+        assert_eq!(wans[0].ip, "81.2.3.4");
+        assert_eq!(wans[0].gateway_ip, "81.2.3.1");
+        assert_eq!(wans[0].nameservers, vec!["1.1.1.1", "9.9.9.9"]);
+        assert_eq!(wans[0].device_mac, "gw");
+        assert!(wans[0].up);
+        assert!(!wans[1].up);
+    }
+
+    #[test]
+    fn a_wan_that_was_never_wired_is_not_reported_as_a_dead_link() {
+        let d = device(
+            r#"{ "mac": "gw", "type": "udm",
+                 "wan1": { "ifname": "eth8", "ip": "81.2.3.4" },
+                 "wan2": { "up": false } }"#,
+        );
+        let wans = wans_of(&d);
+        assert_eq!(wans.len(), 1, "{wans:?}");
+    }
+
+    #[test]
+    fn an_address_with_no_state_reads_as_up() {
+        let d = device(r#"{ "mac": "gw", "wan1": { "ifname": "eth8", "ip": "81.2.3.4" } }"#);
+        assert!(wans_of(&d)[0].up);
+    }
+
+    #[test]
+    fn older_firmware_keeps_the_only_wan_in_the_uplink_object() {
+        let d = device(
+            r#"{ "mac": "gw", "type": "ugw",
+                 "uplink": { "type": "wan", "ifname": "eth0", "ip": "81.2.3.4",
+                             "up": true, "speed": 1000,
+                             "gateways": ["81.2.3.1"], "nameservers": ["1.1.1.1"] } }"#,
+        );
+        let wans = wans_of(&d);
+        assert_eq!(wans.len(), 1);
+        assert_eq!(wans[0].ip, "81.2.3.4");
+        assert_eq!(wans[0].gateway_ip, "81.2.3.1");
+    }
+
+    #[test]
+    fn a_switchs_uplink_is_not_mistaken_for_a_wan() {
+        let d = device(
+            r#"{ "mac": "sw", "type": "usw",
+                 "uplink": { "type": "wire", "ifname": "eth0", "ip": "10.0.1.2", "up": true } }"#,
+        );
+        assert!(wans_of(&d).is_empty());
+    }
+
+    #[test]
+    fn numbered_nameserver_keys_are_read_too() {
+        let d = device(
+            r#"{ "mac": "gw", "wan1": { "ifname": "eth8", "ip": "81.2.3.4",
+                 "nameserver1": "1.1.1.1", "nameserver2": "8.8.8.8" } }"#,
+        );
+        assert_eq!(wans_of(&d)[0].nameservers, vec!["1.1.1.1", "8.8.8.8"]);
+    }
+
+    #[test]
+    fn the_socket_is_found_through_the_port_table_when_the_wan_does_not_name_it() {
+        let d = device(
+            r#"{ "mac": "gw",
+                 "wan1": { "ifname": "eth8", "ip": "81.2.3.4" },
+                 "port_table": [ { "port_idx": 1, "ifname": "eth0" },
+                                 { "port_idx": 9, "ifname": "eth8" } ] }"#,
+        );
+        assert_eq!(wans_of(&d)[0].port_idx, 9);
+    }
+
+    #[test]
+    fn what_nobody_measured_comes_back_as_minus_one() {
+        let d = device(r#"{ "mac": "gw", "wan1": { "ifname": "eth8", "ip": "81.2.3.4" } }"#);
+        let w = &wans_of(&d)[0];
+        assert_eq!(w.latency_ms, -1);
+        assert_eq!(w.xput_down, -1.0);
+        assert_eq!(w.speedtest_at, -1);
+    }
 }

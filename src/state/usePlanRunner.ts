@@ -47,6 +47,23 @@ export interface PlanRunnerApi {
   running: (key: string) => boolean;
   runOf: (key: string) => PlanRun | null;
   run: (key: string, command: string) => Promise<void>;
+
+  /**
+   * A whole step, in order, on one approval.
+   *
+   * What `auto` means for a step made of commands: the operator reads the
+   * commands once, together, and approves the sequence rather than each line.
+   * The line the estate is built on does not move — every command still goes
+   * through the native policy on the way out, and a forbidden one is refused
+   * there whatever was approved here.
+   *
+   * It stops at the first command that fails. A sequence that sets up a server
+   * is a sequence: carrying on past a failure means running step four against
+   * a state step three never reached.
+   */
+  runSequence: (keys: { key: string; command: string }[]) => Promise<boolean>;
+  /** True while any command of that sequence is in flight. */
+  runningSequence: (keys: string[]) => boolean;
 }
 
 export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
@@ -92,31 +109,37 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
     });
   }, []);
 
-  const run = useCallback(
-    async (key: string, command: string) => {
-      if (!selected || !command.trim()) return;
+  /**
+   * One command, and what came back.
+   *
+   * Returns the outcome as well as recording it: a sequence has to know
+   * whether to carry on, and reading that back out of React state a moment
+   * later is a race it would sometimes lose.
+   */
+  const runOne = useCallback(
+    async (key: string, command: string, confirmed: boolean): Promise<PlanRun | null> => {
+      if (!selected || !command.trim()) return null;
       setBusy((prev) => ({ ...prev, [key]: true }));
-      const confirmed = approvals[key] === command;
       try {
         const output = await api.runSshCommand(selected.id, command, confirmed);
         setRuns((prev) => ({ ...prev, [key]: output }));
+        return output;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        setRuns((prev) => ({
-          ...prev,
-          [key]: {
-            command,
-            executed: command,
-            clearance: clearances[command] ?? 'mutating',
-            stdout: '',
-            stderr: '',
-            exitStatus: null,
-            truncated: false,
-            durationMs: 0,
-            ranAt: new Date().toISOString(),
-            error: message,
-          },
-        }));
+        const failure: PlanRun = {
+          command,
+          executed: command,
+          clearance: clearances[command] ?? 'mutating',
+          stdout: '',
+          stderr: '',
+          exitStatus: null,
+          truncated: false,
+          durationMs: 0,
+          ranAt: new Date().toISOString(),
+          error: message,
+        };
+        setRuns((prev) => ({ ...prev, [key]: failure }));
+        return failure;
       } finally {
         setBusy((prev) => ({ ...prev, [key]: false }));
         // One approval authorises one run.
@@ -127,7 +150,40 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
         });
       }
     },
-    [selected, approvals, clearances],
+    [selected, clearances],
+  );
+
+  const run = useCallback(
+    async (key: string, command: string) => {
+      await runOne(key, command, approvals[key] === command);
+    },
+    [runOne, approvals],
+  );
+
+  /*
+   * The whole step, in order, on the one approval that covered it.
+   *
+   * Stops at the first failure, and counts a refusal as a failure: the native
+   * policy turning a command down mid-sequence is exactly the moment to stop
+   * and let someone look, not to carry on with the rest as if the estate were
+   * in the state the next command expects.
+   */
+  const runSequence = useCallback(
+    async (steps: { key: string; command: string }[]) => {
+      for (const { key, command } of steps) {
+        const result = await runOne(key, command, true);
+        const failed =
+          result === null ||
+          result.error !== undefined ||
+          (result.exitStatus !== null && result.exitStatus !== 0);
+        // Whether it reached the end, for a caller running one step after
+        // another: carrying on past a failure is how step four lands on a
+        // state step three never produced.
+        if (failed) return false;
+      }
+      return true;
+    },
+    [runOne],
   );
 
   return {
@@ -140,6 +196,8 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
     clearanceOf: (command) => clearances[command] ?? null,
     approved: (key, command) => approvals[key] === command,
     approve,
+    runSequence,
+    runningSequence: (keys) => keys.some((k) => busy[k] === true),
     running: (key) => busy[key] === true,
     runOf: (key) => runs[key] ?? null,
     run,

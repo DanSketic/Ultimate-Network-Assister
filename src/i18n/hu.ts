@@ -47,6 +47,7 @@ export const hu = {
       ap: 'Access Point',
       clients: 'Kliens csoport',
       host: 'Proxmox host',
+      bridge: 'Bridge',
       storage: 'Tároló',
       ct: 'LXC konténer',
       vm: 'Virtuális gép',
@@ -253,6 +254,18 @@ export const hu = {
     portUp: 'Aktív',
     portDown: 'Nincs kapcsolat',
     portUplink: 'Uplink',
+    portProfile: 'Profil',
+    portNative: 'Natív',
+    portAll: '← Minden port',
+    portForwardLabel: 'Átengedés',
+    portForward: {
+      all: 'minden VLAN',
+      native: 'egy hálózat',
+      customize: 'válogatott VLAN-ok',
+      disabled: 'letiltva',
+    },
+    portUplinkRole: 'uplink',
+    portNoProfile: 'nincs profil a porton',
     portUnnamed: 'Névtelen port',
     portNoLldp: 'a túloldal nem jelentkezik be (nincs LLDP)',
     portVlanUnknown: 'VLAN-átengedés nem felmért',
@@ -284,6 +297,21 @@ export const hu = {
     zoomOut: 'Kicsinyítés',
     fit: 'Illesztés',
     resetLayout: 'Automatikus',
+    familyName: {
+      internet: 'Internet',
+      unifi: 'UniFi hálózat',
+      proxmox: 'Proxmox',
+    },
+    focusFamily: (name: string) => `${name} nagyítása a nézetbe`,
+    showEstate: 'Vissza a teljes nézetre',
+    zonesToggle: 'Zónák',
+    zonesHint: 'Az azonos zónába tartozó kártyák körberajzolása.',
+    zoneName: {
+      WAN: 'WAN',
+      Mgmt: 'Menedzsment',
+      IoT: 'IoT',
+      Servers: 'Szerverek',
+    },
     arrangedBy: (n: number) =>
       `${n} eszközt helyeztél át kézzel — visszaállítás az automatikus elrendezésre`,
   },
@@ -615,6 +643,8 @@ export const hu = {
     free: 'szabad',
 
     unifiOneSided: 'A UniFi oldal csak az egyik felmérésben szerepel, ezért nincs összehasonlítva.',
+    wanOneSided:
+      'A WAN-t csak az egyik felmérés mérte, ezért a kiút nincs összehasonlítva. A korábbi felmérésekben — amelyek még nem gyűjtötték — nincs ilyen mérés.',
     proxmoxOneSided: 'A Proxmox oldal csak az egyik felmérésben szerepel, ezért nincs összehasonlítva.',
 
     deviceAppeared: 'Új eszköz jelent meg',
@@ -623,6 +653,20 @@ export const hu = {
     deviceBack: 'Újra elérhető',
     firmwareChanged: 'Firmware változott',
     addressChanged: 'IP-cím változott',
+
+    wanAppeared: 'Új kiút jelent meg',
+    wanGone: 'A kiút már nem szerepel a jelentésben',
+    wanLost: 'A kapcsolat nem visz forgalmat',
+    wanBack: 'A kapcsolat újra visz forgalmat',
+    wanAddressChanged: 'Megváltozott a publikus cím',
+    wanIspChanged: 'Másik szolgáltató van a vonalon',
+    wanKindChanged: 'Máshogy kapja a címet',
+    wanGatewayChanged: 'Megváltozott a következő ugrás',
+    wanDnsChanged: 'Megváltoztak a névfeloldók',
+    wanSlower: 'A kapcsolat lassabbra állt be',
+    wanFaster: 'A kapcsolat gyorsabbra állt be',
+    wanThroughputDown: 'Csökkent a mért átbocsátás',
+    wanThroughputUp: 'Nőtt a mért átbocsátás',
 
     portDown: 'A port lekapcsolódott',
     portUp: 'A port bekapcsolódott',
@@ -655,6 +699,18 @@ export const hu = {
     backupGained: 'Mentési lefedettség jött létre',
     bridgeVlanOn: 'A bridge VLAN-tudatos lett',
     bridgeVlanOff: 'A bridge már nem VLAN-tudatos',
+    bridgeAdded: 'Új bridge',
+    bridgeRemoved: 'Bridge megszűnt',
+    bridgeDown: 'A bridge már nincs fent',
+    bridgeUp: 'A bridge újra fent van',
+    bridgePortsChanged: 'Másik port viszi a bridge-et',
+    guestBridgeChanged: 'A vendéggép másik bridge-re került',
+    guestVlanChanged: 'A vendéggép másik VLAN-on van',
+    guestNicAdded: 'Új interfész a vendéggépen',
+    guestNicRemoved: 'A vendéggép egyik interfésze eltűnt',
+    guestFirewallOn: 'Bekapcsolt a Proxmox tűzfal az interfészen',
+    guestFirewallOff: 'Kikapcsolt a Proxmox tűzfal az interfészen',
+    untagged: 'tageletlen',
   },
 
   adviceRules: {
@@ -952,7 +1008,7 @@ export const hu = {
       ports: 'Portok',
       target: 'Célállapot',
       plan: 'Terv',
-      apply: 'Alkalmazás',
+      apply: 'Futtatás',
     },
     modulesNote:
       'Egy modul kikapcsolása kiveszi a hozzá tartozó hálózatokat, szabályokat és gépeket a célállapotból, és eltűnnek a hozzá tartozó lépések a tervből is. A kötelező modulok a rendszer vázát adják, ezért nem kapcsolhatók ki.',
@@ -989,6 +1045,8 @@ export const hu = {
       noApi: 'Nincs hozzá API: az alkalmazás előkészíti a pontos értékeket, a beírás kézzel történik.',
       commandOnly:
         'Nincs API-hívás a lépésben, csak parancs: az alkalmazás előkészíti, és ahol van beállított SSH-kapcsolat, a jóváhagyásoddal le is futtatja.',
+      templateOnly:
+        'A parancsban kitöltendő hely van (például <sablon>): az alkalmazás nem tudja, mi kerül oda, ezért ezt a lépést nem futtatja magától.',
       notWritten:
         'Ilyen objektumot az alkalmazás nem ír. Egy rossz tűzfalszabály vagy portkiosztás kizárhat abból a vezérlőből, amivel javítani lehetne, ezért az értékek pontosan elő vannak készítve, de te viszed be őket.',
     },
@@ -998,6 +1056,8 @@ export const hu = {
         `„${title}” kimaradt, mert hiányzik: ${missing}.`,
       moduleClash: (title: string, clash: string) =>
         `„${title}” nem lehet bekapcsolva ezzel együtt: ${clash}.`,
+      networkIncomplete: (name: string) =>
+        `A(z) ${name} hálózathoz nincs megadva tartomány vagy átjáró — a Paraméterek fülön pótold.`,
       vlanTwice: (vlan: number, previous: string, name: string) =>
         `VLAN ${vlan} kétszer szerepel: „${previous}” és „${name}”.`,
       vlanOutOfRange: (vlan: number, name: string) =>
@@ -1037,6 +1097,33 @@ export const hu = {
     moduleCount: (n: number) => `${n} modul`,
     issuesShort: (n: number) => `${n} ellentmondás`,
     households: 'Háztartások',
+    extraNetworks: 'Saját hálózatok',
+    extraNetworksNote:
+      'Amit a felmérés megtalált a hálózaton, de az összeállítás nem ír le. Ugyanúgy a célállapot része, mint a preset hálózatai: a portok natív hálózatának választhatók, bekerülnek a kézikönyvbe és a tervbe. A szerep dönti el, melyik trunk hordozza — ezt érdemes átnézni.',
+    extraNetworkCount: (n: number) => (n === 1 ? '1 hálózat' : `${n} hálózat`),
+    extraNetworkNone: 'Nincs ilyen hálózat. A Portok fülön a felmérés betöltése ajánlja fel őket, ha talál.',
+    netVlan: 'VLAN',
+    netName: 'Név',
+    netCidr: 'Tartomány',
+    netGateway: 'Átjáró',
+    netRoleLabel: 'Szerep',
+    netPurpose: 'Mire való',
+    netRole: {
+      management: 'Menedzsment',
+      trusted: 'Megbízható',
+      infra: 'Infrastruktúra',
+      printers: 'Nyomtatók',
+      dmz: 'DMZ',
+      vpn: 'VPN',
+      rdp: 'RDP',
+      media: 'Média',
+      'server-test': 'Teszt szerverek',
+      'server-prod': 'Éles szerverek',
+      household: 'Lakás kliensei',
+      iot: 'IoT / Wi-Fi eszközök',
+      guest: 'Vendég',
+      cameras: 'Kamerák',
+    },
     householdsNote:
       'Minden háztartás kap egy kliens-hálózatot; hogy az IoT és a vendégek ugyanígy szétválnak-e, a Címzés alatt dől el. Ahol a háztartások el vannak zárva egymástól, a tervben automatikusan megjelenik az ezt kimondó szabály — mindkét irányban.',
     resetParams: 'Paraméterek visszaállítása alapértelmezettre',
@@ -1121,6 +1208,24 @@ export const hu = {
       'Ez kitöltendő minta, nem kész parancs: az alkalmazás nem tudja, mi kerül a helyére, ezért ezt neked kell befejezned és lefuttatnod.',
     sshLocalConsoleNote:
       'Ehhez a lépéshez ott kell lenni a gépnél: a változtatás elvághatja azt a kapcsolatot, amin átmenne. Másold ki, és futtasd konzolon.',
+    stepDone: 'Kész',
+    stepBlocked: (n: number) => (n === 1 ? 'Előbb 1 lépés' : `Előbb ${n} lépés`),
+    waitsFor: 'Ezek után jöhet:',
+    orderClear: 'Amin múlik — mind kész:',
+    markDone: 'Ez a lépés megvan (kézzel vagy itt lefuttatva)',
+    orderBlockedNote:
+      'A lépés parancsai olyan dolgokra épülnek, amik még nincsenek meg. Előbb azokat végezd el, vagy pipáld ki őket, ha máshol már megcsináltad.',
+    runStep: 'Lépés futtatása',
+    whereTheQueueIs:
+      'Egy lépés itt fut le. A teljes futtatható sort — a vezérlőírással együtt, terv-sorrendben, naplóval — a Futtatás fülön lehet végigvinni.',
+    runStepTitle: (n: number) => `A lépés ${n} parancsa egyben`,
+    runStepNote:
+      'A parancsok sorban futnak le, és az első hibánál megállnak. Mindegyik átmegy a natív házirenden: amit az tilt, azt itt sem futtatja le semmi.',
+    runStepInterruptNote:
+      'A parancsok sorban futnak le, és az első hibánál megállnak. Van köztük olyan, ami szolgáltatást vagy magát az SSH-kapcsolatot megszakíthatja — ezeket alább felsoroljuk. Legyen elérhető helyi konzol, mielőtt elindítod.',
+    runStepConfirm: (n: number) =>
+      `Elolvastam mind a ${n} parancsot, és hozzájárulok, hogy ezen a gépen lefussanak.`,
+    mayInterrupt: 'Megszakíthat',
     sshRunHere: 'Futtatás SSH-n',
     sshFailed: 'Nem futott le',
     executionMode: 'Végrehajtási mód',
@@ -1448,6 +1553,96 @@ export const hu = {
       'A távoli adminisztráció csak alagúton keresztül működik.',
     ],
 
+    /* ------------------------------------------------ a gazdagép és a vendégek */
+    baseReposTitle: 'Csomagforrások rendbetétele',
+    baseReposDetail:
+      'Előfizetés nélküli hoston az enterprise forrás minden frissítésnél hibát ad. A no-subscription forrás ugyanazokat a Proxmox csomagokat hozza, csak támogatás nélkül.',
+    baseReposVerify: [
+      'Az apt-get update hiba nélkül fut le.',
+      'A pve-enterprise.list ki van kommentezve, a pve-no-subscription.list létezik.',
+    ],
+    basePackagesTitle: 'Alapcsomagok és szolgáltatások',
+    basePackagesDetail:
+      'A terv többi része ezekre épül: lldpd, hogy a becslés lássa, mi hova van dugva; smartmontools a lemezekhez; mergerfs a médiatárhoz; zfsutils a poolokhoz. A teljes frissítés szolgáltatásokat indíthat újra.',
+    basePackagesVerify: [
+      'systemctl is-active lldpd smartd → mindkettő active',
+      'A vezérlő topológiáján megjelennek az LLDP-szomszédok.',
+    ],
+    baseActions: {
+      check: 'Mi van most a gépen',
+      noSubscription: 'Enterprise forrás ki, no-subscription be',
+      update: 'Csomaglista frissítése',
+      upgrade: 'Teljes frissítés (szolgáltatás újraindulhat)',
+      packages: 'Alapcsomagok telepítése',
+      services: 'Szolgáltatások bekapcsolása',
+    },
+    templateTitle: 'LXC sablon letöltése',
+    templateDetail:
+      'Minden konténer ebből készül. A parancs a tükörtől kérdezi meg, melyik a legfrissebb Debian standard kép, így nem egy elavult fájlnévhez van kötve.',
+    templateVerify: ['pveam list local → szerepel benne a letöltött sablon.'],
+    templateActions: {
+      refresh: 'Sablonlista frissítése',
+      download: 'Legfrissebb Debian sablon letöltése',
+    },
+    guest: {
+      title: (vmid: number, name: string) => `${vmid} · ${name} létrehozása`,
+      detail: (os: string, purpose: string) =>
+        `${os} — ${purpose}. A gép váza a célállapot értékeiből készül: mag, memória, lemez, VLAN és cím. Ha a gép már létezik, a parancs nem nyúl hozzá.`,
+      createLxc: 'Konténer létrehozása',
+      createVm: 'Virtuális gép váza',
+      install: 'Telepítőkép csatolása (kézzel töltendő ki)',
+      start: 'Indítás és állapot',
+      verify: (vmid: number) => [
+        `pct status ${vmid} vagy qm status ${vmid} → a gép létezik.`,
+        'A megadott címen elérhető, és a helyes VLAN-ban van.',
+      ],
+    },
+    snippetsTitle: 'Cloud-init fájlok helye',
+    snippetsDetail:
+      'A cloud image telepítéséhez a Proxmox egy első indításkor felolvasott fájlt ad a gépnek, és ezt csak olyan tárhelyről olvassa, ami snippeteket is tárolhat. Gyári telepítésen egy sem ilyen. A meglévő tartalomlistát kiegészíti, nem írja felül.',
+    snippetsVerify: ['pvesm status → a local tartalmai közt ott a snippets.'],
+    snippetsAction: 'Snippets bekapcsolása a local tárhelyen',
+    imageTitle: 'Debian cloud image letöltése',
+    imageDetail:
+      'Ez a lemez már tartalmazza a rendszert, csak épp semmi nincs benne eldöntve — nevet, felhasználót, címet első indításkor kap. Innen települ minden Linux vendéggép, kattintás nélkül.',
+    imageVerify: ['A sha512sum -c ellenőrzés OK-t ír.'],
+    imageAction: 'Letöltés és ellenőrzés a közzétett összeghez',
+    system: {
+      title: (vmid: number, name: string) => `${vmid} · ${name} — operációs rendszer`,
+      detail: (os: string) =>
+        `${os} cloud image lemezként beimportálva, a méret a tervből, a cím és a belépés cloud-inittel. A gép magától jön fel, telepítőképernyő nélkül. A belépéshez a host saját kulcsait kapja meg — amelyik gép eléri rootként a hipervizort, az érje el azt is, amit a hipervizor épít.`,
+      applianceDetail: (os: string) =>
+        `${os} kész lemezképként importálva. Magától felmegy, de cloud-initet nem olvas: a rögzített címet a saját konzoljában kell beállítani — a terv megmondja, melyiket.`,
+      importAppliance: 'Lemezkép letöltése és importálása',
+      applianceAddress: 'Cím beállítása a gép saját konzolján',
+      applianceVerify: (ip: string) => [
+        'A gép elindult, és a konzolján megjelenik a kezelőfelület.',
+        ip ? `A hálózaton a ${ip} címen felel.` : 'A gép kapott címet a hálózatról.',
+      ],
+      importDisk: 'Rendszerlemez importálása és méretezése',
+      firstBoot: 'Első indítás: felhasználó, kulcs, cím, vendégügynök',
+      start: 'Indítás',
+      waitForAgent: 'Megvárjuk, míg a vendégügynök válaszol',
+      verify: (vmid: number, ip: string) => [
+        `qm guest exec ${vmid} -- true → hibátlanul lefut.`,
+        ip ? `A gép a ${ip} címen felel.` : 'A gép kapott címet a hálózatról.',
+      ],
+    },
+    inGuest: {
+      title: (name: string) => `${name} telepítése a gépen belül`,
+      detail: (os: string) =>
+        `${os} — a gép váza megvan, ez a szoftver. Konténerbe a host közvetlenül belefut (pct exec); virtuális gépnél a QEMU vendégügynök viszi be a parancsot, tehát előbb legyen fent az operációs rendszer és a qemu-guest-agent.`,
+      reachable: 'Válaszol-e a gép',
+      packages: 'Alapcsomagok a gépen belül',
+      repo: 'Gyártói csomagforrás felvétele',
+      download: 'Letöltés és ellenőrzőösszeg',
+      install: 'Telepítés',
+      configure: 'Beállítás (kitöltendő: token, jelszó, domain)',
+      verify: (name: string, where: string) => [
+        `${name} szolgáltatás elindult és fut.`,
+        `Elérhető innen: ${where}`,
+      ],
+    },
     reviewVerify: ['A modul tartalma átnézve és elfogadva.'],
   },
 
@@ -1474,9 +1669,34 @@ export const hu = {
     emptyBody:
       'Vedd fel kézzel, vagy — ha futott felmérés — töltsd be a ténylegesen bedugott portokat, és onnan írd át, aminek másnak kell lennie.',
     importFromSurvey: 'Betöltés a felmérésből',
-    importedCount: (n: number) => `${n} port betöltve a felmérésből`,
+    importSummary: (added: number, enriched: number, unused: number) =>
+      [
+        added > 0 ? `${added} új port` : '',
+        enriched > 0 ? `${enriched} kiegészítve a felmérésből` : '',
+        unused > 0 ? `ebből ${unused} szabad` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    importOnlyEmpty: (n: number) =>
+      `A felmérés nem hozott újat: a meglévő ${n} port már mind benne van.`,
     importNothing: 'A felmérés nem talált portokat.',
-    addPort: 'Port hozzáadása',
+    missingNetworks:
+      'A felmérés olyan hálózatokat talált a portokon, amiket a célállapot nem ír le. Felveheted őket úgy, ahogy a vezérlőben vannak — a szerepüket (mit hordoz belőlük egy trunk) utána a Paraméterek fülön állítsd be.',
+    addMissingNetworks: (n: number) => (n === 1 ? 'Hálózat felvétele' : `${n} hálózat felvétele`),
+    missingNetworksAdded: (n: number) =>
+      `${n} hálózat felkerült a célállapotba — a szerepüket a Paraméterek fülön nézd át, majd töltsd be újra a portokat.`,
+    importUnmatched: (names: string[]) =>
+      `A célállapotban nincs ilyen hálózat: ${names.join(', ')} — ezeken a portokon a natív hálózat üresen maradt.`,
+    addPort: 'Új eszköz',
+    addPortHint: 'Új eszköz első portja. További portokat az eszköz saját gombjával vehetsz fel.',
+    addPortTo: '+ port',
+    addPortToHint: (device: string) => `Port hozzáadása ehhez: ${device}`,
+    deviceUnnamed: 'Névtelen eszköz',
+    devicePorts: (n: number) => (n === 1 ? '1 port' : `${n} port`),
+    deviceUnusedCount: (n: number) => `${n} szabad`,
+    deviceName: 'Eszköz neve',
+    removeDevice: (device: string) => `${device} összes portjának törlése`,
+    removeDeviceConfirm: 'Biztos?',
     colDevice: 'Eszköz',
     colPort: 'Port',
     colLabel: 'Mi van rajta',
@@ -1492,6 +1712,7 @@ export const hu = {
       trunk: 'Switch trunk',
       uplink: 'Uplink',
       off: 'Kikapcsolva',
+      unused: 'Szabad – nincs rajta semmi',
     },
     profiles: {
       accessPrefix: 'ACCESS',
@@ -1507,7 +1728,8 @@ export const hu = {
         server: 'Minden VLAN, amiben vendéggép ülhet',
         trunk: 'Minden VLAN switchek között',
         uplink: 'Minden VLAN az átjáró felé',
-        off: 'A port nincs használatban',
+        off: 'A vezérlőben letiltott port',
+        unused: 'Szabad port, a terv nem nyúl hozzá',
       },
     },
     issue: {
@@ -1522,7 +1744,7 @@ export const hu = {
     },
     writeNote:
       'Az alkalmazás a port profilokat írja meg. Azt, hogy melyik fizikai portra kerüljön, nem írja: egy rossz port-felülírás magától a vezérlőtől is elvághat, és onnan innen már nem lehet visszahozni. A terv pontos értékekkel megmondja, mit kell a portra tenni.',
-    profilesTitle: 'Port profilok',
+    profilesTitle: (n: number) => `Port profilok · ${n}`,
     portsTitle: 'Portok',
     usedBy: (n: number) => `${n} porton`,
   },
@@ -1563,6 +1785,17 @@ export const hu = {
     factWireless: 'Vezeték nélküli',
     factWired: 'Vezetékes',
     factUnidentified: 'Nem azonosított',
+    factLink: 'Kapcsolat',
+    factIsp: 'Szolgáltató',
+    factWanGateway: 'Következő ugrás',
+    factDns: 'DNS',
+    factSpeedtest: 'Utolsó sebességmérés',
+    factAttached: 'Hová csatlakozik',
+    factUplinkPort: 'Uplink port',
+    factVlanAware: 'VLAN-aware',
+    factAddress: 'Cím',
+    factCarries: 'Mit visz',
+    untagged: 'tageletlen',
     metricCpu: 'CPU',
     metricMemory: 'Memória',
     metricDisk: 'Lemez',
@@ -1570,11 +1803,27 @@ export const hu = {
     metricClients: 'Kliensek',
     metricAvailability: 'Elérhetőség',
     metricVcpu: 'vCPU',
+    metricLatency: 'Késleltetés',
+    metricGuests: 'Vendéggépek rajta',
+    metricPortSpeed: 'Kapcsolati sebesség',
+    milliseconds: (n: number) => `${n} ms`,
+    megabits: (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)} Gbit/s` : `${n} Mbit/s`),
+    speedtestResult: (down: number, up: number) => `${down} / ${up} Mbit/s`,
+    internet: 'Internet',
+    bridgeInactive: (name: string) =>
+      `A(z) ${name} be van állítva, de nincs fent — ami rajta van, annak nincs hálózata.`,
+    bridgeTagWithoutVlanAware: (name: string) =>
+      `A(z) ${name} bridge-en van VLAN-ba tagelt vendéggép, de a bridge nem VLAN-aware — a tag nem érvényesül, az a gép a bridge saját hálózatán van.`,
+    wanDown: (name: string) =>
+      `A(z) ${name} nem visz forgalmat, ezen a kapcsolaton nincs kiút a hálózatból.`,
     threads: (n: number) => `${n} szál`,
     days: (n: number) => `${n} nap`,
     hours: (n: number) => `${n} óra`,
     offline: 'offline',
     vlanAware: 'VLAN-aware',
+    factOn: 'Melyik eszköz jelenti',
+    clientsMore: (n: number) => `+${n} további`,
+    clientsUnplaced: (n: number) => `Elhelyezetlen kliensek · ${n}`,
     clientsNode: (n: number) => `Kliensek · ${n}`,
     clientsSubtitle: (wireless: number, wired: number) =>
       `${wireless} vezeték nélküli · ${wired} vezetékes`,
@@ -1650,6 +1899,39 @@ export const hu = {
     'Hálózati konfiguráció módosítása előtt az app helyi konzol elérést kér igazolni.',
   ],
 
+  run: {
+    title: 'Futtatás',
+    subtitle:
+      'Amit az alkalmazás maga el tud végezni, a terv sorrendjében sorba állítva. A többi — a döntések, a kézi lépések, a destruktív tárhelyműveletek — a Terv fülön marad, ott is van a helye.',
+    summary: (steps: number, unifi: number, ssh: number, commands: number) =>
+      `${steps} lépés · ${unifi} vezérlőírás · ${ssh} lépés SSH-n, összesen ${commands} paranccsal`,
+    runAll: 'Végigfuttatás',
+    running: 'Fut…',
+    stop: 'Megállítás',
+    runThis: 'Ez a lépés',
+    route: 'Út',
+    routeUnifi: 'vezérlő API',
+    routeSsh: 'SSH',
+    commands: 'Parancs',
+    empty:
+      'Ebből az összeállításból most semmit nem tud magától elvégezni: a lépések vagy döntést, vagy helyi konzolt, vagy kitöltendő értéket igényelnek. A Terv fülön mindegyik ott van, pontos parancsokkal.',
+    state: {
+      idle: 'várakozik',
+      running: 'fut',
+      done: 'kész',
+      failed: 'hibára futott',
+    },
+    byHandTitle: 'Amit előbb kézzel kell megcsinálni',
+    byHandNote:
+      'Ezeket a lépéseket a konzol nem futtathatja — helyi konzolt kívánnak, mert megszakíthatják a kapcsolatot, amin futnának. A sor addig nem megy tovább, amíg ki nem pipálod őket.',
+    haltedWaiting: (title: string, waiting: string) => `— ${title} vár erre: ${waiting}`,
+    logTitle: 'Ami eddig történt',
+    stopped: '— megállítva',
+    finished: '— a sor végigfutott',
+    haltedHere: (title: string) => `— itt megállt: ${title}`,
+    controllerTitle: 'Vezérlőírás: mentés, száraz futtatás, visszaállítás',
+  },
+
   apply: {
     desktopOnly:
       'Élő rendszerre csak az asztali alkalmazás ír. A böngészőben a célállapot és a terv megtekinthető, de az alkalmazás nem indítható.',
@@ -1719,6 +2001,19 @@ export const hu = {
     applying: 'Alkalmazás fut…',
     whatChanges: 'Mi változna',
     fields: 'Mezők',
+    field: {
+      name: 'Név',
+      purpose: 'Rendeltetés',
+      vlan: 'VLAN azonosító',
+      vlan_enabled: 'VLAN tagelés',
+      ip_subnet: 'Alhálózat',
+      enabled: 'Bekapcsolva',
+      forward: 'Továbbítás',
+      native_vlan: 'Natív VLAN',
+      tagged_vlans: 'Tagelt VLAN-ok',
+      poe_mode: 'PoE',
+      action: 'Művelet',
+    } as Record<string, string>,
     journal: 'Futás naplója',
     journalCounts: (applied: number, failed: number, rolledBack: number) =>
       `${applied} alkalmazva · ${failed} hiba · ${rolledBack} visszaállítva`,

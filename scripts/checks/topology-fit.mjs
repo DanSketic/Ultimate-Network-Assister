@@ -132,6 +132,32 @@ check(
 );
 check('mirrored both ways', left.centreX === CENTRE_X && CENTRE_Y === plain.centreY);
 
+/* ------------------------------------------------------ the grouping outlines */
+
+/*
+ * The outlines are drawn round the cards, so they are the outermost thing on
+ * the map. Framing that leaves them out cuts a boundary off at the edge of the
+ * view, and the label that sits on it goes with it.
+ */
+const outlined = frameFor({
+  nodes,
+  ports: [],
+  drawn: null,
+  areas: [{ minX: -60, minY: -70, maxX: 1036, maxY: 340 }],
+  ...VIEW,
+});
+
+check('an outline round the cards is framed with them',
+  outlined.frame.minX <= -60 - FIT_PAD + 1 && outlined.frame.minY <= -70 - FIT_PAD + 1,
+  `${Math.round(outlined.frame.minX)}, ${Math.round(outlined.frame.minY)}`);
+
+const bare = frameFor({ nodes, ports: [], drawn: null, ...VIEW });
+check('and framing without them zooms in further',
+  bare.zoom > outlined.zoom, `${bare.zoom.toFixed(2)} vs ${outlined.zoom.toFixed(2)}`);
+
+check('the edges keep a margin at every zoom',
+  FIT_PAD >= 40, `${FIT_PAD}px`);
+
 rmSync(OUT, { force: true });
 console.log(failures === 0 ? '\nOK' : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -11,6 +11,135 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.10.0] — 2026-08-27
+
+### Added
+
+- **The plan carries out the work it prepares, on the hypervisor too.** Until
+  now the exact commands were something to copy: the application wrote two
+  kinds of UniFi object and read everything else out loud. The line it would
+  not cross was never "running things" — it was destroying storage, and that
+  line has not moved. What moved is everything on the safe side of it.
+
+  A step made of commands can now be run whole, on one approval: the operator
+  reads the sequence, sees what in it can interrupt a service, and says yes
+  once. It stops at the first command that fails, because carrying on past a
+  failure means running step four against a state step three never reached.
+  Every command still goes through the native policy on the way out, so what
+  that refuses, nothing here runs — and a step that needs somebody at the
+  machine is not offered over the wire at all.
+
+  The mode is set per system rather than for the estate: a controller already
+  carrying households wants every write read first, while a Proxmox host being
+  built from nothing wants the sequence run and the output read after. One
+  setting for both meant picking the more cautious of the two and clicking
+  through the other by hand.
+
+- **A server can be built from nothing, and a missing piece filled in on one
+  that is already running.** The Proxmox side of the plan used to be prose. It
+  is now commands derived from the target state: the package sources a host
+  with no subscription needs, the packages the rest of the plan assumes, the
+  container template, and then every machine — `pct create` and `qm create`
+  with the cores, memory, disk, VLAN and address the plan already decided.
+  Every creation is guarded by its own status check, so running a step twice is
+  not a way to lose what the first one made.
+
+  The operating system installs itself. A Linux guest is built from a cloud
+  image — the disk arrives with the system on it and nothing decided, and
+  cloud-init is handed the few things that are decisions: who logs in, with
+  which key, on which address. Home Assistant's appliance image is imported the
+  same way. Windows is not: an unattended install is a project, and pretending
+  otherwise would produce a command that stops at a prompt nobody can see.
+
+  Then the software inside the machines. A container is reached directly from
+  the host, a virtual machine through its guest agent — which is why every one
+  of those steps begins by asking whether the machine answers rather than
+  assuming it. Where a vendor's install method is a script piped from the
+  network into a shell, it is split into a download, a checksum and a run, so
+  it can be read before it happens. Anything needing a token, a domain or a
+  decision stays a shape with the blank left in it, and a shape cannot be run
+  by anything.
+
+- **Order, as something the plan insists on rather than something the reader
+  supplies.** A plan has always been a sequence, and while every command was
+  copied by hand nothing had to hold it: a person reading step 31 has read step
+  30. Running one on its own is different — `pct create` against a pool that
+  does not exist fails, and against a pool that exists under another name it
+  succeeds at making the wrong thing.
+
+  So steps name what has to come first, the run panel is closed until those are
+  behind us, and a step counts as done when its sequence ran clean or when the
+  operator says so — because most of this work is still done by hand, and a
+  plan that believed only its own runs would block the estate behind a step
+  somebody finished at the console an hour ago.
+
+- **A run console, so that "apply" means something again.** The two surfaces had
+  stopped meaning what their names said: the plan explained the work and also
+  did some of it, while apply wrote two kinds of object and nothing else. The
+  split is by role now. The plan is the handbook — the whole body of work in
+  order, with what each step is for and a way to do any single one of them
+  there and then. The console is the subset the application can carry out
+  itself, queued in the plan's order, run down that queue with a log of what
+  happened, stopping at the first failure. The controller's own backup, dry run
+  and rollback are unchanged and still there, because twenty-three network
+  differences are worth reviewing as a set.
+
+  What the console cannot run and something in it waits for — the trunk bridge,
+  which has to exist before a guest can be given a card on it and which must be
+  done at the machine because reloading it can drop the session — is listed at
+  the top with a tick beside it. The queue goes no further until that tick is
+  made.
+
+### Changed
+
+- **The port layout is grouped by the device it is on.** The device used to be
+  typed into every row, which put a switch's name twenty-four times on the
+  screen and still left the reader counting rows to find where one switch ended
+  and the next began. Each device is now a block with its name once, the number
+  of ports on it, and how many of those are free.
+
+  The port profiles moved alongside the list rather than under it. They are
+  what the layout produces, and on an estate with four switches they were
+  several screens below the thing they were an answer to.
+
+- **The topology's boundaries are three colours rather than one.** The estate's
+  own network keeps the accent, the hypervisor takes an orange of its own, and
+  the internet — the part nobody here administers — takes a violet, so that
+  "where do the virtual machines live" is answered before a single label is
+  read. Clicking a boundary frames that group; clicking it again, or the
+  background, puts the whole estate back.
+
+- **A port in the inspector says what it is set to, not only what is on it.**
+  The profile the port carries, the untagged network that profile names, what
+  it forwards, and the far end's own address and MAC — the four things somebody
+  checks when a machine has come up on the wrong network. The list scans in one
+  line per socket and opens the port that is picked.
+
+### Fixed
+
+- **The survey's port import reads the whole port table.** It used to leave out
+  the empty, enabled, dark port on the grounds that twenty of those would bury
+  the six that matter. What it produced was a layout that disagreed with the
+  switch in front of you, with no way to tell a port nobody uses from a port
+  the import could not read. Every port comes in now, and a free one carries a
+  role that says so and asks nothing of anybody.
+
+- **The untagged network on a port is found.** Matching only on the VLAN id
+  answered "nothing measured" for every port on a stock switch, because the
+  default LAN has no VLAN id at all. A surveyed network is now matched to a
+  planned one by id, then by address range, then by name — and where the port
+  names no profile, by the address the machine on it actually answered on.
+  What still cannot be placed is named out loud: the import says which networks
+  the target state has no counterpart for, and offers to add them exactly as
+  the controller has them.
+
+- **A label the import wrote is not mistaken for one somebody typed.** Earlier
+  imports put the controller's own name for the socket — "Port 3" — in the
+  label column, and the next survey then refused to replace it with the name it
+  had measured. Those now count as blank, so a second survey fills in the
+  machine on the other end; a label somebody wrote by hand is still never
+  overwritten.
+
 ## [1.9.0] — 2026-08-19
 
 ### Added

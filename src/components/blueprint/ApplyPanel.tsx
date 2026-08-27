@@ -1,6 +1,7 @@
 import { rollbackable, runCounts } from '@/apply/model';
-import type { DiffVerdict, OperationDiff } from '@/apply/model';
+import type { DiffVerdict, FieldChange, OperationDiff } from '@/apply/model';
 import { useT, type Dict } from '@/i18n';
+import { cx, vars } from '@/lib/css';
 import type { Palette, Tone } from '@/lib/palette';
 import type { ApplyApi } from '@/state/useApply';
 import { Dot, Pill, SectionLabel } from '../ui';
@@ -13,10 +14,62 @@ const VERDICT_TONE: Record<DiffVerdict, Tone> = {
   external: 'idle',
 };
 
-function formatValue(value: unknown): string {
-  if (value === undefined || value === null || value === '') return '—';
-  if (typeof value === 'boolean') return value ? 'igen' : 'nem';
-  return String(value);
+/*
+ * The order a dry run is read in.
+ *
+ * Worst first: what would stop the run, then what it would make, then what it
+ * would change, and last the two kinds of nothing — already correct, and
+ * provided by something else. Grouped rather than interleaved because the
+ * question in front of someone reviewing this is "is there anything here I did
+ * not intend", and a list that mixes fifteen already-correct rows into three
+ * real changes answers it badly.
+ */
+const VERDICT_ORDER: DiffVerdict[] = ['conflict', 'create', 'update', 'external', 'noop'];
+
+/** One value as it is shown: a chip, sometimes several for one field. */
+interface Chip {
+  text: string;
+  /** Nothing was measured or nothing is set — shown as an em dash, not as a 0. */
+  empty?: boolean;
+  /** A yes/no, coloured by which it is. */
+  tone?: string;
+}
+
+/*
+ * A field value, broken into what the eye can take in at a glance.
+ *
+ * The dry run used to print every value with `String()`, which turned a list of
+ * VLANs into `10,20,30`, a boolean into a hard-coded Hungarian word — in the
+ * English interface too — and an unset value into a bare dash that read as if
+ * it were the value. Each of those is a different kind of thing, and each gets
+ * its own shape here.
+ */
+function chipsOf(value: unknown, palette: Palette, t: Dict): Chip[] {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return [{ text: '—', empty: true }];
+    return value.map((v) => ({ text: String(v) }));
+  }
+  if (value === undefined || value === null || value === '') {
+    return [{ text: '—', empty: true }];
+  }
+  if (typeof value === 'boolean') {
+    return [{ text: value ? t.common.yes : t.common.no, tone: value ? palette.ok : palette.idle }];
+  }
+  return [{ text: String(value) }];
+}
+
+/**
+ * What a field is called, in words.
+ *
+ * The controller's own key is what gets written, so it stays reachable — it is
+ * the row's tooltip — but `native_vlan` is not a name anybody chose to read.
+ * A key with no entry falls back to itself with the underscores opened out,
+ * which is what the firewall's membership field needs: its name moves between
+ * releases and is discovered at run time, so it cannot be listed here.
+ */
+function fieldLabel(field: string, t: Dict): string {
+  const known = (t.apply.field as Record<string, string | undefined>)[field];
+  return known ?? field.replace(/_/g, ' ');
 }
 
 export function ApplyPanel({ api, palette }: { api: ApplyApi; palette: Palette }) {
@@ -213,20 +266,46 @@ export function ApplyPanel({ api, palette }: { api: ApplyApi; palette: Palette }
       </div>
 
       {report ? (
-        <div className="panel" style={{ overflow: 'hidden' }}>
-          <div
-            style={{
-              padding: '14px 16px 11px',
-              borderBottom: '1px solid var(--line)',
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            {t.apply.whatChanges}
-          </div>
-          {report.diffs.map((diff) => (
-            <DiffRow key={diff.operation.id} diff={diff} palette={palette} t={t} />
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{t.apply.whatChanges}</div>
+
+          {VERDICT_ORDER.map((verdict) => {
+            const diffs = report.diffs.filter((d) => d.verdict === verdict);
+            if (diffs.length === 0) return null;
+            const tone = palette[VERDICT_TONE[verdict]];
+
+            return (
+              <section key={verdict}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}
+                >
+                  <Dot color={tone} />
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                    {t.apply.verdicts[verdict]}
+                  </div>
+                  {/* The hairline carries the eye to the count, as in the module list. */}
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 2,
+                      borderRadius: 1,
+                      background: 'var(--line)',
+                      minWidth: 40,
+                    }}
+                  />
+                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--text3)' }}>
+                    {diffs.length}
+                  </div>
+                </div>
+
+                <div className="diff-grid">
+                  {diffs.map((diff) => (
+                    <DiffCard key={diff.operation.id} diff={diff} palette={palette} t={t} />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       ) : null}
 
@@ -364,52 +443,117 @@ function Gate({
   );
 }
 
-function DiffRow({ diff, palette, t }: { diff: OperationDiff; palette: Palette; t: Dict }) {
+/**
+ * One field of one operation.
+ *
+ * On a create there is nothing to compare against, so only the value being
+ * written is shown — the `— →` that used to open every line of a fresh plan
+ * said "there was nothing before", which is the one thing "create" already
+ * says. On an update both sides are there, the old one struck through, because
+ * the question then really is what is being replaced.
+ */
+function FieldRow({
+  change,
+  palette,
+  t,
+}: {
+  change: FieldChange;
+  palette: Palette;
+  t: Dict;
+}) {
+  const from = chipsOf(change.from, palette, t);
+  const to = chipsOf(change.to, palette, t);
+  // Nothing to replace: a create, or a field that had no value before.
+  const replaces = !(from.length === 1 && from[0]!.empty);
+
+  const chip = (c: Chip, i: number, previous?: boolean) => (
+    <span
+      key={`${c.text}-${i}`}
+      className={cx('val', c.empty && 'val--empty', previous && 'val--from')}
+      style={c.tone && !previous ? vars({ '--val': c.tone }) : undefined}
+    >
+      {c.text}
+    </span>
+  );
+
+  return (
+    <div className="diff-fields__row">
+      <span className="diff-fields__label" title={change.field}>
+        {fieldLabel(change.field, t)}
+      </span>
+      <span className="diff-fields__values">
+        {replaces ? (
+          <>
+            {from.map((c, i) => chip(c, i, true))}
+            <span className="diff-fields__arrow" aria-hidden="true">
+              →
+            </span>
+          </>
+        ) : null}
+        {to.map((c, i) => chip(c, i))}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * One operation of the dry run, as a card.
+ *
+ * A row per operation ran the width of the window for the sake of a label and
+ * two short values, so a dry run of a dozen operations was a column of mostly
+ * empty lines. The card is the shape the module list already uses, and the
+ * grid fits as many across as the window allows.
+ *
+ * The verdict is on the card twice over — as the stripe along the top and as
+ * the pill — because the cards are grouped by verdict and a card read on its
+ * own, out of its group, still has to say what it is.
+ */
+function DiffCard({ diff, palette, t }: { diff: OperationDiff; palette: Palette; t: Dict }) {
   const tone = palette[VERDICT_TONE[diff.verdict]];
 
   return (
-    <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--line)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <Pill color={tone}>{t.apply.verdicts[diff.verdict]}</Pill>
-        <span style={{ fontSize: 11.5, fontWeight: 500 }}>{diff.operation.label}</span>
+    <div className="diff-card" style={vars({ '--stripe': tone })}>
+      <span className="diff-card__stripe" />
+
+      <div className="diff-card__head">
+        <Pill color={tone} tight>
+          {t.apply.verdicts[diff.verdict]}
+        </Pill>
         <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
           {t.apply.operationKind[diff.operation.kind]}
         </span>
       </div>
 
-      {diff.note ? (
-        <div
-          className="pretty"
-          style={{ fontSize: 11, color: 'var(--text2)', marginTop: 6, lineHeight: 1.55 }}
-        >
-          {diff.note}
+      <div className="diff-card__body">
+        <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.35 }}>
+          {diff.operation.label}
         </div>
-      ) : null}
 
-      {diff.blockedReason ? (
-        <div
-          className="pretty"
-          style={{ fontSize: 11, color: palette.bad, marginTop: 6, lineHeight: 1.55 }}
-        >
-          {diff.blockedReason}
-        </div>
-      ) : null}
+        {diff.note ? (
+          <div
+            className="pretty"
+            style={{ fontSize: 10.5, color: 'var(--text2)', marginTop: 6, lineHeight: 1.5 }}
+          >
+            {diff.note}
+          </div>
+        ) : null}
+
+        {diff.blockedReason ? (
+          <div
+            className="pretty"
+            style={{ fontSize: 10.5, color: palette.bad, marginTop: 6, lineHeight: 1.5 }}
+          >
+            {diff.blockedReason}
+          </div>
+        ) : null}
+      </div>
 
       {diff.changes.length > 0 ? (
-        <div style={{ marginTop: 8 }}>
-          <SectionLabel style={{ marginBottom: 5 }}>{t.apply.fields}</SectionLabel>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="diff-card__foot">
+          <SectionLabel style={{ marginBottom: 7 }}>{t.apply.fields}</SectionLabel>
+          <div className="diff-fields">
             {diff.changes.map((c) => (
-              <div
-                key={c.field}
-                className="mono"
-                style={{ fontSize: 10.5, display: 'flex', gap: 8, flexWrap: 'wrap' }}
-              >
-                <span style={{ color: 'var(--text3)', minWidth: 110 }}>{c.field}</span>
-                <span style={{ color: 'var(--text3)' }}>{formatValue(c.from)}</span>
-                <span style={{ color: 'var(--text3)' }}>→</span>
-                <span style={{ color: 'var(--text)' }}>{formatValue(c.to)}</span>
-              </div>
+              <FieldRow key={c.field} change={c} palette={palette} t={t} />
             ))}
           </div>
         </div>

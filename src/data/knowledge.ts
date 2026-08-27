@@ -57,6 +57,18 @@ export const KB_BY_KIND: Record<NodeKind, KbTeaser[]> = {
       tag: 'Wi-Fi',
     },
   ],
+  bridge: [
+    {
+      title: 'VLAN-tudatos bridge vagy VLAN-interfészek',
+      subtitle: 'Melyik esetben melyik, és mit tör el az átállás',
+      tag: 'Proxmox',
+    },
+    {
+      title: 'A bridge uplinkje és a switch oldali port',
+      subtitle: 'Trunk, natív VLAN és a leggyakoribb eltérés a kettő között',
+      tag: 'Hálózat',
+    },
+  ],
   host: [
     {
       title: 'Proxmox bridge módosítása biztonságosan',
@@ -185,6 +197,21 @@ export const CONFIG_BY_KIND: Record<NodeKind, ConfigGuide> = {
     commands: [
       { label: 'Rádió állapot', command: 'ssh admin@10.0.1.22 "iwconfig"' },
       { label: 'Kliensek', command: 'ssh admin@10.0.1.22 "wstalist | head -40"' },
+    ],
+  },
+  bridge: {
+    note: 'A bridge átalakítása megszakítja a rajta lévő vendéggépek — és gyakran magának a hostnak a — kapcsolatát. Helyi konzol nélkül nem visszafordítható.',
+    steps: [
+      'Felmérés: melyik vendéggép melyik bridge-en és melyik VLAN-on ül',
+      'Előellenőrzés: a switch oldali port trunk-e, és mi rajta a natív VLAN',
+      'Mentés: az /etc/network/interfaces másolata',
+      'Végrehajtás: egy bridge egyszerre, helyi konzol mellett',
+      'Ellenőrzés: minden érintett vendéggép elérése a saját VLAN-jából',
+    ],
+    commands: [
+      { label: 'Bridge-ek', command: 'brctl show' },
+      { label: 'VLAN-ok a bridge-en', command: 'bridge vlan show' },
+      { label: 'Hálózati konfiguráció', command: 'cat /etc/network/interfaces' },
     ],
   },
   host: {

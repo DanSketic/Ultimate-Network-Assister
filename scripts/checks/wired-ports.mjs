@@ -87,9 +87,18 @@ check(
   portOf(found, 'Gateway', 4)?.neighbour,
 );
 
-const link = found.links.find(
-  (l) => l.to.includes('pve01') || l.from.includes('pve01'),
-);
+/*
+ * The cable into the host, and only that one.
+ *
+ * The host's own bridges are cards of their own now, and their ids carry the
+ * node's name too — so matching on the name alone would pick up the line from
+ * the host to its bridge and never look at the one being tested.
+ */
+const HOST = 'pve:pve01';
+const intoHost = (links) => links.find((l) => (l.to === HOST || l.from === HOST) &&
+  !l.from.startsWith('bridge:') && !l.to.startsWith('bridge:'));
+
+const link = intoHost(found.links);
 check('and the cable is drawn as measured, not inferred', link?.kind === 'physical', link?.kind);
 check('with no inferred marker on it', !link?.provenance, String(link?.provenance));
 
@@ -102,7 +111,7 @@ const noClient = estateOf(
   }),
 );
 check('with no wired client the port stays unnamed', !portOf(noClient, 'Gateway', 4)?.neighbour);
-const guess = noClient.links.find((l) => l.to.includes('pve01') || l.from.includes('pve01'));
+const guess = intoHost(noClient.links);
 check('and the cable falls back to a logical line', guess?.kind === 'logical');
 check('marked as inferred', guess?.provenance === 'Becsült', String(guess?.provenance));
 
@@ -121,6 +130,73 @@ const noPort = estateOf(
   }),
 );
 check('a client with no port reported names nothing', !portOf(noPort, 'Gateway', 4)?.neighbour);
+
+/* ------------------------------ the node the controller knows by another address */
+
+/*
+ * The address the controller learned is not always one the node's own
+ * interface list carries: a node with several addresses, or one learned on a
+ * different network than the one it reports, matches on neither. The name it
+ * was given over DHCP is then the only thing tying the two together — and it
+ * is nearly always the node's own name.
+ *
+ * Getting this wrong is not a small thing. The estate then draws its
+ * hypervisor as an unnamed client hanging off a switch, invents a guessed line
+ * from the gateway to the real host card beside it, and every arrangement pass
+ * afterwards works from that: the switch the host is actually plugged into
+ * ends up as far from it as the map allows.
+ */
+const byName = estateOf(
+  snapshot({
+    unifi: {
+      site: 'default', devices: [gateway([port(4)])], networks: [], wlans: [],
+      firewallRules: [],
+      // Reported at an address the node's interfaces do not carry, under the
+      // name the cluster knows it by.
+      clients: [client({ ip: '10.9.9.9', hostname: 'pve01' })],
+      portProfiles: [],
+    },
+  }),
+);
+check('a node learned at another address is still recognised by its name',
+  portOf(byName, 'Gateway', 4)?.neighbour === 'pve01',
+  portOf(byName, 'Gateway', 4)?.neighbour);
+
+const namedLink = intoHost(byName.links);
+check('and it gets its cable to the switch that learned it',
+  namedLink?.kind === 'physical', `${namedLink?.kind} ${namedLink?.from} → ${namedLink?.to}`);
+check('marked inferred, because the name is what tied them together',
+  namedLink?.provenance === 'Becsült', String(namedLink?.provenance));
+check('and it is not drawn a second time as a client',
+  !byName.nodes.some((n) => n.kind === 'clients'),
+  byName.nodes.filter((n) => n.kind === 'clients').map((n) => n.name).join(', '));
+
+const domain = estateOf(
+  snapshot({
+    unifi: {
+      site: 'default', devices: [gateway([port(4)])], networks: [], wlans: [],
+      firewallRules: [],
+      clients: [client({ ip: '10.9.9.9', hostname: 'pve01.otthon.lan' })],
+      portProfiles: [],
+    },
+  }),
+);
+check('a domain suffix on the reported name does not hide it',
+  portOf(domain, 'Gateway', 4)?.neighbour === 'pve01');
+
+const stranger = estateOf(
+  snapshot({
+    unifi: {
+      site: 'default', devices: [gateway([port(4)])], networks: [], wlans: [],
+      firewallRules: [],
+      clients: [client({ ip: '10.9.9.9', hostname: 'nas' })],
+      portProfiles: [],
+    },
+  }),
+);
+check('but a machine with another name is not taken for the node',
+  intoHost(stranger.links)?.kind === 'logical',
+  String(intoHost(stranger.links)?.kind));
 
 /* --------------------------------------------- other machines get named too */
 

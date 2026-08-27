@@ -28,6 +28,46 @@ export function isDestructiveCommand(body: string): boolean {
 }
 
 /**
+ * Commands that can take a service — or the session running them — off the air.
+ *
+ * A different question from `destructive`, and one that used to have no answer
+ * here at all: nothing on this list loses data, and every one of them can
+ * interrupt something while it happens. Reloading the bridge configuration on
+ * the host you are connected to is the plain case — it is exactly what setting
+ * up a trunk requires, and it can also drop the SSH session doing it.
+ *
+ * So this does not refuse anything. It is what the plan uses to say "this one
+ * can cut you off" before you approve it, which is the difference between a
+ * surprise and a decision.
+ */
+const DISRUPTIVE_COMMANDS = [
+  'ifreload',
+  'ifdown',
+  'ifup',
+  'systemctl restart',
+  'systemctl stop',
+  'service ',
+  'pve-firewall restart',
+  'pveproxy restart',
+  'nft -f',
+  'iptables-restore',
+  'qm stop',
+  'pct stop',
+  'qm shutdown',
+  'pct shutdown',
+  'apt full-upgrade',
+  'apt dist-upgrade',
+  'apt upgrade',
+  'proxmox-boot-tool refresh',
+  'update-initramfs',
+];
+
+export function isDisruptiveCommand(body: string): boolean {
+  const normalised = body.toLowerCase();
+  return DISRUPTIVE_COMMANDS.some((c) => normalised.includes(c));
+}
+
+/**
  * True when the body is something to read rather than something to run.
  *
  * Not every `command` action is a command. Some are a fragment of a file to
@@ -62,8 +102,22 @@ export interface Capability {
 type CapabilityText = Dict['blueprint']['capability'];
 
 /**
- * Caps a step's requested automation against what its actions actually permit.
- * Never raises: a step that asks for `manual` stays manual.
+ * How far this application *could* take a step, which is not the same as how
+ * far the plan recommends taking it.
+ *
+ * This used to answer the second question, and the two had been one field for
+ * as long as there was only one thing to do with a command: copy it. Now that
+ * the plan can run what it prepares, a step that asks for `assisted` — a
+ * package install, a container created — is still something the application is
+ * able to do end to end, and refusing to let anyone say so made the setting
+ * useless exactly where it mattered. The ceiling is what is possible; the
+ * plan's own `requested` stays as the recommendation, and the run mode picks
+ * anywhere at or below the ceiling.
+ *
+ * What the ceiling is not is a loosening of the rule the estate is built on.
+ * Destructive storage work is still capped at `manual` here, structurally, and
+ * the native SSH policy refuses those commands again on the other side of the
+ * IPC boundary whatever this says.
  */
 export function capabilityFor(
   requested: AutomationLevel,
@@ -74,7 +128,25 @@ export function capabilityFor(
     return { level: 'manual', reason: why.destructiveStorage };
   }
 
-  if (requested === 'manual') return { level: 'manual' };
+  // Nothing to run: a step that is a decision, a physical job or a page to
+  // read. There is no automating a conversation with a screwdriver.
+  if (actions.length === 0) return { level: 'manual' };
+
+  /*
+   * A command with a blank left in it is not a command.
+   *
+   * `qm clone <template>` is a shape for a person to fill; sending it verbatim
+   * fails, and pretending the step is automatable would promise a run that
+   * cannot happen. A step whose commands are all templates stays where the
+   * plan put it.
+   */
+  const commands = actions.filter((a) => a.kind === 'command');
+  const runnable = commands.filter((a) => !isTemplateCommand(a.body));
+  if (commands.length > 0 && runnable.length === 0) {
+    return { level: requested === 'auto' ? 'assisted' : requested, reason: why.templateOnly };
+  }
+
+  if (requested === 'manual' && commands.length === 0) return { level: 'manual' };
 
   // A step that can only be done by clicking through a vendor UI cannot be
   // automated, however safe it is.
@@ -93,18 +165,25 @@ export function capabilityFor(
    * Automatable means this application can do it, not that an API exists.
    *
    * Describing a call is not making one. The applier writes two kinds of
-   * object; a step whose API actions are anything else was being counted as
-   * automatable on the strength of a description, which is a promise nothing
-   * in the code could keep.
+   * object; a step whose API actions are anything else is a description for a
+   * person to carry out, and counting it as automatable would be a promise
+   * nothing in the code could keep.
+   *
+   * A command is the other way round: the application has an SSH session, the
+   * native policy decides what may go down it, and running one is something it
+   * genuinely does. So a step with runnable commands reaches `auto` — capped,
+   * as everything is, by what the policy accepts when the moment comes.
    */
-  if (requested === 'auto' && !writable) {
+  if (runnable.length > 0) return { level: 'auto' };
+
+  if (!writable) {
     return {
       level: 'assisted',
       reason: hasApi ? why.notWritten : why.commandOnly,
     };
   }
 
-  return { level: requested };
+  return { level: 'auto' };
 }
 
 /**

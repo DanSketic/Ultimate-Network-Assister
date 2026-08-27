@@ -8,10 +8,12 @@
  * write two kinds of object and nothing else.
  *
  * So the rule measured here is the one the counter now rests on: a step may
- * only claim `auto` if it carries an action the apply pipeline actually writes,
- * and what the pipeline writes is read from the apply layer itself rather than
- * restated. The rest is checked from the other end too — a plan step that is
- * only prose must not claim anything at all.
+ * only claim `auto` if this application has a way to carry it out, and there
+ * are exactly two — an action the apply pipeline writes, read from the apply
+ * layer itself rather than restated, or a command the SSH runner can send. The
+ * rest is checked from the other end too: a plan step that is only prose must
+ * not claim anything at all, and neither must one whose commands are all
+ * shapes with a blank left in them.
  */
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -28,6 +30,7 @@ await build({
                export { resolveBlueprint, withDefaults, createBlueprint } from '${ROOT}/src/blueprint/resolve';
                export { buildPlan } from '${ROOT}/src/blueprint/plan';
                export { compileOperations } from '${ROOT}/src/apply/compile';
+               export { isTemplateCommand, isDestructiveCommand } from '${ROOT}/src/blueprint/automation';
                export { dict } from '${ROOT}/src/i18n/index';`,
     resolveDir: ROOT,
     loader: 'ts',
@@ -35,7 +38,8 @@ await build({
   bundle: true, format: 'esm', outfile: OUT, platform: 'neutral',
   alias: { '@': `${ROOT}/src` }, logLevel: 'error',
 });
-const { presets, resolveBlueprint, withDefaults, createBlueprint, buildPlan, compileOperations, dict } =
+const { presets, resolveBlueprint, withDefaults, createBlueprint, buildPlan, compileOperations,
+        isTemplateCommand, isDestructiveCommand, dict } =
   await import(`file://${OUT}`);
 
 let failures = 0;
@@ -58,48 +62,68 @@ const runs = presets('en').map((preset) => {
 
 /* ------------------------------------ automatable means the applier writes it */
 
+/** A command this application could actually send: real, and safe to send. */
+const runnable = (action) =>
+  action.kind === 'command' &&
+  !action.destructive &&
+  !isTemplateCommand(action.body) &&
+  !isDestructiveCommand(action.body);
+
 const overclaimed = [];
 const automatable = [];
+const byRoute = { written: 0, ssh: 0 };
 for (const { preset, plan } of runs) {
   for (const step of plan.steps) {
     if (step.capability !== 'auto') continue;
     automatable.push(`${preset.id}:${step.id}`);
-    if (!step.actions.some((a) => a.kind === 'api' && a.writable)) {
-      overclaimed.push(`${preset.id}:${step.id}`);
-    }
+    const written = step.actions.some((a) => a.kind === 'api' && a.writable);
+    const overSsh = step.actions.some(runnable);
+    if (written) byRoute.written += 1;
+    else if (overSsh) byRoute.ssh += 1;
+    if (!written && !overSsh) overclaimed.push(`${preset.id}:${step.id}`);
   }
 }
 check(
-  'every automatable step carries an action the applier writes',
+  'every automatable step has a route: the applier writes it, or a command runs it',
   overclaimed.length === 0,
   overclaimed.join(', '),
 );
-console.log(`   steps claiming auto: ${automatable.length}`);
+console.log(`   steps claiming auto: ${automatable.length}  (written ${byRoute.written}, over ssh ${byRoute.ssh})`);
 for (const s of automatable) console.log(`     ${s}`);
 
-/* ------------------------------- and the applier has something for each of them */
+/* --------------------------------- and a destructive step never claims either one */
 
-for (const { preset, plan, operations } of runs) {
-  const claims = plan.steps.filter((s) => s.capability === 'auto').length;
-  if (claims === 0) continue;
-  check(
-    `${preset.id}: the operations exist to back the claim`,
-    operations.length > 0,
-    `${claims} steps, ${operations.length} operations`,
-  );
-}
-
-/* --------------------------------------- a preset with nothing to write says so */
-
-const nothingToWrite = runs.filter((r) => r.operations.length === 0);
-console.log(`   presets the apply pipeline has no work for: ${nothingToWrite.length}`);
-for (const r of nothingToWrite) console.log(`     ${r.preset.id}`);
+const destructiveClaims = runs.flatMap(({ preset, plan }) =>
+  plan.steps
+    .filter(
+      (s) =>
+        s.capability !== 'manual' &&
+        s.actions.some((a) => a.destructive || isDestructiveCommand(a.body)),
+    )
+    .map((s) => `${preset.id}:${s.id}`),
+);
 check(
-  'a preset with no operations claims no automatable step either',
-  nothingToWrite.every((r) => r.plan.steps.every((s) => s.capability !== 'auto')),
-  nothingToWrite
-    .flatMap((r) => r.plan.steps.filter((s) => s.capability === 'auto').map((s) => `${r.preset.id}:${s.id}`))
-    .join(', '),
+  'a step that can destroy storage is manual, whatever it asked for',
+  destructiveClaims.length === 0,
+  destructiveClaims.join(', '),
+);
+
+/* ------------------------- a command that is a shape to fill in is not a claim */
+
+const templateClaims = runs.flatMap(({ preset, plan }) =>
+  plan.steps
+    .filter(
+      (s) =>
+        s.capability === 'auto' &&
+        !s.actions.some((a) => a.kind === 'api' && a.writable) &&
+        s.actions.filter((a) => a.kind === 'command').every((a) => isTemplateCommand(a.body)),
+    )
+    .map((s) => `${preset.id}:${s.id}`),
+);
+check(
+  'a step whose commands are all placeholders claims nothing',
+  templateClaims.length === 0,
+  templateClaims.join(', '),
 );
 
 /* ------------------------------------------ a step with no actions promises nothing */

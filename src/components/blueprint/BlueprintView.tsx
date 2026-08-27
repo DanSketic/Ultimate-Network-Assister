@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { exportGuideHtml } from '@/blueprint/export';
-import type { ResolvedBlueprint } from '@/blueprint/model';
+import type { Plan, ResolvedBlueprint } from '@/blueprint/model';
 import { openTextFile, saveTextFile } from '@/blueprint/store';
 import { vars } from '@/lib/css';
 import { tint, type Palette } from '@/lib/palette';
@@ -10,7 +10,7 @@ import type { EstateApi } from '@/state/useEstate';
 import { useI18n } from '@/i18n';
 import { useApply } from '@/state/useApply';
 import { Pill } from '../ui';
-import { ApplyPanel } from './ApplyPanel';
+import { RunConsole } from './RunConsole';
 import { ModulesTab } from './ModulesTab';
 import { ParametersTab } from './ParametersTab';
 import { PlanTab } from './PlanTab';
@@ -331,7 +331,15 @@ export function BlueprintView({
                   copy={copy}
                 />
               ) : null}
-              {tab === 'apply' ? <ApplyTab resolved={resolved} estate={estate} palette={palette} /> : null}
+              {tab === 'apply' ? (
+                <ApplyTab
+                  plan={plan}
+                  resolved={resolved}
+                  estate={estate}
+                  palette={palette}
+                  accent={accent}
+                />
+              ) : null}
             </div>
           </>
         )}
@@ -348,13 +356,17 @@ export function BlueprintView({
  * confirmation instead of leaving it armed.
  */
 function ApplyTab({
+  plan,
   resolved,
   estate,
   palette,
+  accent,
 }: {
+  plan: Plan;
   resolved: ResolvedBlueprint;
   estate: EstateApi;
   palette: Palette;
+  accent: string;
 }) {
   const apply = useApply({
     resolved,
@@ -362,5 +374,13 @@ function ApplyTab({
     profiles: estate.profiles,
   });
 
-  return <ApplyPanel api={apply} palette={palette} />;
+  return (
+    <RunConsole
+      plan={plan}
+      apply={apply}
+      profiles={estate.profiles}
+      palette={palette}
+      accent={accent}
+    />
+  );
 }

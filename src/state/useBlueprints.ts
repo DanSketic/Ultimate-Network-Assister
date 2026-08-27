@@ -13,6 +13,7 @@ import {
 import type {
   Blueprint,
   BlueprintPreset,
+  ExtraNetwork,
   Household,
   ParamValue,
   PortAssignment,
@@ -48,6 +49,11 @@ export interface BlueprintApi {
   addPort: () => void;
   updatePort: (id: string, patch: Partial<PortAssignment>) => void;
   removePort: (id: string) => void;
+
+  /** Networks the estate has that the preset never described. */
+  addNetworks: (networks: ExtraNetwork[]) => void;
+  updateNetwork: (vlan: number, patch: Partial<ExtraNetwork>) => void;
+  removeNetwork: (vlan: number) => void;
 
   addHouseholdNamed: (name: string) => void;
   updateHousehold: (id: string, patch: Partial<Household>) => void;
@@ -310,17 +316,23 @@ export function useBlueprints(): BlueprintApi {
 
     addPort: () =>
       mutate((bp) => {
-        // A new row lands on the device the last one was on: ports are entered
-        // switch by switch, not scattered.
-        const last = bp.ports[bp.ports.length - 1];
+        /*
+         * A new row starts a new device.
+         *
+         * It used to land on the device the last row was on, back when the
+         * layout was one flat table and that was the only way to enter a
+         * switch port by port. The ports are grouped by device now and each
+         * group adds its own rows, so the one thing that had no way in was a
+         * second switch — which is what this is for.
+         */
         return {
           ...bp,
           ports: [
             ...bp.ports,
             {
               id: `port-${Date.now().toString(36)}-${bp.ports.length}`,
-              device: last?.device ?? '',
-              idx: (last?.idx ?? 0) + 1,
+              device: '',
+              idx: 1,
               label: '',
               role: 'access' as const,
               nativeVlan: 0,
@@ -337,6 +349,38 @@ export function useBlueprints(): BlueprintApi {
       })),
 
     removePort: (id) => mutate((bp) => ({ ...bp, ports: bp.ports.filter((p) => p.id !== id) })),
+
+    /*
+     * Added by VLAN, and never twice.
+     *
+     * The VLAN id is what makes two networks the same network — the name is
+     * edited, the id is not — so adding one the target state already has is a
+     * no-op rather than a second row that then reports itself as a clash.
+     */
+    addNetworks: (networks) =>
+      mutate((bp) => {
+        const have = new Set([...(bp.extraNetworks ?? []).map((n) => n.vlan)]);
+        const fresh = networks.filter((n) => !have.has(n.vlan));
+        if (fresh.length === 0) return bp;
+        return {
+          ...bp,
+          extraNetworks: [...(bp.extraNetworks ?? []), ...fresh].sort((a, b) => a.vlan - b.vlan),
+        };
+      }),
+
+    updateNetwork: (vlan, patch) =>
+      mutate((bp) => ({
+        ...bp,
+        extraNetworks: (bp.extraNetworks ?? []).map((n) =>
+          n.vlan === vlan ? { ...n, ...patch } : n,
+        ),
+      })),
+
+    removeNetwork: (vlan) =>
+      mutate((bp) => ({
+        ...bp,
+        extraNetworks: (bp.extraNetworks ?? []).filter((n) => n.vlan !== vlan),
+      })),
 
     addHouseholdNamed: (name) =>
       mutate((bp) =>

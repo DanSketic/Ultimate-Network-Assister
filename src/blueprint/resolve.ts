@@ -22,6 +22,15 @@ type IssueText = Dict['blueprint']['issue'];
  * and everything the planner and the exporter consume comes from here, so a
  * parameter change is visible everywhere at once.
  */
+/**
+ * What a hand-added network is attributed to.
+ *
+ * Not a module, because no module introduces it — and everything downstream
+ * asks a network which module it came from, so it needs an answer that is not
+ * a module's id pretending.
+ */
+export const EXTRA_MODULE_ID = 'estate';
+
 export function resolveBlueprint(
   blueprint: Blueprint,
   preset: BlueprintPreset,
@@ -34,6 +43,31 @@ export function resolveBlueprint(
 
   const ctx = buildContext(blueprint.params, preset, blueprint.households, enabled);
   const built = preset.build(ctx);
+
+  /*
+   * The networks the user added, alongside the ones the preset built.
+   *
+   * Before validation, not after: a hand-added network that collides with a
+   * preset one is exactly the mistake worth catching, and the VLAN check
+   * already there catches it the moment the two are in one list.
+   */
+  const extra = (blueprint.extraNetworks ?? []).map((n) => ({ ...n, moduleId: EXTRA_MODULE_ID }));
+  built.networks.push(...extra);
+
+  /*
+   * A hand-added network has to say what a preset one says.
+   *
+   * The range and the gateway are what everything downstream needs — the
+   * handbook prints them, the applier writes them — and the survey can only
+   * supply them where the controller stated them. Missing, they are worth an
+   * error the moment they are missing rather than a blank in the handbook
+   * discovered later.
+   */
+  for (const n of extra) {
+    if (!n.cidr || !n.gateway) {
+      issues.push({ severity: 'error', message: x.networkIncomplete(n.name), where: n.name });
+    }
+  }
 
   validate(built, blueprint.households, ctx, issues, preset, x);
 

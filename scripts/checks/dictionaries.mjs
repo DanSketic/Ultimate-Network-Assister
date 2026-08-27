@@ -40,8 +40,13 @@ const SHARED = new Set([
   // Network vocabulary that stays English in Hungarian usage.
   'Online', 'online', 'Uplink', 'Switch', 'Port', 'port', 'SSID', 'Site', 'Wi-Fi',
   'Proxmox host', 'Switch trunk', 'Trunk bridge', 'Uptime', 'Firmware',
+  // What a port's own role is called in both languages.
+  'uplink',
+  // The button that adds one more port to a device: a sign and a word that is
+  // the same word in both languages.
+  '+ port',
   'vCPU', 'VM / LXC', 'OS', 'AUTO', '#', 'offline', 'VLAN-aware', 'Site backup',
-  'IoT VLAN',
+  'IoT VLAN', 'Internet', 'Bridge', 'Uplink port',
   // Two-part navigation labels whose second half is shared.
   '& policy', 'recovery',
   // Link speeds and product names, written the same either way.

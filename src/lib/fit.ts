@@ -26,6 +26,14 @@ export interface FitInput {
   ports: { x: number; y: number }[];
   /** Bounds of everything drawn in the SVG layer, or null if nothing is. */
   drawn: Rect | null;
+  /**
+   * The grouping outlines, which are drawn round the cards rather than on
+   * them.
+   *
+   * They have to be framed too: an outline whose top edge is off screen reads
+   * as a box that does not close, and the label sitting on it goes with it.
+   */
+  areas?: Rect[];
   /** Visible width, and height less whatever the overlay bars cover. */
   available: number;
   usable: number;
@@ -42,8 +50,14 @@ export interface Fit {
   frame: Rect;
 }
 
-/** Breathing room left at the edges. */
-export const FIT_PAD = 28;
+/**
+ * Breathing room left at the edges.
+ *
+ * Enough that the outermost thing on the map — an outline, a port chip, a
+ * cable's widest bow — is not flush against the edge of the view. A map that
+ * touches its own frame reads as cut off even when everything is on screen.
+ */
+export const FIT_PAD = 48;
 
 /**
  * Frames the estate around the cards, with room for whatever hangs off them.
@@ -55,7 +69,7 @@ export const FIT_PAD = 28;
  * looking centred.
  */
 export function frameFor(input: FitInput): Fit | null {
-  const { nodes, ports, drawn, available, usable, zoomMin, zoomMax } = input;
+  const { nodes, ports, drawn, areas, available, usable, zoomMin, zoomMax } = input;
   if (nodes.length === 0 || available <= 0 || usable <= 0) return null;
 
   const centreX =
@@ -75,6 +89,7 @@ export function frameFor(input: FitInput): Fit | null {
     reach(p.x - CHIP_W / 2, p.y - CHIP_H / 2, p.x + CHIP_W / 2, p.y + CHIP_H / 2);
   }
   if (drawn) reach(drawn.minX, drawn.minY, drawn.maxX, drawn.maxY);
+  for (const a of areas ?? []) reach(a.minX, a.minY, a.maxX, a.maxY);
 
   const halfW = reachX + FIT_PAD;
   const halfH = reachY + FIT_PAD;

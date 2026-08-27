@@ -58,6 +58,13 @@ const pve = (over = {}) => ({
   backupJobs: [], backupFiles: [], certificates: [], updates: [], updatesReadable: false, ...over,
 });
 
+const wan = (over = {}) => ({
+  deviceMac: 'gw', name: 'WAN1', ifname: 'eth8', kind: 'dhcp', ip: '81.2.3.4',
+  gatewayIp: '81.2.3.1', nameservers: ['1.1.1.1'], up: true, speed: 1000, uptimeSecs: 86400,
+  isp: 'Telekom', latencyMs: 12, xputDown: 900, xputUp: 300, speedtestAt: 1756000000,
+  portIdx: 9, ...over,
+});
+
 const snap = (id, over = {}) => ({
   id, startedAt: '', finishedAt: `2026-08-${id.padStart(2, '0')}T09:00:00Z`, log: [], errors: [],
   proxmox: null, unifi: null, ...over,
@@ -132,6 +139,139 @@ const moved = of(
 );
 check('a different device at the far end is worth a warning',
   moved.changes[0].what === hu.diff.neighbourChanged && moved.changes[0].tone === 'warn');
+
+/* ------------------------------------------------------- the guests' network */
+
+const vnic = (over = {}) => ({
+  name: 'net0', model: 'virtio', mac: 'AA:BB:CC:DD:EE:01', bridge: 'vmbr0', vlan: 20,
+  firewall: false, ...over,
+});
+
+const vmOn = (over = {}) => ({
+  vmid: 101, name: 'docker', kind: 'qemu', node: 'pve01', status: 'running',
+  cpuCount: 2, memTotal: 4e9, diskTotal: 3e10, tags: '', ...over,
+});
+
+const diffGuest = (a, b) =>
+  of(snap('1', { proxmox: pve({ guests: [a] }) }), snap('2', { proxmox: pve({ guests: [b] }) }));
+
+const rebridged = diffGuest(vmOn({ nics: [vnic()] }), vmOn({ nics: [vnic({ bridge: 'vmbr1' })] }));
+check('a guest that moved bridge is reported',
+  whats(rebridged).includes(hu.diff.guestBridgeChanged), whats(rebridged).join(', '));
+check('with both bridges shown', rebridged.changes[0].detail === 'vmbr0 → vmbr1');
+
+const retagged = diffGuest(vmOn({ nics: [vnic()] }), vmOn({ nics: [vnic({ vlan: 30 })] }));
+check('a guest that changed VLAN is reported',
+  whats(retagged).includes(hu.diff.guestVlanChanged));
+
+const untagged = diffGuest(vmOn({ nics: [vnic()] }), vmOn({ nics: [vnic({ vlan: null })] }));
+check('losing the tag reads as untagged, not as zero',
+  untagged.changes[0].detail === `20 → ${hu.diff.untagged}`, untagged.changes[0].detail);
+
+const unarmed = diffGuest(
+  vmOn({ nics: [vnic({ firewall: true })] }),
+  vmOn({ nics: [vnic({ firewall: false })] }),
+);
+check('the guest firewall being switched off is a warning',
+  unarmed.changes[0].what === hu.diff.guestFirewallOff && unarmed.changes[0].tone === 'warn');
+
+const unreadable = diffGuest(vmOn({ nics: [vnic()] }), vmOn({ nics: [] }));
+check('a config that could not be read this time is not a change',
+  unreadable.changes.length === 0, whats(unreadable).join(', '));
+
+const beforeConfigs = diffGuest(vmOn(), vmOn({ nics: [vnic()] }));
+check('and neither is one from a survey taken before configs were read',
+  beforeConfigs.changes.length === 0, whats(beforeConfigs).join(', '));
+
+/* ------------------------------------------------------------------ bridges */
+
+const br = (over = {}) => ({
+  node: 'pve01', name: 'vmbr0', kind: 'bridge', address: '10.0.1.10', cidr: '10.0.1.10/24',
+  bridgePorts: 'eno1', vlanAware: false, active: true, ...over,
+});
+
+const diffBridge = (before, after) =>
+  of(
+    snap('1', { proxmox: pve({ interfaces: before }) }),
+    snap('2', { proxmox: pve({ interfaces: after }) }),
+  );
+
+check('a new bridge is reported',
+  whats(diffBridge([], [br()])).includes(hu.diff.bridgeAdded));
+check('and a bridge that is gone',
+  whats(diffBridge([br()], [])).includes(hu.diff.bridgeRemoved));
+
+const rewired = diffBridge([br()], [br({ bridgePorts: 'eno2' })]);
+check('a bridge carried by a different port is a warning',
+  rewired.changes[0].what === hu.diff.bridgePortsChanged && rewired.changes[0].tone === 'warn');
+
+const downed = diffBridge([br()], [br({ active: false })]);
+check('a bridge that is no longer up is the worst kind of change',
+  downed.changes[0].what === hu.diff.bridgeDown && downed.changes[0].tone === 'bad');
+
+/* ---------------------------------------------------------------------- WAN */
+
+const wanOf = (a, b) =>
+  of(snap('1', { unifi: unifi({ wans: [a] }) }), snap('2', { unifi: unifi({ wans: [b] }) }));
+
+const readdressed = wanOf(wan(), wan({ ip: '81.2.9.9' }));
+check('a public address that changed on its own is caught',
+  whats(readdressed).includes(hu.diff.wanAddressChanged));
+check('with both addresses shown', readdressed.changes[0].detail === '81.2.3.4 → 81.2.9.9');
+
+const dropped = wanOf(wan(), wan({ up: false }));
+check('a link that stopped carrying traffic is the worst news',
+  dropped.changes[0].what === hu.diff.wanLost && dropped.changes[0].tone === 'bad');
+
+const restored = wanOf(wan({ up: false }), wan());
+check('and coming back is good news', restored.changes[0].tone === 'good');
+
+const provider = wanOf(wan(), wan({ isp: 'Vodafone' }));
+check('a different provider on the line is reported',
+  whats(provider).includes(hu.diff.wanIspChanged));
+
+const pppoe = wanOf(wan({ kind: 'static' }), wan({ kind: 'pppoe' }));
+check('so is a different way of getting the address',
+  whats(pppoe).includes(hu.diff.wanKindChanged));
+
+const resolvers = wanOf(wan(), wan({ nameservers: ['8.8.8.8'] }));
+check('and resolvers that changed under the estate',
+  whats(resolvers).includes(hu.diff.wanDnsChanged));
+
+const halved = wanOf(wan({ xputDown: 900 }), wan({ xputDown: 300 }));
+check('a line that lost most of its throughput is reported',
+  whats(halved).includes(hu.diff.wanThroughputDown));
+
+const scatter = wanOf(wan({ xputDown: 900 }), wan({ xputDown: 830 }));
+check('ordinary speedtest scatter is not', scatter.changes.length === 0,
+  whats(scatter).join(', '));
+
+const firstTest = wanOf(wan({ xputDown: -1 }), wan({ xputDown: 900 }));
+check('a first-ever speedtest is not a change', firstTest.changes.length === 0,
+  whats(firstTest).join(', '));
+
+const secondLink = of(
+  snap('1', { unifi: unifi({ wans: [wan()] }) }),
+  snap('2', { unifi: unifi({ wans: [wan(), wan({ name: 'WAN2', ifname: 'eth9', ip: '10.64.0.7' })] }) }),
+);
+check('a second link appearing is reported once',
+  whats(secondLink).filter((w) => w === hu.diff.wanAppeared).length === 1);
+
+const noWan = of(
+  snap('1', { unifi: unifi({ wans: [] }) }),
+  snap('2', { unifi: unifi({ wans: [] }) }),
+);
+check('two surveys that both found no WAN report nothing', noWan.changes.length === 0);
+
+/*
+ * The field did not exist before this build, and an absent reading is not an
+ * estate without internet — the one mistake this whole file exists to prevent.
+ */
+const older = of(snap('1', { unifi: unifi() }), snap('2', { unifi: unifi({ wans: [wan()] }) }));
+check('a survey taken before the WAN was collected reports no new link',
+  !whats(older).includes(hu.diff.wanAppeared), whats(older).join(', '));
+check('and says why it was not compared',
+  older.notCompared.includes(hu.diff.wanOneSided), older.notCompared.join(' | '));
 
 /* ------------------------------------------------------------ configuration */
 

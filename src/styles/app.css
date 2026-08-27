@@ -684,7 +684,501 @@ select.input {
   padding: 8px 9px 5px;
 }
 
+/* ------------------------------------------------------------- run queue */
+
+/*
+ * The queue, in a window of its own.
+ *
+ * Thirty-two steps is a page and a half, and while it runs the interesting one
+ * is whichever is running — which on a long list is as likely to be off the
+ * screen as on it. So the list scrolls inside itself and the running step is
+ * kept in the middle of that window: the eye stays in one place, with what
+ * just finished above and what is coming below.
+ */
+.run-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(56vh, 540px);
+  overflow-y: auto;
+  /* Room for the shadow of a row's focus ring, which a tight overflow clips. */
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel2);
+}
+
+.run-queue .port-row {
+  scroll-margin: 12px;
+}
+
+/* ------------------------------------------------------------ port layout */
+
+/*
+ * The ports, and what they add up to, side by side.
+ *
+ * The profiles are the answer the port layout produces — one per purpose, with
+ * the VLANs each carries — and they used to sit under it. On an estate with
+ * four switches and sixty ports that is several screens down: the reader
+ * changes a port's role and cannot see the thing it changed. So on a wide
+ * view they move alongside, and stay put while the ports scroll.
+ *
+ * Below that width they go back under the list, because a 300px column beside
+ * a 400px one is two columns of neither.
+ */
+.ports-layout {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1080px) {
+  .ports-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
+  .ports-layout__side {
+    position: sticky;
+    top: 0;
+    /* Its own scroll when there are more profiles than height for them: the
+       column keeps its place instead of pushing the page taller. */
+    max-height: calc(100vh - 170px);
+    overflow: auto;
+  }
+}
+
+/* --------------------------------------------------------------- port rows */
+
+/*
+ * One port, described.
+ *
+ * The list used to be three lines of grey monospace under each other — the
+ * neighbour, then the addresses, then the configuration — and at a glance
+ * every port looked like every other one. Reading it meant reading all of it.
+ *
+ * So the row is built the way someone actually scans it: the socket number as
+ * a badge you can find with your eye, the link state as a colour on that badge
+ * rather than a word to parse, what is on the far end as the one plain-language
+ * line, and everything measured *about* the port as labelled chips underneath.
+ * A chip is only there when something measured it, so a sparse row is a sparse
+ * port rather than a row of dashes.
+ */
+.port-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 11px;
+  align-items: start;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.port-row + .port-row {
+  margin-top: 6px;
+}
+
+/*
+ * The scanning form.
+ *
+ * A switch has twenty-four of these and a panel is three hundred pixels wide:
+ * every port described in full is eight screens of chips, which is not a list
+ * anybody reads. So the list answers "which socket is which" in one line each,
+ * and the port someone picks answers everything else. Clicking a line is the
+ * same act as clicking its socket in the picture above — one selection, two
+ * ways in.
+ */
+.port-row--compact {
+  align-items: center;
+  gap: 9px;
+  padding: 5px 9px;
+  border-color: transparent;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.port-row--compact + .port-row--compact {
+  margin-top: 2px;
+}
+
+.port-row--compact:hover {
+  background: var(--panel2);
+  border-color: var(--line);
+}
+
+.port-row--compact .port-row__num {
+  width: 22px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+.port-row--compact .port-row__what {
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.port-row--compact .port-row__state {
+  padding-top: 0;
+  font-size: 9.5px;
+}
+
+/* The one that is open, and the way back to the rest of them. */
+.port-row--open {
+  border-color: var(--tone, var(--line2));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone, var(--line2)) 25%, transparent);
+}
+
+/* A port with no link is still worth reading, just not first. */
+.port-row--idle {
+  background: transparent;
+}
+
+/*
+ * The socket number, in the port's own colour.
+ *
+ * The same colour the strip above uses for that socket, so the eye carries
+ * from the picture of the case to the line describing it without a legend.
+ */
+.port-row__num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  border: 1px solid var(--tone, var(--line));
+  background: color-mix(in srgb, var(--tone, var(--line2)) 14%, transparent);
+  color: var(--tone, var(--text2));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.port-row__what {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.port-row__far {
+  color: var(--text2);
+  font-weight: 400;
+}
+
+/* Nothing announced itself: a state, not a value, so it does not read as one. */
+.port-row__quiet {
+  color: var(--text3);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.port-row__state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+  padding-top: 4px;
+}
+
+/*
+ * The measured facts, one chip each.
+ *
+ * Named `fact-chip` rather than `chip`, which the title bar's source picker
+ * already owns: the first version of this took that name and turned the picker
+ * into a column of stacked words.
+ *
+ * Key above value, because the keys are the same on every row and the values
+ * are what differs: reading down a column of chips compares like with like.
+ */
+.fact-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.fact-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 7px 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel2);
+  max-width: 100%;
+}
+
+.fact-chip__k {
+  font-size: 8.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.fact-chip__v {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A chip that is the whole statement, with no value under it. */
+.fact-chip--flag {
+  justify-content: center;
+  padding: 4px 8px;
+  border-color: var(--tone, var(--line));
+  color: var(--tone, var(--text2));
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+}
+
 /* ------------------------------------------------------------ module cards */
+
+/*
+ * An outline round the cards of one zone.
+ *
+ * Dashed and unfilled on purpose: a filled panel behind the cards would read
+ * as a surface they sit on, and the cables crossing it would look like they
+ * pass over something. This is a boundary, not a container.
+ */
+.zone-area {
+  position: absolute;
+  /*
+   * Two pixels, because the whole surface is scaled: at the zoom someone uses
+   * to see a whole estate a hairline is half a pixel, which is how the first
+   * version of this managed to be invisible exactly when it was needed.
+   */
+  border: 1.5px dotted var(--zone-line, var(--line2));
+  border-radius: 16px;
+  /*
+   * A wash rather than a panel.
+   *
+   * Faint enough that the cards keep their own weight and a cable crossing it
+   * still reads as crossing open space — but present, because a hairline alone
+   * disappeared into the grid behind it.
+   */
+  background: var(--zone-fill, transparent);
+  pointer-events: none;
+  /* Behind the cards and the cables both: it is a backdrop, and it must never
+     take a click meant for a device. */
+  z-index: 0;
+}
+
+.zone-area__label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--zone-label, var(--text3));
+  /* Sits on the boundary, so it needs a ground of its own to break the line. */
+  background: var(--panel);
+  border: 1px solid var(--zone-line, var(--line2));
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/*
+ * The outer boundary: one family, one rectangle.
+ */
+/*
+ * Clickable, unlike the zone outlines inside it: clicking a group frames that
+ * group, and clicking the background frames the estate again. It stays behind
+ * the cards and takes only what falls between them, so a click meant for a
+ * device still reaches the device.
+ */
+.family-area {
+  position: absolute;
+  appearance: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  border: 2px dashed var(--zone-line, var(--line2));
+  border-radius: 20px;
+  background: var(--zone-fill, transparent);
+  cursor: zoom-in;
+  z-index: 0;
+  transition: background 0.12s ease;
+}
+
+.family-area:hover {
+  /* The wash a shade stronger, and nothing else: a boundary that thickens or
+     moves on hover redraws the map under the pointer. */
+  background: color-mix(in srgb, var(--zone-label, var(--line2)) 7%, transparent);
+}
+
+/* Already framed, so the click that means anything is the one on the way out. */
+.family-area--focused {
+  cursor: zoom-out;
+}
+
+.family-area:focus-visible {
+  outline: 2px solid var(--zone-label, var(--accent));
+  outline-offset: 3px;
+}
+
+/*
+ * The family label. Larger than a zone's, and on the outer boundary.
+ */
+.family-area__label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--zone-label, var(--text3));
+  background: var(--panel);
+  border: 1.5px solid var(--zone-line, var(--line2));
+  border-radius: 999px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.zone-area__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/*
+ * The dry run's operations.
+ *
+ * The module card's shape without its clickability: a dry run is read, not
+ * toggled. Wider than a module card because the field lines inside carry
+ * values — a subnet, a VLAN list — that must not wrap every time.
+ */
+.diff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  gap: 10px;
+}
+
+.diff-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+}
+
+/* The verdict, as a hairline along the top edge. */
+.diff-card__stripe {
+  height: 2px;
+  flex: none;
+  background: var(--stripe, var(--line));
+}
+
+.diff-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 11px 13px 0;
+}
+
+.diff-card__body {
+  padding: 8px 13px 0;
+}
+
+.diff-card__foot {
+  margin-top: auto;
+  padding: 10px 13px 11px;
+}
+
+.diff-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/*
+ * Label on the left, values on the right.
+ *
+ * The label column is capped rather than fixed: a long field name shrinks it
+ * instead of pushing the values off the card, and a card narrow enough that
+ * both do not fit drops the values onto their own line.
+ */
+.diff-fields__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
+  line-height: 1.5;
+}
+
+.diff-fields__label {
+  flex: 0 1 auto;
+  min-width: 68px;
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.diff-fields__values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.diff-fields__arrow {
+  font-size: 10px;
+  color: var(--text3);
+}
+
+/* A value, as a chip: one per list item, so a VLAN list reads as a list. */
+.val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line2);
+  background: var(--panel2);
+  color: var(--val, var(--text));
+  /* A subnet or a long name wraps inside the chip rather than widening it. */
+  overflow-wrap: anywhere;
+}
+
+/* What is being replaced: present, but plainly on its way out. */
+.val--from {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--text3);
+  text-decoration: line-through;
+  text-decoration-color: var(--line2);
+}
+
+/* Nothing set. Not a zero, not an empty string — nothing. */
+.val--empty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text3);
+  text-decoration: none;
+}
 
 .module-grid {
   display: grid;

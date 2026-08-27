@@ -29,6 +29,8 @@ export type NodeKind =
   | 'ap'
   | 'clients'
   | 'host'
+  /** A software bridge on a hypervisor: what its guests are actually wired to. */
+  | 'bridge'
   | 'storage'
   | 'ct'
   | 'vm'
@@ -48,6 +50,7 @@ export const NODE_KINDS: Record<NodeKind, NodeKindMeta> = {
   ap: { code: 'AP' },
   clients: { code: 'CL' },
   host: { code: 'PVE' },
+  bridge: { code: 'BR' },
   storage: { code: 'ZFS' },
   ct: { code: 'CT' },
   vm: { code: 'VM' },
@@ -87,6 +90,16 @@ export interface NetNode {
   name: string;
   subtitle: string;
   status: Tone;
+  /**
+   * The addresses the device answers on, where anything measured them.
+   *
+   * Carried as fields rather than left in `facts` because they are looked up
+   * rather than read: the far end of a cable, a row in a port list, a device
+   * being told apart from the identical one beside it. A fact row is prose in
+   * whatever language the estate was built in; these are the values.
+   */
+  ip?: string;
+  mac?: string;
   /** Top-left position on the topology canvas. */
   x: number;
   y: number;
@@ -123,8 +136,33 @@ export interface NodePort {
   poePower: string;
   /** What the controller passes on this port: "all", "disabled" or a group. */
   vlanMode: string;
+  /**
+   * How the port is configured, as the controller has it.
+   *
+   * The port view used to answer "what is plugged in here" and not "what is
+   * this port set to", which is the other half of the same question — and the
+   * half someone is looking for when a device is on the wrong network. All
+   * three are measurements, not the plan's intentions: the profile is the one
+   * the port names, the untagged network is the one that profile names, and
+   * the mode is what that profile passes.
+   */
+  profile: string;
+  /** "all", "native", "customize" or "disabled" — what the profile forwards. */
+  forward: string;
+  /** The untagged network on the port, by VLAN id and by name. 0 when none. */
+  nativeVlan: number;
+  nativeNetwork: string;
   neighbour: string;
   neighbourPort: string;
+  /**
+   * The far end's own addresses, wherever anything measured them.
+   *
+   * A name answers "what is it"; these answer "which one" — the question
+   * anybody standing at the rack with two identical boxes actually has. Empty
+   * where nothing reported them.
+   */
+  neighbourMac: string;
+  neighbourIp: string;
   uplink: boolean;
 }
 

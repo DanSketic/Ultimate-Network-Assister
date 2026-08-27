@@ -119,6 +119,14 @@ export interface Blueprint {
   enabledModules: string[];
   /** What is plugged into which switch port. Empty until the user says. */
   ports: PortAssignment[];
+  /**
+   * Networks the estate has that the preset never described.
+   *
+   * Optional in storage on purpose: every blueprint saved before this existed
+   * has no such field, and a reader that insists on one would lose them.
+   * Read it as `extraNetworks ?? []` and it is simply empty for those.
+   */
+  extraNetworks?: ExtraNetwork[];
   createdAt: string;
   updatedAt: string;
 }
@@ -130,8 +138,23 @@ export interface Blueprint {
  * port must pass follow. Typing tagged VLAN lists by hand is exactly how a
  * trunk ends up missing one network and an access point stops handing out an
  * SSID for reasons nobody can find.
+ *
+ * `off` and `unused` are two different statements and both are worth making.
+ * `off` is a decision someone took in the controller — the port is disabled,
+ * and the layout carries that rather than quietly re-enabling it. `unused` is
+ * the honest reading of a port with nothing on it: it exists, the estate can
+ * see it is free, and the plan has nothing to say about it. Before there was a
+ * word for the second, such ports were left out of the layout altogether,
+ * which made a 24-port switch look like an 8-port one.
  */
-export type PortRole = 'access' | 'ap' | 'server' | 'trunk' | 'uplink' | 'off';
+export type PortRole =
+  | 'access'
+  | 'ap'
+  | 'server'
+  | 'trunk'
+  | 'uplink'
+  | 'off'
+  | 'unused';
 
 /** One port, as the user describes it. Plain data — no VLANs decided here. */
 export interface PortAssignment {
@@ -198,6 +221,28 @@ export type NetworkRole =
   | 'guest'
   /** Wired cameras. Their own role so an AP trunk does not carry them. */
   | 'cameras';
+
+/**
+ * A network the user adds to the target state by hand.
+ *
+ * A preset describes an estate it was designed for, and no preset describes
+ * every estate: a survey routinely finds networks the plan has no counterpart
+ * for — a casting VLAN per household, a network for the Wi-Fi gadgets — and
+ * before this there was nowhere to put them. A port sitting on one could not
+ * name its network, and the handbook described an estate missing the parts
+ * nobody had thought to parameterise.
+ *
+ * The same shape as a planned network minus what only a preset can know: it
+ * belongs to no module, and to no household.
+ */
+export interface ExtraNetwork {
+  vlan: number;
+  name: string;
+  cidr: string;
+  gateway: string;
+  role: NetworkRole;
+  purpose: string;
+}
 
 export interface PlannedNetwork {
   vlan: number;
@@ -432,6 +477,19 @@ export interface PlanStep {
   /** Changing this can cut the remote session; a local console must be proven. */
   requiresLocalConsole: boolean;
   prechecks: string[];
+  /**
+   * Steps that have to be done before this one, by id.
+   *
+   * The plan has always been in the right order, and reading it in order was
+   * left to the reader. That was fine while every command was copied by hand —
+   * a person reading step 31 has read 30 — and stopped being fine the moment
+   * the application could run a step on its own: `pct create` against a pool
+   * that does not exist yet fails, and `--rootfs fastpool:8` against a pool
+   * that exists under another name succeeds at making the wrong thing.
+   *
+   * Empty for a step that depends on nothing, which is most of them.
+   */
+  requires: string[];
   actions: PlanAction[];
   verification: string[];
 }

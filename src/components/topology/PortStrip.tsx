@@ -1,5 +1,6 @@
 import { useI18n } from '@/i18n';
 import type { NodePort } from '@/data/model';
+import { cx, vars } from '@/lib/css';
 import type { Palette } from '@/lib/palette';
 
 /**
@@ -148,62 +149,183 @@ function Legend({ color, label }: { color: string; label: string }) {
   );
 }
 
-/** The detail for one port, or the whole list when none is picked. */
+/** One measured fact about a port: a label, and the value under it. */
+function Chip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="fact-chip" title={`${label}: ${value}`}>
+      <span className="fact-chip__k">{label}</span>
+      <span className="fact-chip__v">{value}</span>
+    </span>
+  );
+}
+
+/** A fact that is only ever true or absent — uplink, PoE — in its own colour. */
+function Flag({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="fact-chip fact-chip--flag mono" style={vars({ '--tone': color })}>
+      {label}
+    </span>
+  );
+}
+
+/**
+ * The detail for one port, or the whole list when none is picked.
+ *
+ * Three questions, in the order they get asked: which socket, what is on the
+ * other end, and what the port is set to. The first two are the line you read;
+ * the third is the chips below it, which are there to be scanned rather than
+ * read — a row of them lines up with the row above, so an odd one out shows
+ * itself without anybody comparing values by hand.
+ */
 export function PortList({
   ports,
   palette,
+  accent,
   selected,
+  onSelect,
 }: {
   ports: NodePort[];
   palette: Palette;
+  accent: string;
   selected: number | null;
+  onSelect: (idx: number | null) => void;
 }) {
   const { t } = useI18n();
+  const x = t.topology;
   const shown = selected === null ? ports : ports.filter((p) => p.idx === selected);
   if (shown.length === 0) return null;
 
   return (
     <div style={{ marginTop: 12 }}>
-      {shown.map((p) => (
-        <div
-          key={p.idx}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '34px 1fr auto',
-            gap: 10,
-            alignItems: 'baseline',
-            padding: '7px 0',
-            borderTop: '1px solid var(--line)',
-            fontSize: 11,
-          }}
+      {selected !== null ? (
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ fontSize: 10.5, padding: '3px 8px', marginBottom: 8 }}
+          onClick={() => onSelect(null)}
         >
-          <span className="mono" style={{ color: 'var(--text3)' }}>
-            {p.idx}
-          </span>
-          <span style={{ minWidth: 0 }}>
-            <span style={{ fontWeight: 500 }}>{p.name || t.topology.portUnnamed}</span>
-            {p.neighbour ? (
-              <span style={{ color: 'var(--text2)' }}>
-                {' → '}
-                {p.neighbour}
-                {p.neighbourPort ? ` (${p.neighbourPort})` : ''}
+          {x.portAll}
+        </button>
+      ) : null}
+      {shown.map((p) => {
+        const tone = toneOf(p, palette, accent);
+        const forward =
+          p.forward && p.forward in x.portForward
+            ? x.portForward[p.forward as keyof typeof x.portForward]
+            : '';
+
+        const far = p.neighbour
+          ? `${p.neighbour}${p.neighbourPort ? ` (${p.neighbourPort})` : ''}`
+          : '';
+
+        if (selected === null) {
+          return (
+            <button
+              key={p.idx}
+              type="button"
+              className={cx('port-row', 'port-row--compact', !p.up && 'port-row--idle')}
+              style={vars({ '--tone': tone })}
+              onClick={() => onSelect(p.idx)}
+            >
+              <span className="port-row__num">{p.idx}</span>
+              <span className="port-row__what">
+                {p.name || x.portUnnamed}
+                {far ? <span className="port-row__far">{` → ${far}`}</span> : null}
               </span>
-            ) : p.up ? (
-              <span style={{ color: 'var(--text3)' }}> · {t.topology.portNoLldp}</span>
-            ) : null}
-            <div className="mono" style={{ fontSize: 9.5, color: 'var(--text3)', marginTop: 3 }}>
-              {p.vlanMode ? `VLAN: ${p.vlanMode}` : t.topology.portVlanUnknown}
-              {p.poe && p.poePower ? ` · PoE ${p.poePower} W` : p.poe ? ' · PoE' : ''}
-            </div>
-          </span>
-          <span
-            className="mono"
-            style={{ fontSize: 10, color: p.up ? palette.ok : 'var(--text3)', whiteSpace: 'nowrap' }}
+              <span
+                className="port-row__state"
+                style={{ color: p.up ? 'var(--text2)' : 'var(--text3)' }}
+              >
+                {p.poe ? (
+                  <span
+                    title="PoE"
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      background: palette.warn,
+                      flex: 'none',
+                    }}
+                  />
+                ) : null}
+                {p.up ? `${p.speed}` : '—'}
+              </span>
+            </button>
+          );
+        }
+
+        return (
+          <div
+            key={p.idx}
+            className={cx('port-row', 'port-row--open', !p.up && 'port-row--idle')}
+            style={vars({ '--tone': tone })}
           >
-            {p.up ? `${p.speed} Mb/s` : t.topology.portDown}
-          </span>
-        </div>
-      ))}
+            <span className="port-row__num">{p.idx}</span>
+
+            <div style={{ minWidth: 0 }}>
+              <div className="port-row__what">
+                {p.name || x.portUnnamed}
+                {far ? (
+                  <span className="port-row__far">{` → ${far}`}</span>
+                ) : p.up ? (
+                  <span className="port-row__quiet"> · {x.portNoLldp}</span>
+                ) : null}
+              </div>
+
+              <div className="fact-chips">
+                {/* Who, exactly. A name says what it is; these say which one. */}
+                {p.neighbourIp ? <Chip label="IP" value={p.neighbourIp} /> : null}
+                {p.neighbourMac ? <Chip label="MAC" value={p.neighbourMac} /> : null}
+
+                {/* And what the port itself is set to. */}
+                {p.profile ? <Chip label={x.portProfile} value={p.profile} /> : null}
+                {p.nativeVlan || p.nativeNetwork ? (
+                  <Chip
+                    label={x.portNative}
+                    value={
+                      p.nativeVlan
+                        ? `${p.nativeVlan}${p.nativeNetwork ? ` · ${p.nativeNetwork}` : ''}`
+                        : p.nativeNetwork
+                    }
+                  />
+                ) : null}
+                {forward ? <Chip label={x.portForwardLabel} value={forward} /> : null}
+                {p.vlanMode ? <Chip label="VLAN" value={p.vlanMode} /> : null}
+
+                {p.uplink ? <Flag label={x.portUplinkRole} color={accent} /> : null}
+                {p.poe ? (
+                  <Flag label={p.poePower ? `PoE ${p.poePower} W` : 'PoE'} color={palette.warn} />
+                ) : null}
+                {!p.enabled ? <Flag label={x.portForward.disabled} color={palette.idle} /> : null}
+
+                {/* A port nobody configured says so, rather than showing a row
+                    of chips with nothing in them. */}
+                {!p.profile && !p.vlanMode ? (
+                  <span className="fact-chip fact-chip--flag" style={{ color: 'var(--text3)' }}>
+                    {x.portNoProfile}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <span
+              className="port-row__state"
+              style={{ color: p.up ? 'var(--text2)' : 'var(--text3)' }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: tone,
+                  flex: 'none',
+                }}
+              />
+              {p.up ? `${p.speed} Mb/s` : x.portDown}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

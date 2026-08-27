@@ -8,6 +8,7 @@ import type {
   NetLink,
   NetNode,
   NodeKind,
+  Provenance,
   Recommendation,
   Risk,
   ScanLogEntry,
@@ -25,14 +26,17 @@ import {
   type LiveVerdict,
 } from './liveFirewall';
 import { CANVAS_W, NODE_W } from '@/lib/geometry';
+import { familyOf } from '@/lib/zones';
 import type { Tone } from '@/lib/palette';
 import {
   takesBackups,
   type Profile,
   type ProxmoxSnapshot,
   type SurveySnapshot,
+  type UnifiClient,
   type UnifiDevice,
   type UnifiSnapshot,
+  type UnifiWan,
 } from './model';
 
 /*
@@ -101,7 +105,23 @@ export interface EstateBar {
 /* ------------------------------------------------------------------ layout */
 
 const COL_GAP = 80;
-const ROW_H = 186;
+/*
+ * The gap between the network's column and the hypervisor's.
+ *
+ * Wider than the gap between two cards, because it is the seam the two family
+ * outlines run along: at a card's own spacing the two boundaries would touch,
+ * and a boundary that touches another reads as one shape.
+ */
+const COLUMN_GAP = 150;
+/*
+ * Row spacing.
+ *
+ * Set by what has to fit in the band between two rows, not by taste: a zone
+ * boundary, the family boundary outside it, the gap that keeps the two apart,
+ * and the same again for the row below — with the two families' boundaries
+ * still clear of each other in the middle.
+ */
+const ROW_H = 200;
 const MAX_PER_ROW = 6;
 
 interface Draft extends Omit<NetNode, 'x' | 'y'> {
@@ -173,8 +193,26 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
   const layerOf = new Map<string, number>();
   tiers.forEach((tier, i) => tier.forEach((n) => layerOf.set(n.id, i)));
 
+  /*
+   * Which column each card ends up in, decided here rather than at placement.
+   *
+   * The layout puts the network on the left and the hypervisor on the right,
+   * and if the ordering below did not know that, it would spend its effort
+   * arranging a row that is never drawn: the placement would then split the
+   * row into its two columns and undo the arrangement, crossings and all. So
+   * the column is a constraint from the start — every step below reorders
+   * within a column and never across the seam between them.
+   */
+  const columnOf = new Map<string, number>();
+  tiers.forEach((tier) =>
+    tier.forEach((n) => columnOf.set(n.id, familyOf(n.kind) === 'proxmox' ? 1 : 0)),
+  );
+  const column = (id: string) => columnOf.get(id) ?? 0;
+
   // Ids per layer, placeholders included.
-  const order: string[][] = tiers.map((tier) => tier.map((n) => n.id));
+  const order: string[][] = tiers.map((tier) =>
+    [...tier].sort((a, b) => column(a.id) - column(b.id)).map((n) => n.id),
+  );
   // Edges between each layer and the one below it.
   const between: [string, string][][] = tiers.map(() => []);
 
@@ -187,8 +225,13 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
     const [head, tail] = from < to ? [link.from, link.to] : [link.to, link.from];
 
     let previous = head;
+    // A cable passing a tier keeps its channel in its own column: the two ends
+    // agree where they are, and where they do not the network side is the one
+    // the cable is passing through.
+    const laneColumn = Math.min(column(link.from), column(link.to));
     for (let layer = top + 1; layer < bottom; layer++) {
       const stand = `${VIRTUAL}${index}:${layer}`;
+      columnOf.set(stand, laneColumn);
       order[layer]!.push(stand);
       between[layer - 1]!.push([previous, stand]);
       previous = stand;
@@ -254,12 +297,79 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
    */
   const CROSSING_WEIGHT = 10;
   const SPREAD_WEIGHT = 9;
+  /*
+   * How far apart two connected cards are left.
+   *
+   * Crossings and stretched tier cables are about the tangle; this is about
+   * the reading. A cable that runs the width of the map is followed with a
+   * finger even when it crosses nothing, so every arrangement is also scored
+   * on the plain horizontal distance between the two ends of each cable —
+   * measured in card widths, and worth less than a crossing, so it decides
+   * between arrangements that are otherwise as untangled as each other.
+   */
+  const NEAR_WEIGHT = 2;
+
+  /**
+   * Roughly where each card will land.
+   *
+   * Mirrors what the placement does with the two columns: a family keeps its
+   * own band, and a row's block is centred inside it. Approximate on purpose —
+   * it is a comparison between arrangements, not a drawing.
+   */
+  const estimateX = (): Map<string, number> => {
+    const widthOf = (id: string) => (id.startsWith(VIRTUAL) ? LANE_W : NODE_W);
+    const blocks = order.map((layer) => {
+      const columns: [string[], string[]] = [[], []];
+      for (const id of layer) columns[column(id) === 1 ? 1 : 0]!.push(id);
+      return columns;
+    });
+    const spanOf = (ids: string[]) =>
+      ids.length === 0
+        ? 0
+        : ids.reduce((sum, id) => sum + widthOf(id), 0) + (ids.length - 1) * COL_GAP;
+    const columnSpan = [
+      Math.max(0, ...blocks.map(([left]) => spanOf(left))),
+      Math.max(0, ...blocks.map(([, right]) => spanOf(right))),
+    ];
+    const gutter = columnSpan[0]! > 0 && columnSpan[1]! > 0 ? COLUMN_GAP : 0;
+    const startOf = [0, columnSpan[0]! + gutter];
+
+    const at = new Map<string, number>();
+    for (const [left, right] of blocks) {
+      [left, right].forEach((ids, c) => {
+        let x = startOf[c]! + (columnSpan[c]! - spanOf(ids)) / 2;
+        for (const id of ids) {
+          at.set(id, x + widthOf(id) / 2);
+          x += widthOf(id) + COL_GAP;
+        }
+      });
+    }
+    return at;
+  };
+
+  /** Total horizontal distance of every cable, in card widths. */
+  const stretch = () => {
+    const at = estimateX();
+    let sum = 0;
+    for (const edges of between) {
+      for (const [a, b] of edges) {
+        const x = at.get(a);
+        const y = at.get(b);
+        if (x === undefined || y === undefined) continue;
+        sum += Math.abs(x - y) / (NODE_W + COL_GAP);
+      }
+    }
+    return sum;
+  };
 
   const total = () =>
     between.reduce(
-      (sum, edges, i) => sum + crossingsBetween(order[i]!, order[i + 1] ?? [], edges) * CROSSING_WEIGHT,
+      (sum, edges, i) =>
+        sum + crossingsBetween(order[i]!, order[i + 1] ?? [], edges) * CROSSING_WEIGHT,
       0,
-    ) + order.reduce((sum, _, i) => sum + spread(i) * SPREAD_WEIGHT, 0);
+    ) +
+    order.reduce((sum, _, i) => sum + spread(i) * SPREAD_WEIGHT, 0) +
+    stretch() * NEAR_WEIGHT;
 
   const snapshot = () => order.map((layer) => [...layer]);
   let best = snapshot();
@@ -292,7 +402,7 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
       return { id, key, i };
     });
 
-    keyed.sort((a, b) => a.key - b.key || a.i - b.i);
+    keyed.sort((a, b) => column(a.id) - column(b.id) || a.key - b.key || a.i - b.i);
     order[index] = keyed.map((k) => k.id);
   };
 
@@ -308,13 +418,16 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
       (i + 1 < order.length
         ? crossingsBetween(order[i]!, order[i + 1]!, between[i]!) * CROSSING_WEIGHT
         : 0) +
-      spread(i) * SPREAD_WEIGHT;
+      spread(i) * SPREAD_WEIGHT +
+      stretch() * NEAR_WEIGHT;
 
     for (let round = 0; round < 6; round++) {
       let improved = false;
       for (let i = 0; i < order.length; i++) {
         const layer = order[i]!;
         for (let j = 0; j + 1 < layer.length; j++) {
+          // Never across the seam: the placement would put them back.
+          if (column(layer[j]!) !== column(layer[j + 1]!)) continue;
           const before = localCost(i);
           [layer[j], layer[j + 1]] = [layer[j + 1]!, layer[j]!];
           if (localCost(i) < before) improved = true;
@@ -344,26 +457,68 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
       for (const [a, b] of edges) {
         if (Math.abs(layer.indexOf(a) - layer.indexOf(b)) <= 1) continue;
 
-        let bestArrangement = [...layer];
+        let best = snapshot();
         let bestScore = total();
 
         for (const [moving, anchor] of [
           [a, b],
           [b, a],
         ]) {
-          const without = layer.filter((id) => id !== moving);
+          const without = order[layerIndex]!.filter((id) => id !== moving);
           const at = without.indexOf(anchor);
           if (at < 0) continue;
-          for (const where of [at, at + 1]) {
+
+          /*
+           * Beside the anchor, or as near to it as the column allows.
+           *
+           * A cable along the tier often runs between the columns — a
+           * hypervisor and the switch it is plugged into — and the two ends
+           * cannot be brought together without crossing the seam. Landing the
+           * card at the edge of its own column that faces the anchor is the
+           * whole of the improvement that is available, and it is a large one:
+           * the cable then spans the gutter and nothing else.
+           */
+          const sameColumn = column(moving!) === column(anchor!);
+          const mine = without
+            .map((id, i) => (column(id) === column(moving!) ? i : -1))
+            .filter((i) => i >= 0);
+          const edge = at < (mine[0] ?? 0) ? (mine[0] ?? 0) : (mine[mine.length - 1] ?? 0) + 1;
+          const places = sameColumn ? [at, at + 1] : [edge];
+
+          for (const where of places) {
+            const before = snapshot();
             order[layerIndex] = [...without.slice(0, where), moving, ...without.slice(where)];
+
+            /*
+             * Let the rest of the map settle before judging the move.
+             *
+             * This is what the search was missing. Sliding a switch across its
+             * row leaves the cards it feeds where they were, so the move is
+             * scored with every one of its cables stretched across the map —
+             * and rejected, even where moving the switch *and* what hangs off
+             * it is plainly better. A pair that has to move together can never
+             * be found one card at a time.
+             *
+             * So the neighbouring rows are swept onto the new arrangement
+             * first, and the score is of the settled map. The move is kept
+             * only if that is better; otherwise everything goes back.
+             */
+            for (let i = layerIndex + 1; i < order.length; i++) sweep(i, 'up', 'mean');
+            for (let i = layerIndex - 1; i >= 0; i--) sweep(i, 'down', 'mean');
+
             const score = total();
             if (score < bestScore) {
               bestScore = score;
-              bestArrangement = [...order[layerIndex]!];
+              best = snapshot();
             }
+            before.forEach((row, i) => {
+              order[i] = row;
+            });
           }
         }
-        order[layerIndex] = bestArrangement;
+        best.forEach((row, i) => {
+          order[i] = row;
+        });
       }
     }
 
@@ -373,6 +528,60 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
       best = snapshot();
     }
     if (bestCount === 0) break;
+  }
+
+  /*
+   * Cards of the same zone, side by side — where it costs nothing.
+   *
+   * The map is read in two ways at once: which cable goes where, and what
+   * belongs with what. The ordering above answers the first and is blind to
+   * the second, so a row could come out as switch · store · host · bridge —
+   * management and servers interleaved, and no way to draw an outline round
+   * either without enclosing the other.
+   *
+   * So each row is offered a version of itself with its zones gathered, and it
+   * is kept only when the whole objective — crossings and stretched cables —
+   * says it is no worse. Tidiness never buys itself a tangle; where the two
+   * disagree, the cables win, and that row simply gets two outlines instead of
+   * one.
+   */
+  const zoneOfId = new Map(tiers.flat().map((n) => [n.id, n.zone]));
+  order.forEach((_, i) => {
+    order[i] = [...best[i]!];
+  });
+  let zoned = total();
+
+  for (let i = 0; i < order.length; i++) {
+    const layer = order[i]!;
+    const cards = layer.filter((id) => !id.startsWith(VIRTUAL));
+    if (cards.length < 3) continue;
+
+    // Zones in the order they first appear, so the arrangement the sweeps
+    // arrived at is disturbed as little as gathering allows.
+    const byZone = new Map<string, string[]>();
+    for (const id of cards) {
+      // Keyed by column first: a zone that appears on both sides of the seam
+      // must stay two groups, or gathering would drag a card across it.
+      const zone = `${column(id)}:${zoneOfId.get(id) ?? ''}`;
+      const group = byZone.get(zone);
+      if (group) group.push(id);
+      else byZone.set(zone, [id]);
+    }
+    const gathered = [...byZone.values()].flat();
+    if (gathered.join('|') === cards.join('|')) continue;
+
+    // The channels keep their positions; only the cards move between them.
+    let k = 0;
+    const candidate = layer.map((id) => (id.startsWith(VIRTUAL) ? id : gathered[k++]!));
+    order[i] = candidate;
+
+    const cost = total();
+    if (cost <= zoned) {
+      zoned = cost;
+      best[i] = [...candidate];
+    } else {
+      order[i] = layer;
+    }
   }
 
   /*
@@ -399,7 +608,10 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
     best[layer!] = [
       ...row.slice(0, low + 1).filter((id) => !trapped.includes(id)),
       ...row.slice(low + 1, high).filter((id) => !trapped.includes(id)),
-      ...row.slice(high).filter((id) => !trapped.includes(id)).slice(0, 1),
+      ...row
+        .slice(high)
+        .filter((id) => !trapped.includes(id))
+        .slice(0, 1),
       ...trapped,
       ...row.slice(high + 1).filter((id) => !trapped.includes(id)),
     ];
@@ -429,27 +641,198 @@ function orderTiers(tiers: Draft[][], links: NetLink[]): Slot[][] {
  * the point: it is where a cable crossing this tier runs, and closing it up
  * would put that cable back over its neighbours.
  */
-function placeTiers(tiers: Slot[][]): NetNode[] {
+function placeTiers(tiers: Slot[][], links: NetLink[]): NetNode[] {
   const widthOf = (slot: Slot) => (slot.lane === undefined ? NODE_W : LANE_W);
+
+  /*
+   * Two columns: the network, and the hypervisor.
+   *
+   * Every row used to be centred on its own, so a family's cards sat at a
+   * different span on every row — the gateway in the middle, the switches to
+   * the left of it, the guests to the right — and there was no shape that
+   * enclosed one family without cutting through the other. Fixing the columns
+   * fixes that: each family keeps the same band of the canvas all the way
+   * down, and the outline round it is a plain rectangle.
+   *
+   * The way out goes in the network column. It is a card of its own, on a row
+   * of its own, and giving it a third column would push the whole map sideways
+   * to make room for one card.
+   */
+  const columnOf = (slot: Slot): 'network' | 'proxmox' =>
+    slot.node && familyOf(slot.node.kind) === 'proxmox' ? 'proxmox' : 'network';
+
+  const rows = tiers.map((tier) => {
+    const network: Slot[] = [];
+    const proxmox: Slot[] = [];
+    // A channel belongs to the column of the card it was opened beside, so a
+    // cable passing a tier keeps its lane inside the right band.
+    let current: 'network' | 'proxmox' = 'network';
+    for (const slot of tier) {
+      if (slot.node) current = columnOf(slot);
+      (current === 'proxmox' ? proxmox : network).push(slot);
+    }
+    return { network, proxmox };
+  });
+
+  const lineWidth = (slots: Slot[]) =>
+    slots.length === 0
+      ? 0
+      : slots.reduce((sum, s) => sum + widthOf(s), 0) + (slots.length - 1) * COL_GAP;
+
+  /** How wide a column has to be: its widest line, once wrapping is applied. */
+  const columnWidth = (pick: (row: (typeof rows)[number]) => Slot[]) =>
+    Math.max(
+      0,
+      ...rows.map((row) => {
+        const slots = pick(row);
+        const cards = slots.filter((s) => s.lane === undefined).length;
+        const rowsNeeded = Math.max(1, Math.ceil(cards / MAX_PER_ROW));
+        const perLine = Math.max(1, Math.ceil(slots.length / rowsNeeded));
+        let widest = 0;
+        for (let i = 0; i < slots.length; i += perLine) {
+          widest = Math.max(widest, lineWidth(slots.slice(i, i + perLine)));
+        }
+        return widest;
+      }),
+    );
+
+  const networkWidth = columnWidth((r) => r.network);
+  const proxmoxWidth = columnWidth((r) => r.proxmox);
+  const gutter = networkWidth > 0 && proxmoxWidth > 0 ? COLUMN_GAP : 0;
+  const startX = Math.round((CANVAS_W - (networkWidth + gutter + proxmoxWidth)) / 2);
+  const columnX = {
+    network: startX,
+    proxmox: startX + networkWidth + gutter,
+  };
+  const columnW = { network: networkWidth, proxmox: proxmoxWidth };
+
   let y = 24;
-  const out: NetNode[] = [];
 
-  for (const tier of tiers) {
-    if (tier.length === 0) continue;
-    // Wrapping counts cards, since that is what makes a row look crowded.
-    const cards = tier.filter((s) => s.lane === undefined).length;
-    const perRow = cards > MAX_PER_ROW ? MAX_PER_ROW : tier.length;
+  /** One drawn line: a column's slots on one row, and where the block starts. */
+  interface Line {
+    column: 'network' | 'proxmox';
+    slots: Slot[];
+    y: number;
+    width: number;
+    x: number;
+  }
+  const drawn: Line[] = [];
 
-    for (let i = 0; i < tier.length; i += perRow) {
-      const line = tier.slice(i, i + perRow);
-      const width =
-        line.reduce((sum, s) => sum + widthOf(s), 0) + (line.length - 1) * COL_GAP;
-      let x = Math.round((CANVAS_W - width) / 2);
-      for (const slot of line) {
-        if (slot.node) out.push({ ...slot.node, x, y });
-        x += widthOf(slot) + COL_GAP;
+  for (const row of rows) {
+    if (row.network.length === 0 && row.proxmox.length === 0) continue;
+
+    // Each column wraps on its own, and the tier is as tall as the column that
+    // needed the most lines.
+    const lines = (slots: Slot[]) => {
+      if (slots.length === 0) return [] as Slot[][];
+      const cards = slots.filter((s) => s.lane === undefined).length;
+      /*
+       * Wrapping splits evenly rather than filling the first line.
+       *
+       * Seven cards at a cap of six came out as six and a stray one below
+       * them, which reads as an outlier rather than as a row that did not fit.
+       * Four and three is the same information with nothing singled out.
+       */
+      const rowsNeeded = Math.max(1, Math.ceil(cards / MAX_PER_ROW));
+      const perLine = Math.ceil(slots.length / rowsNeeded);
+      const out: Slot[][] = [];
+      for (let i = 0; i < slots.length; i += perLine) out.push(slots.slice(i, i + perLine));
+      return out;
+    };
+
+    const network = lines(row.network);
+    const proxmox = lines(row.proxmox);
+
+    for (let line = 0; line < Math.max(network.length, proxmox.length); line++) {
+      for (const [column, slots] of [
+        ['network', network[line]],
+        ['proxmox', proxmox[line]],
+      ] as const) {
+        if (!slots || slots.length === 0) continue;
+        const width = lineWidth(slots);
+        drawn.push({
+          column,
+          slots,
+          y,
+          width,
+          // Centred inside its own column to begin with; the pass below slides
+          // it to where its cables want it.
+          x: columnX[column] + (columnW[column] - width) / 2,
+        });
       }
       y += ROW_H;
+    }
+  }
+
+  /*
+   * Sliding each line along until its cables are as short as they can be.
+   *
+   * Ordering decides who is left of whom; it cannot decide where the row sits.
+   * A row with one card in it was centred in its column, so a gateway could end
+   * up half a map away from the switch it feeds while the order was perfect —
+   * which is what "needlessly far apart" looks like on screen.
+   *
+   * Each line is offered the median of what its cables ask for, which is the
+   * standard treatment and the robust one: an outlier cable pulls the row a
+   * little, a majority pulls it all the way. The line never leaves its own
+   * column, so the two families keep their bands.
+   */
+  const centreOf = new Map<string, number>();
+  const placeCentres = () => {
+    centreOf.clear();
+    for (const line of drawn) {
+      let x = line.x;
+      for (const slot of line.slots) {
+        if (slot.node) centreOf.set(slot.node.id, x + NODE_W / 2);
+        x += widthOf(slot) + COL_GAP;
+      }
+    }
+  };
+
+  const partners = new Map<string, string[]>();
+  for (const link of links) {
+    (partners.get(link.from) ?? partners.set(link.from, []).get(link.from)!).push(link.to);
+    (partners.get(link.to) ?? partners.set(link.to, []).get(link.to)!).push(link.from);
+  }
+
+  for (let pass = 0; pass < 6; pass++) {
+    placeCentres();
+    const order = pass % 2 === 0 ? drawn : [...drawn].reverse();
+
+    for (const line of order) {
+      const wanted: number[] = [];
+      for (const slot of line.slots) {
+        if (!slot.node) continue;
+        const mine = centreOf.get(slot.node.id);
+        if (mine === undefined) continue;
+        for (const other of partners.get(slot.node.id) ?? []) {
+          // Only cables to another line: two cards on this one move together.
+          if (line.slots.some((s) => s.node?.id === other)) continue;
+          const theirs = centreOf.get(other);
+          if (theirs !== undefined) wanted.push(theirs - mine);
+        }
+      }
+      if (wanted.length === 0) continue;
+
+      wanted.sort((a, b) => a - b);
+      const middle =
+        wanted.length % 2 === 1
+          ? wanted[(wanted.length - 1) / 2]!
+          : (wanted[wanted.length / 2 - 1]! + wanted[wanted.length / 2]!) / 2;
+
+      const min = columnX[line.column];
+      const max = columnX[line.column] + columnW[line.column] - line.width;
+      line.x = Math.max(min, Math.min(max, line.x + middle));
+      placeCentres();
+    }
+  }
+
+  const out: NetNode[] = [];
+  for (const line of drawn) {
+    let x = Math.round(line.x);
+    for (const slot of line.slots) {
+      if (slot.node) out.push({ ...slot.node, x, y: line.y });
+      x += widthOf(slot) + COL_GAP;
     }
   }
 
@@ -626,13 +1009,29 @@ function deviceStatus(device: UnifiDevice): Tone {
 /** Which zone key a fixed address falls into, for the inspector's policy tab. */
 function zoneOf(kind: NodeKind): ZoneKey {
   switch (kind) {
+    case 'cloud':
+      return 'WAN';
     case 'gateway':
     case 'switch':
     case 'ap':
-    case 'host':
       return 'Mgmt';
+    /*
+     * The hypervisor goes with what runs on it.
+     *
+     * Its own address is on the management network, which is what put it here
+     * to begin with — but on the map it is the head of the server side, and a
+     * card sandwiched between its own bridge and its own store while belonging
+     * to a different group of them both is the one arrangement that cannot be
+     * outlined at all.
+     */
+    case 'host':
+      return 'Servers';
     case 'clients':
       return 'IoT';
+    // A bridge carries whatever its guests are tagged into, so it belongs with
+    // the machines on it rather than with the management plane.
+    case 'bridge':
+      return 'Servers';
     default:
       return 'Servers';
   }
@@ -642,9 +1041,22 @@ function zoneOf(kind: NodeKind): ZoneKey {
 
 function proxmoxNodes(
   pve: ProxmoxSnapshot,
+  /**
+   * VLAN id → the controller's name for it.
+   *
+   * So a guest tagged into 20 reads "20 · HOME" rather than a number nobody
+   * can place. Empty when there is no UniFi side to ask, and the number then
+   * stands on its own — which is still the measurement.
+   */
+  vlanNames: Map<number, string>,
   t: Dict,
-): { host: Draft[]; guests: Draft[]; storage: Draft[] } {
+): { host: Draft[]; bridges: Draft[]; guests: Draft[]; storage: Draft[] } {
   const f = t.findings;
+  const vlanLabel = (vlan: number | null) => {
+    if (vlan == null) return f.untagged;
+    const name = vlanNames.get(vlan);
+    return name ? `${vlan} · ${name}` : String(vlan);
+  };
   const host: Draft[] = pve.nodes.map((n) => {
     const storages = pve.storages.filter((s) => s.node === n.name);
     const worst = Math.max(0, ...storages.map((s) => pct(s.used, s.total)));
@@ -655,8 +1067,13 @@ function proxmoxNodes(
       kind: 'host' as NodeKind,
       name: n.name,
       subtitle: pve.version || 'Proxmox VE',
+      ip:
+        pve.interfaces.find((i) => i.node === n.name && i.address && i.active)?.address ??
+        undefined,
       status: n.status !== 'online' ? 'bad' : worst >= 85 || memPct >= 90 ? 'warn' : 'ok',
-      zone: 'Mgmt' as ZoneKey,
+      // With what runs on it, as `zoneOf` says for every other card of its
+      // kind: the host set its own zone here and the two had drifted apart.
+      zone: zoneOf('host'),
       facts: [
         { key: f.factVersion, value: pve.version || '—' },
         { key: f.factCpu, value: f.threads(n.cpuCount) },
@@ -671,7 +1088,11 @@ function proxmoxNodes(
         },
       ],
       metrics: [
-        { label: f.metricCpu, value: `${Math.round(n.cpuRatio * 100)}%`, percent: Math.round(n.cpuRatio * 100) },
+        {
+          label: f.metricCpu,
+          value: `${Math.round(n.cpuRatio * 100)}%`,
+          percent: Math.round(n.cpuRatio * 100),
+        },
         {
           label: f.metricMemory,
           value: `${bytesLabel(n.memUsed)} / ${bytesLabel(n.memTotal)}`,
@@ -707,18 +1128,48 @@ function proxmoxNodes(
     kind: (g.kind === 'lxc' ? 'ct' : 'vm') as NodeKind,
     name: g.name || `${g.kind} ${g.vmid}`,
     subtitle: `${g.kind === 'lxc' ? 'LXC' : 'VM'} ${g.vmid} · ${g.node}`,
+    // The first interface's address is the one the guest is on the wire with;
+    // its own IP is not something Proxmox reports for a machine it only hosts.
+    mac: g.nics?.[0]?.mac,
     status: (g.status === 'running' ? 'ok' : 'warn') as Tone,
     zone: 'Servers' as ZoneKey,
     facts: [
       { key: f.factId, value: String(g.vmid) },
       { key: f.factState, value: g.status },
       { key: f.factHost, value: g.node },
+      /*
+       * What the guest is actually wired to.
+       *
+       * The one thing about a virtual machine that decides what it can reach,
+       * and the card used to say nothing about it. A guest whose config could
+       * not be read says "not measured" rather than nothing, because the two
+       * look identical on screen and mean opposite things.
+       */
+      {
+        key: f.factAttached,
+        value:
+          g.nics === undefined || g.nics.length === 0
+            ? f.notMeasured
+            : g.nics.map((n) => `${n.bridge} · ${vlanLabel(n.vlan)}`).join(', '),
+      },
       { key: f.factTags, value: g.tags || '—' },
     ],
     metrics: [
-      { label: f.metricVcpu, value: String(g.cpuCount), percent: Math.min(100, g.cpuCount * 10) },
-      { label: f.metricMemory, value: bytesLabel(g.memTotal), percent: Math.min(100, gib(g.memTotal) * 5) },
-      { label: f.metricDisk, value: bytesLabel(g.diskTotal), percent: Math.min(100, gib(g.diskTotal) / 5) },
+      {
+        label: f.metricVcpu,
+        value: String(g.cpuCount),
+        percent: Math.min(100, g.cpuCount * 10),
+      },
+      {
+        label: f.metricMemory,
+        value: bytesLabel(g.memTotal),
+        percent: Math.min(100, gib(g.memTotal) * 5),
+      },
+      {
+        label: f.metricDisk,
+        value: bytesLabel(g.diskTotal),
+        percent: Math.min(100, gib(g.diskTotal) / 5),
+      },
     ],
     services: [],
     warnings:
@@ -734,7 +1185,11 @@ function proxmoxNodes(
       kind: 'storage' as NodeKind,
       name: s.name,
       subtitle: `${s.kind} · ${s.node}`,
-      status: (pct(s.used, s.total) >= 90 ? 'bad' : pct(s.used, s.total) >= 80 ? 'warn' : 'ok') as Tone,
+      status: (pct(s.used, s.total) >= 90
+        ? 'bad'
+        : pct(s.used, s.total) >= 80
+          ? 'warn'
+          : 'ok') as Tone,
       zone: 'Servers' as ZoneKey,
       facts: [
         { key: f.factKind, value: s.kind },
@@ -753,7 +1208,101 @@ function proxmoxNodes(
       warnings: [],
     }));
 
-  return { host, guests, storage };
+  return { host, bridges: bridgeNodes(pve, vlanLabel, t), guests, storage };
+}
+
+/**
+ * The bridges on a hypervisor, one card each.
+ *
+ * A bridge is a switch — it is exactly what the word means — and until now the
+ * map drew guests hanging directly off the host, which is not what they are
+ * plugged into. Two facts nobody can see from the outside live here: whether
+ * the bridge is VLAN-aware, and which physical port carries it. Get either
+ * wrong and a guest is silently on the wrong network, or on none.
+ *
+ * Every bridge the node reports gets a card, including one with nothing on it:
+ * an empty bridge is usually the leftover of a change that half happened, and
+ * it is worth seeing.
+ */
+function bridgeNodes(
+  pve: ProxmoxSnapshot,
+  vlanLabel: (vlan: number | null) => string,
+  t: Dict,
+): Draft[] {
+  const f = t.findings;
+
+  return pve.interfaces
+    .filter((i) => i.kind.includes('bridge'))
+    .map<Draft>((iface) => {
+      const on = pve.guests.filter(
+        (g) => g.node === iface.node && (g.nics ?? []).some((n) => n.bridge === iface.name),
+      );
+      // Which VLANs actually arrive here, as measured on the guests rather
+      // than as configured on the bridge: the bridge itself does not say.
+      const vlans = [
+        ...new Set(
+          on.flatMap((g) =>
+            (g.nics ?? []).filter((n) => n.bridge === iface.name).map((n) => n.vlan),
+          ),
+        ),
+      ].sort((a, b) => (a ?? 0) - (b ?? 0));
+
+      return {
+        id: `bridge:${iface.node}:${iface.name}`,
+        kind: 'bridge' as NodeKind,
+        name: iface.name,
+        subtitle: `${iface.node}${iface.bridgePorts ? ` · ${iface.bridgePorts}` : ''}`,
+        ip: iface.address ?? undefined,
+        status: (iface.active ? 'ok' : 'idle') as Tone,
+        zone: 'Servers' as ZoneKey,
+        facts: [
+          { key: f.factHost, value: iface.node },
+          { key: f.factUplinkPort, value: iface.bridgePorts || '—' },
+          {
+            key: f.factVlanAware,
+            value: iface.vlanAware ? t.common.yes : t.common.no,
+          },
+          { key: f.factAddress, value: iface.cidr || iface.address || '—' },
+          {
+            key: f.factCarries,
+            value: vlans.length > 0 ? vlans.map(vlanLabel).join(', ') : '—',
+          },
+        ],
+        metrics: [
+          {
+            label: f.metricGuests,
+            value: String(on.length),
+            percent: Math.min(100, on.length * 10),
+          },
+        ],
+        services: [],
+        warnings: [
+          ...(iface.active
+            ? []
+            : [
+                {
+                  severity: 'warn' as const,
+                  text: f.bridgeInactive(iface.name),
+                },
+              ]),
+          /*
+           * A tagged guest on a bridge that does not know about VLANs.
+           *
+           * The tag is then simply not applied: the guest lands on the bridge's
+           * own network with no error anywhere, which is the failure that takes
+           * an afternoon to find. Only claimed where both halves were measured.
+           */
+          ...(!iface.vlanAware && vlans.some((v) => v != null)
+            ? [
+                {
+                  severity: 'bad' as const,
+                  text: f.bridgeTagWithoutVlanAware(iface.name),
+                },
+              ]
+            : []),
+        ],
+      };
+    });
 }
 
 /**
@@ -772,20 +1321,55 @@ function proxmoxNodes(
  *
  * Keyed `switchMac#portIndex`.
  */
-function fromWiredClients(unifi: UnifiSnapshot, pve: ProxmoxSnapshot | null): Map<string, string> {
-  const byAddress = new Map<string, string>();
-  for (const node of pve?.nodes ?? []) {
-    for (const iface of pve?.interfaces ?? []) {
+/**
+ * Which Proxmox node a wired client is, where it can be told at all.
+ *
+ * Two ways, and the difference between them matters enough to report:
+ *
+ *   By address. An address the node's own interface list carries is the node,
+ *   full stop. Measured on both sides.
+ *
+ *   By name. The controller reports the DHCP hostname it was given, and for a
+ *   hypervisor that is almost always the node's own name — but "almost always"
+ *   is an inference, and it is marked as one.
+ *
+ * The second is not a nicety. A node with several addresses, or one the
+ * controller learned on a different network than the one its interface list
+ * names, matches on neither address nor anything else — and then the estate
+ * draws its hypervisor as an unnamed client hanging off a switch, with a
+ * guessed line to the gateway beside it. Which is exactly what it did.
+ */
+function nodeOfClient(
+  c: UnifiClient,
+  pve: ProxmoxSnapshot | null,
+): { node: string; measured: boolean } | null {
+  if (!pve) return null;
+
+  for (const node of pve.nodes) {
+    for (const iface of pve.interfaces) {
       if (iface.node !== node.name) continue;
       const address = iface.address ?? iface.cidr?.split('/')[0];
-      if (address) byAddress.set(address, node.name);
+      if (address && address === c.ip) return { node: node.name, measured: true };
     }
   }
 
+  // The first label of the hostname: the controller reports "pve" where the
+  // cluster calls the node "pve", and "pve.lan" where the DHCP server adds a
+  // domain to it.
+  const reported = c.hostname.split('.')[0]?.toLowerCase() ?? '';
+  if (!reported) return null;
+  const named = pve.nodes.find((n) => n.name.toLowerCase() === reported);
+  return named ? { node: named.name, measured: false } : null;
+}
+
+function fromWiredClients(unifi: UnifiSnapshot, pve: ProxmoxSnapshot | null): Map<string, string> {
   const out = new Map<string, string>();
   for (const c of unifi.clients) {
     if (!c.wired || !c.switchMac || c.switchPort <= 0) continue;
-    const name = byAddress.get(c.ip) || c.hostname || c.ip;
+    // The estate's own name for a node it recognises, rather than whatever the
+    // DHCP server was told: the two are often different, and the map should
+    // say what the rest of the interface says.
+    const name = nodeOfClient(c, pve)?.node || c.hostname || c.ip;
     if (!name) continue;
     out.set(`${c.switchMac.toLowerCase()}#${c.switchPort}`, name);
   }
@@ -797,6 +1381,7 @@ function unifiNodes(
   pve: ProxmoxSnapshot | null,
   t: Dict,
 ): {
+  wan: Draft[];
   gateways: Draft[];
   switches: Draft[];
   aps: Draft[];
@@ -819,6 +1404,25 @@ function unifiNodes(
    */
   const onPort = fromWiredClients(unifi, pve);
 
+  /*
+   * What the controller has configured on a port, and who is on the far end.
+   *
+   * The port list answered "what is plugged in" and stopped there. The other
+   * half — which profile the port carries, which network that profile leaves
+   * untagged, and the far end's own address — is measured just as plainly, and
+   * is what someone is looking for when a machine has come up on the wrong
+   * network or when two identical boxes have to be told apart.
+   */
+  const deviceByMac = new Map(unifi.devices.map((d) => [d.mac.toLowerCase(), d]));
+  const profileById = new Map(unifi.portProfiles.map((x) => [x.id, x]));
+  const networkById = new Map(unifi.networks.map((n) => [n.id, n]));
+  const clientOnPort = new Map<string, (typeof unifi.clients)[number]>();
+  for (const c of unifi.clients) {
+    if (!c.wired || !c.switchMac || c.switchPort <= 0) continue;
+    const key = `${c.switchMac.toLowerCase()}#${c.switchPort}`;
+    if (!clientOnPort.has(key)) clientOnPort.set(key, c);
+  }
+
   const fromUplink = new Map<string, string>();
   for (const d of unifi.devices) {
     if (!d.uplinkMac) continue;
@@ -839,41 +1443,76 @@ function unifiNodes(
       kind,
       name: d.name || d.model || d.mac,
       subtitle: `${d.ip || '—'} · ${d.model}`,
+      // Looked up rather than read: the far end of a cable, a row in a port
+      // list, one of two identical boxes.
+      ip: d.ip,
+      mac: d.mac,
       status: deviceStatus(d),
       zone: zoneOf(kind),
-      ports: d.ports.map((p) => ({
-        idx: p.idx,
-        name: p.name,
-        up: p.up,
-        enabled: p.enabled,
-        speed: p.speed,
-        poe: p.poeEnabled,
-        poePower: p.poePower,
-        vlanMode: p.taggedVlanMgmt,
-        // Prefer the estate's own name for a known device over the neighbour's
-        // self-reported one, then what LLDP said, then the uplink report.
-        // Three measured sources, strongest first: what the far end announced
-        // over LLDP, what a UniFi device said about its own uplink, and what
-        // the controller learned on the port. The last is the only one that
-        // reaches a machine the controller does not manage.
-        neighbour:
-          nameByMac.get(p.neighbourMac.toLowerCase()) ??
-          (p.neighbourName ||
-            fromUplink.get(`${d.mac.toLowerCase()}#${p.idx}`) ||
-            onPort.get(`${d.mac.toLowerCase()}#${p.idx}`) ||
-            ''),
-        neighbourPort: p.neighbourPort,
-        uplink: p.isUplink,
-      })),
+      ports: d.ports.map((p) => {
+        const key = `${d.mac.toLowerCase()}#${p.idx}`;
+        const profile = p.portConfId ? profileById.get(p.portConfId) : undefined;
+        const native = profile?.nativeNetworkId
+          ? networkById.get(profile.nativeNetworkId)
+          : undefined;
+        const client = clientOnPort.get(key);
+        const lldp = p.neighbourMac ? deviceByMac.get(p.neighbourMac.toLowerCase()) : undefined;
+
+        return {
+          idx: p.idx,
+          name: p.name,
+          up: p.up,
+          enabled: p.enabled,
+          speed: p.speed,
+          poe: p.poeEnabled,
+          poePower: p.poePower,
+          vlanMode: p.taggedVlanMgmt,
+          profile: profile?.name ?? '',
+          forward: profile?.forward ?? '',
+          // The untagged network as the controller has it. A network with no
+          // VLAN id is the default LAN, which has a name but no number — both
+          // are carried so neither has to be guessed from the other.
+          nativeVlan: native?.vlan ?? 0,
+          nativeNetwork: native?.name ?? '',
+          // Prefer the estate's own name for a known device over the neighbour's
+          // self-reported one, then what LLDP said, then the uplink report.
+          // Three measured sources, strongest first: what the far end announced
+          // over LLDP, what a UniFi device said about its own uplink, and what
+          // the controller learned on the port. The last is the only one that
+          // reaches a machine the controller does not manage.
+          neighbour:
+            nameByMac.get(p.neighbourMac.toLowerCase()) ??
+            (p.neighbourName ||
+              fromUplink.get(`${d.mac.toLowerCase()}#${p.idx}`) ||
+              onPort.get(`${d.mac.toLowerCase()}#${p.idx}`) ||
+              ''),
+          neighbourPort: p.neighbourPort,
+          // The far end's own addresses, from whichever source saw it: LLDP
+          // names a MAC the controller may also manage, and a wired client
+          // reports both of its own.
+          neighbourMac: p.neighbourMac || lldp?.mac || client?.mac || '',
+          neighbourIp: lldp?.ip || client?.ip || '',
+          uplink: p.isUplink,
+        };
+      }),
       facts: [
         { key: f.factModel, value: d.model || '—' },
         { key: f.factFirmware, value: d.version || '—' },
-        { key: f.factUptime, value: d.state === 1 ? uptimeLabel(d.uptimeSecs, t) : f.offline },
+        {
+          key: f.factUptime,
+          value: d.state === 1 ? uptimeLabel(d.uptimeSecs, t) : f.offline,
+        },
         { key: f.factMac, value: d.mac },
       ],
       metrics:
         d.state === 1
-          ? [{ label: f.metricClients, value: String(d.clients), percent: Math.min(100, d.clients * 2) }]
+          ? [
+              {
+                label: f.metricClients,
+                value: String(d.clients),
+                percent: Math.min(100, d.clients * 2),
+              },
+            ]
           : [{ label: f.metricAvailability, value: 'Offline', percent: 0 }],
       services: [],
       warnings:
@@ -892,35 +1531,227 @@ function unifiNodes(
   const switches = drafts.filter((d) => d.kind === 'switch');
   const aps = drafts.filter((d) => d.kind === 'ap');
 
-  const clients: Draft[] = [];
-  if (unifi.clients.length > 0) {
-    const wireless = unifi.clients.filter((c) => !c.wired).length;
-    const unknown = unifi.clients.filter((c) => !c.oui).length;
-    clients.push({
-      id: 'clients',
-      kind: 'clients',
-      name: f.clientsNode(unifi.clients.length),
-      subtitle: f.clientsSubtitle(wireless, unifi.clients.length - wireless),
-      status: unknown > 0 ? 'idle' : 'ok',
-      zone: 'IoT',
+  return {
+    wan: wanNodes(unifi, t),
+    gateways,
+    switches,
+    aps,
+    clients: clientNodes(unifi, pve, t),
+  };
+}
+
+/** How many machines a client card names before it starts counting instead. */
+const NAMED_CLIENTS = 12;
+
+/**
+ * The clients, grouped by the device that reports them.
+ *
+ * One bubble for the whole estate was the easy answer and the wrong one: the
+ * controller says which access point each wireless client is associated with
+ * and which switch port each wired one was learned on, and collapsing all of
+ * that into a single card threw away the one thing somebody looking at a map
+ * wants to know — where the machines actually are. It also drew every access
+ * point's cable to the same spot, which is what made the lower half of the map
+ * a fan of crossing lines.
+ *
+ * So: one card per device that has clients, named machines listed on it, and
+ * the ones the controller could not place kept apart in a card of their own
+ * rather than quietly folded in with the rest.
+ */
+function clientNodes(unifi: UnifiSnapshot, pve: ProxmoxSnapshot | null, t: Dict): Draft[] {
+  const f = t.findings;
+
+  // Machines that are cards of their own are not clients of anything here: the
+  // UniFi devices themselves, and the hypervisor, which has its own cable.
+  const deviceMacs = new Set(unifi.devices.map((d) => d.mac.toLowerCase()));
+
+  /*
+   * The machines that live behind a hypervisor, not on the switch.
+   *
+   * A guest on a bridge has its own address on the wire, so the controller
+   * learns it on whatever port the *host* is plugged into and reports it as a
+   * client of that switch. Drawn as one, it hangs off the switch — a path that
+   * goes round the machine it actually runs on, which is not how any of it is
+   * wired. The guest is already on the map, on its bridge, on its host.
+   *
+   * Two ways to know, and the first is exact: the address the guest's own
+   * configuration gives its interface. The second catches the guests whose
+   * configuration could not be read — anything learned on the very port the
+   * host is on is behind that host, because that is what the port carries.
+   */
+  const guestMacs = new Set(
+    (pve?.guests ?? []).flatMap((g) => (g.nics ?? []).map((n) => n.mac.toLowerCase())),
+  );
+  const hostPorts = new Set(
+    unifi.clients
+      .filter((c) => c.wired && c.switchMac && c.switchPort > 0 && nodeOfClient(c, pve))
+      .map((c) => `${c.switchMac.toLowerCase()}#${c.switchPort}`),
+  );
+
+  const byDevice = new Map<string, typeof unifi.clients>();
+  const unplaced: typeof unifi.clients = [];
+
+  for (const c of unifi.clients) {
+    // A card of its own is not a client of anything: the UniFi devices, and
+    // any Proxmox node the controller happens to have learned.
+    if (deviceMacs.has(c.mac.toLowerCase()) || nodeOfClient(c, pve)) continue;
+    if (guestMacs.has(c.mac.toLowerCase())) continue;
+    if (c.wired && c.switchMac && hostPorts.has(`${c.switchMac.toLowerCase()}#${c.switchPort}`)) {
+      continue;
+    }
+    const anchor = (c.wired ? c.switchMac : c.apMac).toLowerCase();
+    if (anchor && deviceMacs.has(anchor)) {
+      const group = byDevice.get(anchor);
+      if (group) group.push(c);
+      else byDevice.set(anchor, [c]);
+    } else {
+      unplaced.push(c);
+    }
+  }
+
+  const nameOf = (c: (typeof unifi.clients)[number]) => c.hostname || c.ip || c.oui || c.mac;
+
+  const draft = (id: string, name: string, group: typeof unifi.clients, on: string): Draft => {
+    const wireless = group.filter((c) => !c.wired).length;
+    const unknown = group.filter((c) => !c.oui).length;
+    const named = group.slice(0, NAMED_CLIENTS);
+
+    return {
+      id,
+      kind: 'clients' as NodeKind,
+      name,
+      subtitle: f.clientsSubtitle(wireless, group.length - wireless),
+      status: (unknown > 0 ? 'idle' : 'ok') as Tone,
+      zone: 'IoT' as ZoneKey,
       facts: [
-        { key: f.factTotal, value: String(unifi.clients.length) },
+        { key: f.factOn, value: on },
+        { key: f.factTotal, value: String(group.length) },
         { key: f.factWireless, value: String(wireless) },
-        { key: f.factWired, value: String(unifi.clients.length - wireless) },
+        { key: f.factWired, value: String(group.length - wireless) },
         { key: f.factUnidentified, value: String(unknown) },
       ],
       metrics: [
-        { label: f.factWireless, value: String(wireless), percent: pct(wireless, unifi.clients.length) },
+        {
+          label: f.factWireless,
+          value: String(wireless),
+          percent: pct(wireless, group.length),
+        },
+      ],
+      /*
+       * The machines by name, because that is the question the card exists to
+       * answer. Capped, and the cap says how many it is not showing rather
+       * than letting the list run down the inspector.
+       */
+      services: [
+        ...named.map((c) => ({
+          name: nameOf(c),
+          detail: [c.ip, c.wired ? f.factWired : f.factWireless, c.oui].filter(Boolean).join(' · '),
+          status: (c.oui ? 'ok' : 'idle') as Tone,
+          provenance: 'Felmért' as const,
+        })),
+        ...(group.length > named.length
+          ? [
+              {
+                name: f.clientsMore(group.length - named.length),
+                detail: '',
+                status: 'idle' as Tone,
+                provenance: 'Felmért' as const,
+              },
+            ]
+          : []),
+      ],
+      warnings: unknown > 0 ? [{ severity: 'warn' as const, text: f.unknownVendor(unknown) }] : [],
+    };
+  };
+
+  const out: Draft[] = [];
+  for (const [mac, group] of byDevice) {
+    const device = unifi.devices.find((d) => d.mac.toLowerCase() === mac);
+    const on = device?.name || device?.model || mac;
+    out.push(draft(`clients:${mac}`, f.clientsNode(group.length), group, on));
+  }
+  if (unplaced.length > 0) {
+    out.push(draft('clients', f.clientsUnplaced(unplaced.length), unplaced, f.notMeasured));
+  }
+  return out;
+}
+
+/**
+ * The id of a WAN card.
+ *
+ * One helper for the card and for its cable, because they used to build the
+ * same string in two places and one of them fell back to the list index while
+ * the other fell back to an empty string — so a link the controller reported
+ * without an interface name got a card with no cable to it.
+ */
+function wanId(w: UnifiWan, index: number): string {
+  return `wan:${w.ifname || w.name || index}`;
+}
+
+/**
+ * The way out, one card per link.
+ *
+ * One card each rather than a single "Internet", because a second WAN is a
+ * different provider on a different wire, and the whole reason to draw it is
+ * to see which of the two is carrying the estate and which one is dark.
+ *
+ * Nothing here is inferred. A figure the survey did not measure comes back as
+ * -1 and is shown as not measured, which is the honest reading: a link nobody
+ * has speed-tested is not a slow link.
+ */
+function wanNodes(unifi: UnifiSnapshot, t: Dict): Draft[] {
+  const f = t.findings;
+
+  return (unifi.wans ?? []).map<Draft>((w, i) => {
+    const speedtest =
+      w.xputDown >= 0
+        ? f.speedtestResult(Math.round(w.xputDown), Math.round(Math.max(0, w.xputUp)))
+        : f.notMeasured;
+
+    return {
+      id: wanId(w, i),
+      kind: 'cloud' as NodeKind,
+      name: w.isp || f.internet,
+      subtitle: `${w.ip || '—'}${w.kind ? ` · ${w.kind.toUpperCase()}` : ''}`,
+      ip: w.ip,
+      status: (w.up ? 'ok' : 'bad') as Tone,
+      zone: 'WAN' as ZoneKey,
+      facts: [
+        { key: f.factLink, value: w.name || 'WAN' },
+        { key: f.factIsp, value: w.isp || f.notMeasured },
+        { key: f.factWanGateway, value: w.gatewayIp || '—' },
+        {
+          key: f.factDns,
+          value: w.nameservers.length > 0 ? w.nameservers.join(', ') : '—',
+        },
+        {
+          key: f.factUptime,
+          value: w.up ? uptimeLabel(w.uptimeSecs, t) : f.offline,
+        },
+        { key: f.factSpeedtest, value: speedtest },
+      ],
+      metrics: [
+        // Latency is drawn against 100 ms, which is where a household link
+        // stops feeling immediate. The bar is a reading, not a verdict.
+        {
+          label: f.metricLatency,
+          value: w.latencyMs >= 0 ? f.milliseconds(w.latencyMs) : f.notMeasured,
+          percent: w.latencyMs >= 0 ? Math.min(100, w.latencyMs) : 0,
+        },
+        ...(w.speed > 0
+          ? [
+              {
+                label: f.metricPortSpeed,
+                value: f.megabits(w.speed),
+                percent: Math.min(100, Math.round((w.speed / 1000) * 100)),
+              },
+            ]
+          : []),
       ],
       services: [],
-      warnings:
-        unknown > 0
-          ? [{ severity: 'warn' as const, text: f.unknownVendor(unknown) }]
-          : [],
-    });
-  }
-
-  return { gateways, switches, aps, clients };
+      warnings: w.up ? [] : [{ severity: 'bad' as const, text: f.wanDown(w.name || 'WAN') }],
+    };
+  });
 }
 
 /* ------------------------------------------------------------------- links */
@@ -935,8 +1766,16 @@ function buildLinks(
 ): NetLink[] {
   const links: NetLink[] = [];
   const present = new Set(nodes.map((n) => n.id));
+  // One cable, one line. The same pair can be measured twice — a device
+  // reports its uplink and LLDP sees the same link from the other end — and
+  // two strokes between two cards read as two cables.
+  const drawn = new Set<string>();
   const add = (link: NetLink) => {
-    if (present.has(link.from) && present.has(link.to)) links.push(link);
+    if (!present.has(link.from) || !present.has(link.to)) return;
+    const pair = [link.from, link.to].sort().join('|');
+    if (drawn.has(pair)) return;
+    drawn.add(pair);
+    links.push(link);
   };
 
   if (unifi) {
@@ -951,23 +1790,160 @@ function buildLinks(
       });
     }
 
-    // Client associations are measured per client, but shown aggregated, so
-    // the edge itself is an inference about the group.
-    const apsWithClients = new Set(unifi.clients.filter((c) => c.apMac).map((c) => c.apMac));
-    for (const apMac of apsWithClients) {
-      add({ from: `unifi:${apMac}`, to: 'clients', kind: 'wireless', direction: 'both' });
+    /*
+     * Cables LLDP saw that no uplink report mentions.
+     *
+     * A device only reports an uplink while it is adopted and talking; one
+     * that dropped off, or a third-party box the controller never adopted,
+     * says nothing at all. Its parent's port table still names it, because
+     * LLDP is answered by the far end and the near end recorded it. That is
+     * measured evidence of a cable between two cards that are both on the map,
+     * and it used to be thrown away.
+     */
+    const byMac = new Map(unifi.devices.map((d) => [d.mac.toLowerCase(), d]));
+    for (const d of unifi.devices) {
+      for (const p of d.ports) {
+        if (!p.neighbourMac) continue;
+        const far = byMac.get(p.neighbourMac.toLowerCase());
+        if (!far || far.mac === d.mac) continue;
+        add({
+          from: `unifi:${d.mac}`,
+          to: `unifi:${far.mac}`,
+          kind: p.up ? 'physical' : 'broken',
+          direction: p.up ? 'both' : 'none',
+        });
+      }
+    }
+
+    /*
+     * The way out.
+     *
+     * The gateway reports the WAN as its own interface, so the line between
+     * the two is measured in the same sense as any uplink. Where the health
+     * summary was the only source, no gateway is attributed and the card sits
+     * on its own rather than being wired to a guess.
+     */
+    const gateways = nodes.filter((n) => n.kind === 'gateway');
+    (unifi.wans ?? []).forEach((w, i) => {
+      const carried = (target: string, provenance?: Provenance) =>
+        add({
+          from: wanId(w, i),
+          to: target,
+          kind: w.up ? 'physical' : 'broken',
+          direction: w.up ? 'both' : 'none',
+          ...(provenance ? { provenance } : {}),
+        });
+
+      // The gateway named itself: measured, like any uplink report.
+      if (w.deviceMac) {
+        carried(`unifi:${w.deviceMac}`);
+        return;
+      }
+
+      /*
+       * The controller's health summary knows there is a way out and does not
+       * say which gateway carries it. Leaving the card unattached was worse
+       * than saying so: a card floating beside a gateway that plainly holds
+       * that very address reads as a fault in the map.
+       *
+       * Two things can attribute it, and both are conclusions rather than
+       * measurements, so the line is marked inferred either way:
+       *
+       *   The address. A gateway reports its WAN address as its own, so a
+       *   device holding exactly this address is the one carrying the link.
+       *
+       *   Being the only one. A site with a single gateway has nowhere else
+       *   for a WAN to arrive; a site with two is not guessed at, and the card
+       *   stays on its own rather than pointing at whichever came first.
+       */
+      const holder = w.ip
+        ? unifi.devices.find((d) => d.ip && d.ip === w.ip && deviceKind(d.kind) === 'gateway')
+        : undefined;
+      const target = holder
+        ? nodes.find((n) => n.id === `unifi:${holder.mac}`)
+        : gateways.length === 1
+          ? gateways[0]
+          : undefined;
+
+      if (target) carried(target.id, 'Becsült');
+    });
+
+    /*
+     * Each client card to the device that reports it.
+     *
+     * Measured per client — the controller names the access point or the
+     * switch port — and shown as one line per device, so the line itself is an
+     * inference about the group rather than about any one machine.
+     */
+    for (const card of nodes.filter((n) => n.kind === 'clients' && n.id.startsWith('clients:'))) {
+      const mac = card.id.slice('clients:'.length);
+      const device = unifi.devices.find((d) => d.mac.toLowerCase() === mac);
+      if (!device) continue;
+      const wired = unifi.clients.some((c) => c.wired && c.switchMac.toLowerCase() === mac);
+      add({
+        from: `unifi:${device.mac}`,
+        to: card.id,
+        kind: wired ? 'physical' : 'wireless',
+        direction: 'both',
+        provenance: 'Becsült',
+      });
+    }
+
+    /*
+     * The ones the controller could not place. They are somewhere behind the
+     * gateway and nothing measured says more than that, so the line says the
+     * same: logical, and marked inferred.
+     */
+    const unplaced = nodes.find((n) => n.id === 'clients');
+    const gateway = nodes.find((n) => n.kind === 'gateway');
+    if (unplaced && gateway) {
+      add({
+        from: gateway.id,
+        to: unplaced.id,
+        kind: 'logical',
+        direction: 'both',
+        provenance: 'Becsült',
+      });
     }
   }
 
   if (pve) {
+    /*
+     * Host → bridge → guest, where the guest says which bridge.
+     *
+     * A guest is not plugged into its hypervisor, it is plugged into a bridge
+     * on it, and that bridge is what decides which VLAN the guest lands in.
+     * Where the config was readable the map now says so; where it was not, the
+     * old direct line to the host stands — which is honest about knowing that
+     * the guest runs there and nothing more.
+     */
+    const bridges = new Set(
+      pve.interfaces.filter((i) => i.kind.includes('bridge')).map((i) => `${i.node}:${i.name}`),
+    );
+    for (const key of bridges) {
+      const node = key.slice(0, key.indexOf(':'));
+      add({
+        from: `pve:${node}`,
+        to: `bridge:${key}`,
+        kind: 'physical',
+        direction: 'both',
+      });
+    }
+
     for (const node of pve.nodes) {
       for (const g of pve.guests.filter((x) => x.node === node.name)) {
-        add({
-          from: `pve:${node.name}`,
-          to: `guest:${g.vmid}`,
-          kind: g.status === 'running' ? 'physical' : 'broken',
-          direction: g.status === 'running' ? 'both' : 'none',
-        });
+        const attached = (g.nics ?? [])
+          .filter((n) => bridges.has(`${node.name}:${n.bridge}`))
+          .map((n) => `bridge:${node.name}:${n.bridge}`);
+
+        for (const from of attached.length > 0 ? attached : [`pve:${node.name}`]) {
+          add({
+            from,
+            to: `guest:${g.vmid}`,
+            kind: g.status === 'running' ? 'physical' : 'broken',
+            direction: g.status === 'running' ? 'both' : 'none',
+          });
+        }
       }
       for (const s of pve.storages.filter((x) => x.node === node.name && x.total > 0)) {
         add({
@@ -992,24 +1968,50 @@ function buildLinks(
    * knowing and assuming, and the map now shows which it has.
    */
   if (unifi && pve) {
-    const host = nodes.find((n) => n.kind === 'host');
-    const addresses = new Set(
-      pve.interfaces
-        .map((i) => i.address ?? i.cidr?.split('/')[0])
-        .filter((a): a is string => Boolean(a)),
-    );
-    const learned = unifi.clients.find(
-      (c) => c.wired && c.switchMac && c.switchPort > 0 && addresses.has(c.ip),
-    );
-    const switchOf = learned
-      ? nodes.find((n) => n.id.toLowerCase() === `unifi:${learned.switchMac}`.toLowerCase())
-      : undefined;
+    const gateway = nodes.find((n) => n.kind === 'gateway');
 
-    if (host && learned && switchOf) {
-      add({ from: switchOf.id, to: host.id, kind: 'physical', direction: 'both' });
-    } else if (host) {
-      const gateway = nodes.find((n) => n.kind === 'gateway');
-      if (gateway) {
+    /*
+     * Every node, not the first one.
+     *
+     * A cluster is three hosts, and only one of them used to get a line — the
+     * other two floated on the map with no path into the network, which is the
+     * one thing a topology must not say about a machine that is plainly
+     * reachable. Each node is matched against its *own* interfaces, too: any
+     * address on any host used to satisfy the search, so in a cluster the
+     * cable could be drawn to the wrong box.
+     */
+    for (const host of nodes.filter((n) => n.kind === 'host')) {
+      const name = host.id.slice('pve:'.length);
+
+      // A host with two NICs into two switches has two cables, and the
+      // controller learned it on both. Drawing one of them would make a
+      // redundant path look like a single point of failure.
+      const learned = unifi.clients
+        .map((c) => ({ c, match: nodeOfClient(c, pve) }))
+        .filter(
+          ({ c, match }) => c.wired && c.switchMac && c.switchPort > 0 && match?.node === name,
+        );
+      const switches = learned
+        .map(({ c, match }) => ({
+          card: nodes.find((n) => n.id.toLowerCase() === `unifi:${c.switchMac}`.toLowerCase()),
+          measured: match?.measured ?? false,
+        }))
+        .filter((s): s is { card: Draft; measured: boolean } => s.card !== undefined);
+
+      if (switches.length > 0) {
+        for (const { card, measured } of switches) {
+          // The cable is measured either way — the controller learned a machine
+          // on that port. Whether that machine is *this* host is what the name
+          // match only makes likely, so that is what the marking is about.
+          add({
+            from: card.id,
+            to: host.id,
+            kind: 'physical',
+            direction: 'both',
+            ...(measured ? {} : { provenance: 'Becsült' as Provenance }),
+          });
+        }
+      } else if (gateway) {
         add({
           from: gateway.id,
           to: host.id,
@@ -1106,8 +2108,7 @@ function buildRules(
         dst: resolve(r.dst),
         port: r.dstPort ? `${r.protocol || 'any'} ${r.dstPort}` : r.protocol || t.findings.anyPort,
         action: (r.action === 'drop' || r.action === 'reject' ? 'Tilt' : 'Engedélyez') as
-          | 'Tilt'
-          | 'Engedélyez',
+          'Tilt' | 'Engedélyez',
         state: loaded ? ('Felmért' as const) : ('Nem ellenőrzött' as const),
         checkedAt: loaded ? checkedAt : '—',
       };
@@ -1202,11 +2203,7 @@ function buildSignals(
   return out;
 }
 
-function buildRisks(
-  unifi: UnifiSnapshot | null,
-  pve: ProxmoxSnapshot | null,
-  t: Dict,
-): Risk[] {
+function buildRisks(unifi: UnifiSnapshot | null, pve: ProxmoxSnapshot | null, t: Dict): Risk[] {
   const f = t.findings;
   const out: Risk[] = [];
 
@@ -1227,7 +2224,9 @@ function buildRisks(
         text: f.riskGuestStoppedText(g.status),
       });
     }
-    for (const d of pve.disks.filter((x) => x.health && x.health !== 'PASSED' && x.health !== 'OK')) {
+    for (const d of pve.disks.filter(
+      (x) => x.health && x.health !== 'PASSED' && x.health !== 'OK',
+    )) {
       out.push({
         severity: 'bad',
         title: f.riskDisk(d.model || d.devpath),
@@ -1262,30 +2261,34 @@ function buildRisks(
 
 /* ------------------------------------------------------------------ public */
 
-export function estateFromSnapshot(
-  snapshot: SurveySnapshot,
-  profiles: Profile[],
-  t: Dict,
-): Estate {
+export function estateFromSnapshot(snapshot: SurveySnapshot, profiles: Profile[], t: Dict): Estate {
   const f = t.findings;
   const { proxmox: pve, unifi } = snapshot;
 
   const uni = unifi
     ? unifiNodes(unifi, pve, t)
-    : { gateways: [], switches: [], aps: [], clients: [] };
-  const prox = pve ? proxmoxNodes(pve, t) : { host: [], guests: [], storage: [] };
+    : { wan: [], gateways: [], switches: [], aps: [], clients: [] };
+  const vlanNames = new Map<number, string>(
+    (unifi?.networks ?? [])
+      .filter((n) => n.vlan != null)
+      .map((n) => [n.vlan as number, n.name] as [number, string]),
+  );
+  const prox = pve
+    ? proxmoxNodes(pve, vlanNames, t)
+    : { host: [], bridges: [], guests: [], storage: [] };
 
   const tiers = [
+    uni.wan,
     uni.gateways,
-    [...uni.switches, ...prox.host],
-    [...uni.aps, ...prox.guests],
-    [...uni.clients, ...prox.storage],
+    [...uni.switches, ...prox.host, ...prox.storage],
+    [...uni.aps, ...prox.bridges],
+    [...uni.clients, ...prox.guests],
   ];
 
   // Links first: they depend only on ids, and the layout needs them to put
   // each device under whatever it hangs off.
   const links = buildLinks(unifi, pve, tiers.flat());
-  const nodes = placeTiers(orderTiers(tiers, links));
+  const nodes = placeTiers(orderTiers(tiers, links), links);
   /*
    * The ruleset the gateway actually holds, where a survey could read it.
    *
@@ -1369,7 +2372,12 @@ export function estateFromSnapshot(
 
   const sizeless = stores.filter((x) => x.total === 0);
   for (const s of sizeless.slice(0, 4)) {
-    capacity.push({ label: `${s.name} (${s.node})`, value: f.notMeasured, percent: 0, tone: 'idle' });
+    capacity.push({
+      label: `${s.name} (${s.node})`,
+      value: f.notMeasured,
+      percent: 0,
+      tone: 'idle',
+    });
   }
 
   /*
@@ -1417,7 +2425,11 @@ export function estateFromSnapshot(
       hint: f.statDevicesHint((unifi?.devices.length ?? 0) - offline, offline),
       ...(offline > 0 ? { tone: 'bad' as Tone } : {}),
     },
-    { label: f.statGuests, value: String(vms + cts), hint: f.statGuestsHint(vms, cts) },
+    {
+      label: f.statGuests,
+      value: String(vms + cts),
+      hint: f.statGuestsHint(vms, cts),
+    },
     {
       label: f.statNetworks,
       value: String(zones.length),
@@ -1460,10 +2472,7 @@ export function estateFromSnapshot(
      * point of the panel, so leaving one note for both states would undo it.
      */
     matrixNote: live.v4.recognised
-      ? t.policy.matrixNoteMeasured(
-          matrix.length * matrix.length - unverifiedCells,
-          live.v6.read,
-        )
+      ? t.policy.matrixNoteMeasured(matrix.length * matrix.length - unverifiedCells, live.v6.read)
       : t.policy.matrixNoteLive,
     liveRead: live.v4.read,
     rules,

@@ -246,14 +246,14 @@ export function exportGuideHtml(
               `<code>${p.idx}</code>`,
               esc(p.label || '—'),
               esc(t.ports.roles[p.role]),
-              `<code>${esc(p.profile)}</code>`,
+              p.profile ? `<code>${esc(p.profile)}</code>` : '—',
               p.taggedVlans.length > 0 ? `<code>${p.taggedVlans.join(', ')}</code>` : '—',
             ]),
         )}`
       : '',
 
     resolved.portProfiles.length > 0
-      ? `<h3>${esc(t.ports.profilesTitle)}</h3>${table(
+      ? `<h3>${esc(t.ports.profilesTitle(resolved.portProfiles.length))}</h3>${table(
           [t.ports.colProfile, t.ports.colNative, t.ports.colTagged, g.storageCols[3] ?? ''],
           resolved.portProfiles.map((p) => [
             `<code>${esc(p.name)}</code>`,

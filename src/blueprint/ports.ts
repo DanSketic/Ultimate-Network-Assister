@@ -36,6 +36,10 @@ const CARRIES: Record<PortRole, NetworkRole[] | 'all' | 'none'> = {
   trunk: 'all',
   uplink: 'all',
   off: 'none',
+  // Nothing on it, so nothing to carry — and, unlike every other role, nothing
+  // to write either: an unused port gets no profile and never reaches the
+  // assignment step.
+  unused: 'none',
 };
 
 /** Roles whose native VLAN is management rather than a chosen network. */
@@ -74,6 +78,9 @@ function profileName(
   networks: PlannedNetwork[],
   x: Dict['ports']['profiles'],
 ): string {
+  // A free port is not a profile. Naming one would put it in the profile list
+  // and, from there, in the list of ports someone is asked to go and set.
+  if (role === 'unused') return '';
   if (role === 'off') return x.disabled;
   if (role === 'access') {
     const net = networks.find((n) => n.vlan === nativeVlan);
@@ -96,7 +103,21 @@ export function derivePorts(
   const mgmt = managementVlan(networks);
 
   const ports = assignments.map<PlannedPort>((a) => {
-    const nativeVlan = MANAGEMENT_NATIVE.includes(a.role) ? mgmt : a.nativeVlan;
+    /*
+     * What the plan says the port's untagged network is.
+     *
+     * Nothing, for a port that is free or switched off. The layout may still
+     * remember what the survey measured there — that is what makes changing
+     * the role to access fill the network in rather than leave a blank — but
+     * the plan has nothing to say about a port nobody uses, and printing a
+     * network next to it in the handbook would read as an instruction.
+     */
+    const nativeVlan =
+      a.role === 'unused' || a.role === 'off'
+        ? 0
+        : MANAGEMENT_NATIVE.includes(a.role)
+          ? mgmt
+          : a.nativeVlan;
     return {
       device: a.device,
       idx: a.idx,
@@ -112,6 +133,7 @@ export function derivePorts(
   // One profile per distinct purpose, with the ports that use it counted.
   const byName = new Map<string, PlannedPortProfile>();
   for (const p of ports) {
+    if (p.profile === '') continue;
     const existing = byName.get(p.profile);
     if (existing) {
       existing.portCount += 1;

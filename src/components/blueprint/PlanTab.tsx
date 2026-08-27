@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
-import { effectiveLevel, isTemplateCommand } from '@/blueprint/automation';
-import { type AutomationLevel, type Plan, type PlanAction, type PlanStep } from '@/blueprint/model';
+import {
+  effectiveLevel,
+  isDestructiveCommand,
+  isDisruptiveCommand,
+  isTemplateCommand,
+} from '@/blueprint/automation';
+import {
+  type AutomationLevel,
+  type Plan,
+  type PlanAction,
+  type PlanStep,
+  type TargetPlatform,
+} from '@/blueprint/model';
 import { useT } from '@/i18n';
 import { vars } from '@/lib/css';
 import type { Palette } from '@/lib/palette';
@@ -10,6 +21,28 @@ import type { Clearance, Profile } from '@/survey/model';
 import { Pill, StatCard } from '../ui';
 
 const MODES: AutomationLevel[] = ['manual', 'assisted', 'auto'];
+
+/**
+ * Which system a step is against.
+ *
+ * A step's actions all land on one machine in practice; where they do not, the
+ * first one decides, because that is the system the step is about. Steps with
+ * no actions are the estate's own paperwork and go under the host.
+ */
+function targetOf(step: PlanStep): TargetPlatform {
+  return step.actions[0]?.target ?? 'host';
+}
+
+/** The commands of a step this application could actually send, in order. */
+function runnableCommands(step: PlanStep): PlanAction[] {
+  return step.actions.filter(
+    (a) =>
+      a.kind === 'command' &&
+      !a.destructive &&
+      !isTemplateCommand(a.body) &&
+      !isDestructiveCommand(a.body),
+  );
+}
 
 const CLEARANCE_TONE: Record<Clearance, 'ok' | 'warn' | 'bad'> = {
   readOnly: 'ok',
@@ -32,7 +65,23 @@ export function PlanTab({
 }) {
   const t = useT();
   const runner = usePlanRunner(profiles);
-  const [mode, setMode] = useState<AutomationLevel>('assisted');
+  /*
+   * A mode per system, not one for the estate.
+   *
+   * The two halves are not the same kind of risk and are rarely at the same
+   * stage. A controller that is already carrying households wants every write
+   * read first; a Proxmox host being built from nothing wants the sequence run
+   * and the output read after. One setting for both meant picking the more
+   * cautious of the two and then clicking through the other by hand.
+   */
+  const [modes, setModes] = useState<Record<TargetPlatform, AutomationLevel>>({
+    unifi: 'assisted',
+    proxmox: 'assisted',
+    docker: 'assisted',
+    kubernetes: 'assisted',
+    host: 'assisted',
+  });
+  const modeOf = (step: PlanStep) => modes[targetOf(step)];
   const [open, setOpen] = useState<string | null>(plan.steps[0]?.id ?? null);
 
   const modeHint: Record<AutomationLevel, string> = {
@@ -40,6 +89,43 @@ export function PlanTab({
     assisted: t.plan.modeAssisted,
     auto: t.plan.modeAuto,
   };
+
+  // Only the systems this plan actually touches get a switch.
+  const targets = [...new Set(plan.steps.map(targetOf))];
+
+  /*
+   * Which steps are behind us.
+   *
+   * The plan is in order, and until the application could run a step there was
+   * nothing to enforce: a person reading step 31 has read 30. Running one is
+   * different — `pct create` against a pool that does not exist fails, and the
+   * failure is the first anybody hears of the order.
+   *
+   * A step counts as done when its sequence ran here without a failure, or
+   * when the operator says so — because most of this plan is still carried out
+   * by hand, and a plan that only believes its own runs would block the whole
+   * estate behind a step somebody did at the console an hour ago.
+   *
+   * Held for the session rather than saved: it is a record of what happened
+   * while this window was open, and claiming more than that in a file would be
+   * a claim about a machine nobody has looked at since.
+   */
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const markDone = (id: string, yes: boolean) =>
+    setDone((prev) => {
+      const next = new Set(prev);
+      if (yes) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  const byId = new Map(plan.steps.map((step) => [step.id, step]));
+  const stepTitles = new Map(plan.steps.map((step) => [step.id, step.title]));
+  /** The prerequisites of a step that are still outstanding, by title. */
+  const missingBefore = (step: PlanStep) =>
+    step.requires
+      .filter((id) => !done.has(id))
+      .map((id) => byId.get(id)?.title ?? id);
 
   const toneFor = (level: AutomationLevel) =>
     level === 'auto' ? palette.ok : level === 'assisted' ? accent : palette.idle;
@@ -84,41 +170,106 @@ export function PlanTab({
         />
       </div>
 
-      <div className="panel" style={{ padding: '13px 15px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 500 }}>{t.plan.executionMode}</span>
+      {/*
+        * The mode panel stays put.
+        *
+        * It is the control the rest of the page is read against — every step's
+        * badge means something different depending on it — and the plan is
+        * forty steps long. Scrolled off the top, the reader is looking at
+        * "automata" on a step with no way to see, or change, what that is set
+        * to without going back up.
+        */}
+      <div
+        style={{
+          position: 'sticky',
+          /*
+           * Minus the view's own top padding, because that is what the sticky
+           * offset is measured from: at `0` the panel parks one padding's
+           * worth down the page, and the steps scroll through the strip above
+           * it. The number is the same one the negative margin undoes.
+           */
+          top: -18,
+          zIndex: 5,
+          /*
+           * Out to the scroller's own edges, and back in again.
+           *
+           * The view is padded, and a sticky element inside it sticks to the
+           * padding box — which leaves a band above it where the steps scroll
+           * past in plain sight. The negative margin takes this wrapper out to
+           * the container's edge so it covers that band, and its padding puts
+           * the panel back where the eye expects it.
+           */
+          margin: '-18px -20px 20px',
+          padding: '18px 20px 0',
+          background: 'var(--app)',
+        }}
+      >
+      <div
+        className="panel"
+        style={{
+          padding: '13px 15px',
+          boxShadow: '0 6px 18px -12px rgba(0,0,0,.55)',
+        }}
+      >
+        <span style={{ fontSize: 12, fontWeight: 500 }}>{t.plan.executionMode}</span>
+        {targets.map((target) => (
           <div
+            key={target}
             style={{
               display: 'flex',
-              padding: 3,
-              background: 'var(--panel2)',
-              border: '1px solid var(--line)',
-              borderRadius: 8,
-              gap: 2,
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginTop: 10,
             }}
           >
-            {MODES.map((m) => (
-              <button
-                key={m}
-                type="button"
-                className="subtab"
-                aria-pressed={mode === m}
-                style={vars({
-                  '--tab-bg': mode === m ? 'var(--panel)' : 'transparent',
-                  '--tab-fg': mode === m ? 'var(--text)' : 'var(--text2)',
-                })}
-                onClick={() => setMode(m)}
-              >
-                {t.blueprint.automation[m]}
-              </button>
-            ))}
+            <span
+              className="mono"
+              style={{ fontSize: 10.5, color: 'var(--text3)', minWidth: 96 }}
+            >
+              {t.blueprint.targets[target]}
+            </span>
+            <div
+              style={{
+                display: 'flex',
+                padding: 3,
+                background: 'var(--panel2)',
+                border: '1px solid var(--line)',
+                borderRadius: 8,
+                gap: 2,
+              }}
+            >
+              {MODES.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className="subtab"
+                  aria-pressed={modes[target] === m}
+                  style={vars({
+                    '--tab-bg': modes[target] === m ? 'var(--panel)' : 'transparent',
+                    '--tab-fg': modes[target] === m ? 'var(--text)' : 'var(--text2)',
+                  })}
+                  onClick={() => setModes((prev) => ({ ...prev, [target]: m }))}
+                >
+                  {t.blueprint.automation[m]}
+                </button>
+              ))}
+            </div>
+            <span
+              className="pretty"
+              style={{ fontSize: 10.5, color: 'var(--text2)', flex: 1, minWidth: 220 }}
+            >
+              {modeHint[modes[target]]}
+            </span>
           </div>
-        </div>
+        ))}
+
+        {/* Where the whole queue is run, said once, where the modes are set. */}
         <div
           className="pretty"
-          style={{ fontSize: 11, color: 'var(--text2)', marginTop: 9, lineHeight: 1.55 }}
+          style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.55, marginTop: 10 }}
         >
-          {modeHint[mode]}
+          {t.plan.whereTheQueueIs}
         </div>
 
         {runner.supported ? (
@@ -163,6 +314,7 @@ export function PlanTab({
           </div>
         ) : null}
       </div>
+      </div>
 
       {plan.modules.map((pm) => (
         <section key={pm.module.id} style={{ marginBottom: 24 }}>
@@ -192,7 +344,11 @@ export function PlanTab({
                 key={step.id}
                 step={step}
                 index={i + 1}
-                effective={effectiveLevel(mode, step.capability)}
+                effective={effectiveLevel(modeOf(step), step.capability)}
+                blockedBy={missingBefore(step)}
+                stepTitles={stepTitles}
+                done={done.has(step.id)}
+                onDone={(yes) => markDone(step.id, yes)}
                 expanded={open === step.id}
                 onToggle={() => setOpen(open === step.id ? null : step.id)}
                 palette={palette}
@@ -213,6 +369,10 @@ function StepCard({
   step,
   index,
   effective,
+  blockedBy,
+  stepTitles,
+  done,
+  onDone,
   expanded,
   onToggle,
   palette,
@@ -224,6 +384,12 @@ function StepCard({
   step: PlanStep;
   index: number;
   effective: AutomationLevel;
+  /** Prerequisites still outstanding, by title. Empty when the way is clear. */
+  blockedBy: string[];
+  /** Every step's title, for naming the ones this one waits on. */
+  stepTitles: Map<string, string>;
+  done: boolean;
+  onDone: (yes: boolean) => void;
   expanded: boolean;
   onToggle: () => void;
   palette: Palette;
@@ -234,6 +400,34 @@ function StepCard({
 }) {
   const t = useT();
   const capped = effective !== step.capability;
+
+  /*
+   * The whole step, run in one go.
+   *
+   * Offered only where the mode says `auto` and the step is made of commands
+   * this application can send. The approval is the same act as approving one
+   * command, moved up a level: the operator reads the sequence, sees what in it
+   * can interrupt something, and says yes once. Everything below it is
+   * unchanged — the native policy still decides each command on the way out.
+   */
+  const sequence = step.actions
+    .map((action, i) => ({ action, key: `${step.id}-${i}` }))
+    .filter(({ action }) => runnableCommands(step).includes(action));
+  const disruptive = sequence.filter(({ action }) => isDisruptiveCommand(action.body));
+  /*
+   * Not for a step that needs someone at the machine.
+   *
+   * A step marked `requiresLocalConsole` is one where the command can cut the
+   * session carrying it — reloading the bridge the SSH connection runs over is
+   * the case it was written for. The single-command path already refuses to
+   * send those; running them as a sequence would be the same act with less
+   * ceremony, which is the wrong direction.
+   */
+  const offersSequence =
+    effective === 'auto' && runner.ready && sequence.length > 0 && !step.requiresLocalConsole;
+  const blocked = blockedBy.length > 0;
+  const sequenceBusy = runner.runningSequence(sequence.map((x) => x.key));
+  const [sequenceApproved, setSequenceApproved] = useState(false);
 
   return (
     <div
@@ -295,6 +489,16 @@ function StepCard({
             >
               {t.blueprint.risk[step.risk]}
             </Pill>
+            {done ? (
+              <Pill color={palette.ok} tight>
+                {t.plan.stepDone}
+              </Pill>
+            ) : null}
+            {blockedBy.length > 0 ? (
+              <Pill color={palette.warn} tight>
+                {t.plan.stepBlocked(blockedBy.length)}
+              </Pill>
+            ) : null}
             {step.requiresBackup ? (
               <Pill color={palette.warn} tight>
                 {t.plan.backupRequired}
@@ -355,8 +559,132 @@ function StepCard({
 
       {expanded ? (
         <div style={{ padding: '0 14px 14px 45px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/*
+            * The order, stated rather than implied.
+            *
+            * A plan is a sequence, and the only thing that used to hold it in
+            * order was the reader going down the page. Naming what a step is
+            * waiting for turns "it failed" into "not yet" — and the tick is
+            * how a step done at the console an hour ago stops blocking the
+            * rest of the estate.
+            */}
+          {step.requires.length > 0 ? (
+            <div
+              className="soft"
+              style={{
+                padding: '10px 12px',
+                borderColor: blockedBy.length > 0 ? palette.warn : 'var(--line)',
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 5 }}>
+                {blockedBy.length > 0 ? t.plan.waitsFor : t.plan.orderClear}
+              </div>
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: 18,
+                  fontSize: 11,
+                  color: 'var(--text2)',
+                  lineHeight: 1.6,
+                }}
+              >
+                {step.requires.map((id) => (
+                  <li key={id} style={{ color: blockedBy.length > 0 ? undefined : palette.ok }}>
+                    {stepTitles.get(id) ?? id}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {step.prechecks.length > 0 ? (
             <ChecklistBlock title={t.plan.precheck} items={step.prechecks} color={palette.warn} />
+          ) : null}
+
+          {/*
+            * Running the step as one act.
+            *
+            * The list below it does not change: every command is still shown
+            * in full, still copyable, still runnable on its own. This is the
+            * `auto` mode's whole difference — one reading, one approval, and
+            * the sequence stops itself at the first command that fails.
+            */}
+          {offersSequence ? (
+            <div className="soft" style={{ padding: '11px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 500 }}>
+                  {t.plan.runStepTitle(sequence.length)}
+                </span>
+                {disruptive.length > 0 ? (
+                  <Pill color={palette.warn} tight>
+                    {t.plan.mayInterrupt}
+                  </Pill>
+                ) : null}
+              </div>
+              <div
+                className="pretty"
+                style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.55, marginTop: 6 }}
+              >
+                {blocked
+                  ? t.plan.orderBlockedNote
+                  : disruptive.length > 0
+                    ? t.plan.runStepInterruptNote
+                    : t.plan.runStepNote}
+              </div>
+              {disruptive.length > 0 ? (
+                <ul
+                  className="mono"
+                  style={{ margin: '7px 0 0', paddingLeft: 18, fontSize: 10, color: palette.warn }}
+                >
+                  {disruptive.map(({ key, action }) => (
+                    <li key={key}>{action.label}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <label
+                style={{
+                  display: 'flex',
+                  gap: 9,
+                  alignItems: 'flex-start',
+                  margin: '10px 0',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={sequenceApproved}
+                  disabled={blocked}
+                  onChange={(e) => setSequenceApproved(e.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <span className="pretty">{t.plan.runStepConfirm(sequence.length)}</span>
+              </label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={!sequenceApproved || sequenceBusy || blocked}
+                  style={vars({ '--btn-bg': accent })}
+                  onClick={() => {
+                    setSequenceApproved(false);
+                    void runner
+                      .runSequence(
+                        sequence.map(({ key, action }) => ({ key, command: action.body })),
+                      )
+                      // The step is behind us when every command of it ran and
+                      // none of them failed — which is what runSequence stops
+                      // at, so a short run is a failed one.
+                      .then(() => onDone(true));
+                  }}
+                >
+                  {sequenceBusy ? t.ssh.runningNow : t.plan.runStep}
+                </button>
+                <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
+                  {runner.selected?.label} · {runner.selected?.sshHost}
+                </span>
+              </div>
+            </div>
           ) : null}
 
           {step.actions.length > 0 ? (
@@ -380,6 +708,20 @@ function StepCard({
               </div>
             </div>
           ) : null}
+
+          <label
+            style={{
+              display: 'flex',
+              gap: 9,
+              alignItems: 'center',
+              fontSize: 11,
+              cursor: 'pointer',
+              color: 'var(--text2)',
+            }}
+          >
+            <input type="checkbox" checked={done} onChange={(e) => onDone(e.target.checked)} />
+            <span className="pretty">{t.plan.markDone}</span>
+          </label>
 
           {step.verification.length > 0 ? (
             <ChecklistBlock title={t.plan.verification} items={step.verification} color={accent} />

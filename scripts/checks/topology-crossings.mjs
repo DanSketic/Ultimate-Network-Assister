@@ -239,8 +239,8 @@ function tangle(flows, nodes) {
 
 const TIER = (n) =>
   n.kind === 'gateway' || n.kind === 'cloud' ? 0
-  : n.kind === 'switch' || n.kind === 'host' ? 1
-  : n.kind === 'ap' || n.kind === 'ct' || n.kind === 'vm' ? 2 : 3;
+  : n.kind === 'switch' || n.kind === 'host' || n.kind === 'storage' ? 1
+  : n.kind === 'ap' || n.kind === 'bridge' ? 2 : 3;
 
 const rows = [[], [], [], []];
 for (const n of estate.nodes) rows[TIER(n)].push(n);

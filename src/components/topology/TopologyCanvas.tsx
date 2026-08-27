@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NetLink, NetNode } from '@/data/model';
 import { useT } from '@/i18n';
-import { cx } from '@/lib/css';
+import { cx, vars } from '@/lib/css';
 import { deepLink } from '@/lib/deeplink';
-import { frameFor } from '@/lib/fit';
+import { FIT_PAD, frameFor } from '@/lib/fit';
 import { buildFlows, SPEED_STEPS, type PortLabel } from '@/lib/flows';
-import { CANVAS_H, CANVAS_W } from '@/lib/geometry';
-import type { Palette, Tone } from '@/lib/palette';
+import { CANVAS_H, CANVAS_W, CHIP_H, CHIP_W, NODE_H, NODE_W } from '@/lib/geometry';
+import {
+  familyAreas,
+  type FamilyArea,
+  type NodeFamily,
+  labelSize,
+  labelSpot,
+  outlineEdges,
+  zoneAreas,
+  type LabelBox,
+} from '@/lib/zones';
+import { familyHue, tint, type Palette, type Tone } from '@/lib/palette';
 import { ZOOM_MAX, ZOOM_MIN } from '@/state/useAppState';
 import { CaretIcon } from '../icons';
 import { Dot } from '../ui';
@@ -39,6 +49,15 @@ export interface TopologyCanvasProps {
   onMoveNode?: (id: string, x: number, y: number) => void;
   onResetLayout?: () => void;
 }
+
+/**
+ * How far a boundary's name reaches above its own top edge.
+ *
+ * The label sits on the line rather than inside it, so anything framing a
+ * boundary has to reserve this much more than the box asks for — otherwise the
+ * name is the one thing the fit cuts off.
+ */
+const LABEL_REACH = 6;
 
 interface DragOrigin {
   x: number;
@@ -92,6 +111,32 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [panning, setPanning] = useState(false);
   const [draggingNode, setDraggingNode] = useState<string | null>(null);
+  /*
+   * Which cards belong together, outlined.
+   *
+   * On by default: the grouping is what the map was missing, and a hint nobody
+   * finds is no hint. Off is one click away for a map being read cable by
+   * cable, where the outlines are one thing too many.
+   */
+  const [showZones, setShowZones] = useState(true);
+
+  /*
+   * The group the view is currently framed on, if any.
+   *
+   * Kept only so that a click on the background knows whether it has anything
+   * to undo: with nothing focused, empty space is empty space and clicking it
+   * must not rearrange a view the reader has panned by hand.
+   */
+  const [focused, setFocused] = useState<NodeFamily | null>(null);
+
+  /*
+   * Whether the pointer travelled between going down and coming up.
+   *
+   * A drag across the map ends with a click on whatever is under the pointer,
+   * and a pan that lands on a boundary must not be read as someone asking to
+   * zoom into it. The mouseup clears the drag itself, so this outlives it.
+   */
+  const panMoved = useRef(false);
 
   // Hover highlights take precedence over the current selection.
   const focus = hovered ?? selected;
@@ -111,10 +156,63 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
     [nodes, links, palette, accent, focus, showLogical, showEstimated, animate],
   );
 
+  const areas = useMemo(() => (showZones ? zoneAreas(nodes) : []), [nodes, showZones]);
+  const families = useMemo(() => (showZones ? familyAreas(nodes) : []), [nodes, showZones]);
+
+  /*
+   * Where each boundary's name goes.
+   *
+   * Worked out together for all of them, and against the port chips, because
+   * the corner a name wants is often where a cable comes down into the first
+   * card of the group — and a name under a chip is unreadable. The families
+   * are placed first: their names are the coarser ones, so a zone gives way
+   * rather than the other way round.
+   */
+  const labels = useMemo(() => {
+    if (!showZones) return { family: [] as LabelBox[], zone: [] as LabelBox[] };
+
+    const chips: LabelBox[] = ports.map((p) => ({
+      x: p.x - CHIP_W / 2,
+      y: p.y - CHIP_H / 2,
+      w: CHIP_W,
+      h: CHIP_H,
+    }));
+
+    // Every other outline's lines. A name may sit inside a boundary; on one it
+    // is unreadable, and so is the line.
+    const edges = [...families, ...areas].map((area) => ({ area, bands: outlineEdges(area) }));
+    const others = (mine: unknown) =>
+      edges.filter((e) => e.area !== mine).flatMap((e) => e.bands);
+
+    const taken: LabelBox[] = [];
+    const family = families.map((area) => {
+      const spot = labelSpot(
+        area,
+        labelSize(t.topology.familyName[area.family], true),
+        [...chips, ...taken],
+        others(area),
+      );
+      taken.push(spot);
+      return spot;
+    });
+    const zone = areas.map((area) => {
+      const spot = labelSpot(
+        area,
+        labelSize(t.topology.zoneName[area.zone], false),
+        [...chips, ...taken],
+        others(area),
+      );
+      taken.push(spot);
+      return spot;
+    });
+    return { family, zone };
+  }, [showZones, families, areas, ports, t]);
+
   const startPan = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       dragRef.current = { x: e.clientX, y: e.clientY, panX, panY };
+      panMoved.current = false;
       setPanning(true);
     },
     [panX, panY],
@@ -183,6 +281,7 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
     const move = (e: MouseEvent) => {
       const origin = dragRef.current;
       if (!origin) return;
+      if (Math.hypot(e.clientX - origin.x, e.clientY - origin.y) >= 3) panMoved.current = true;
       onPan(origin.panX + (e.clientX - origin.x), origin.panY + (e.clientY - origin.y));
     };
     const end = () => {
@@ -199,33 +298,103 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
   }, [panning, onPan]);
 
   /**
-   * Frames everything that is actually drawn.
+   * How much room the view has, and what the pan is solved against.
    *
    * Two things have to be measured rather than assumed. The content is not the
    * canvas: nodes occupy a fraction of it, and fitting the canvas leaves the
    * estate small in the middle of an empty field. And the visible area is not
    * the window: the inspector takes the right-hand side and the legend sits
    * over the bottom, so both are subtracted before anything is scaled.
+   */
+  const measure = useCallback(() => {
+    const viewport = viewportRef.current;
+    const surface = viewport?.firstElementChild;
+    if (!viewport || !(surface instanceof HTMLElement) || nodes.length === 0) return null;
+
+    // The overlay bars sit over the bottom of the canvas, so that strip is not
+    // somewhere the estate can be put.
+    const BOTTOM_BARS = 78;
+    return {
+      viewport,
+      surface,
+      available: viewport.clientWidth,
+      usable: viewport.clientHeight - BOTTOM_BARS,
+    };
+  }, [nodes.length]);
+
+  /**
+   * Puts one canvas point in the middle of the view, at a given zoom.
    *
    * Where a canvas point lands on screen is read off the live transform rather
    * than reconstructed from the stylesheet. The surface is a flex item with a
    * percentage-resolved transform origin, and predicting that from first
    * principles is exactly the kind of arithmetic that is quietly wrong on one
    * axis — which is how this landed off-centre before.
+   *
+   * So it is solved as a move from where things are now. A point at local p
+   * sits at `edge + z·p + origin·(1 − z) + pan`, and `edge` — where the
+   * surface lands untransformed — is not worth reconstructing: it is a flex
+   * item in a scroll container, and the browser shifts it to keep overflowing
+   * content reachable. Reading one measured position and cancelling the terms
+   * leaves
+   *
+   *     pan' = target − seen + z·at − z'·centre + origin·(z' − z) + pan
+   *
+   * which needs no assumption about the layout at all. The measured point and
+   * the point being framed are two different things here: `at` is the cards'
+   * centre, which is the one place on the map whose position on screen can be
+   * read off the DOM, while `centre` is wherever the caller wants the middle
+   * of the view to end up. Letting them differ is the whole of what makes
+   * framing a single group possible rather than only the estate entire.
    */
+  const placeFrame = useCallback(
+    (
+      view: { viewport: HTMLElement; surface: HTMLElement; available: number; usable: number },
+      want: { zoom: number; centreX: number; centreY: number },
+    ) => {
+      const { viewport, surface, available, usable } = view;
+
+      const style = getComputedStyle(surface);
+      const [originX = 0, originY = 0] = style.transformOrigin.split(' ').map(parseFloat);
+      const box = viewport.getBoundingClientRect();
+
+      // Where the cards' centre is on screen right now...
+      const rects = [...surface.querySelectorAll('.node')].map((el) => el.getBoundingClientRect());
+      if (rects.length === 0) {
+        onZoomFit();
+        return;
+      }
+      const seenX =
+        (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2 -
+        box.left;
+      const seenY =
+        (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2 -
+        box.top;
+
+      // ...and where that same point is in canvas coordinates.
+      const atX =
+        (Math.min(...nodes.map((n) => n.x)) + Math.max(...nodes.map((n) => n.x + NODE_W))) / 2;
+      const atY =
+        (Math.min(...nodes.map((n) => n.y)) + Math.max(...nodes.map((n) => n.y + NODE_H))) / 2;
+
+      const shift = want.zoom - zoom;
+      onZoomFit({
+        zoom: want.zoom,
+        panX:
+          available / 2 - seenX + zoom * atX - want.zoom * want.centreX + originX * shift + panX,
+        panY: usable / 2 - seenY + zoom * atY - want.zoom * want.centreY + originY * shift + panY,
+      });
+    },
+    [nodes, onZoomFit, zoom, panX, panY],
+  );
+
+  /** Frames everything that is actually drawn. */
   const fitToContent = useCallback(() => {
-    const viewport = viewportRef.current;
-    const surface = viewport?.firstElementChild;
-    if (!viewport || !(surface instanceof HTMLElement) || nodes.length === 0) {
+    const view = measure();
+    if (!view) {
       onZoomFit();
       return;
     }
-
-    // The overlay bars sit over the bottom of the canvas, so that strip is not
-    // somewhere the estate can be put.
-    const BOTTOM_BARS = 78;
-    const available = viewport.clientWidth;
-    const usable = viewport.clientHeight - BOTTOM_BARS;
 
     /*
      * The cables have to be measured rather than derived: the bow that clears
@@ -234,7 +403,7 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
      * coordinates — the same space the node positions are in — regardless of
      * the transform currently on the surface.
      */
-    const drawnBox = surface.querySelector('svg')?.getBBox();
+    const drawnBox = view.surface.querySelector('svg')?.getBBox();
     const drawn =
       drawnBox && drawnBox.width > 0
         ? {
@@ -245,12 +414,26 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
           }
         : null;
 
+    /*
+     * The outlines are framed with the cards.
+     *
+     * They are HTML rather than SVG, so they are not in the drawn bounds — and
+     * being the outermost thing on the map, leaving them out is exactly how a
+     * fit ends with a boundary running off the top of the view. The label sits
+     * above its box's top edge, so a little more is reserved there.
+     */
+    const outlines = [
+      ...families.map((a) => ({ minX: a.x, minY: a.y - LABEL_REACH, maxX: a.x + a.w, maxY: a.y + a.h })),
+      ...areas.map((a) => ({ minX: a.x, minY: a.y, maxX: a.x + a.w, maxY: a.y + a.h })),
+    ];
+
     const fit = frameFor({
       nodes,
       ports,
       drawn,
-      available,
-      usable,
+      areas: outlines,
+      available: view.available,
+      usable: view.usable,
       zoomMin: ZOOM_MIN,
       zoomMax: ZOOM_MAX,
     });
@@ -259,48 +442,70 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
       return;
     }
 
-    /*
-     * Solved as a move from where things are now, not from where the layout
-     * says they should be.
-     *
-     * A point at local p sits at `edge + z·p + origin·(1 − z) + pan`, and
-     * `edge` — where the surface lands untransformed — turned out not to be
-     * something worth reconstructing: it is a flex item in a scroll container,
-     * and the browser shifts it to keep overflowing content reachable. Reading
-     * one measured position and cancelling the terms leaves
-     *
-     *     pan' = target − seen + (z' − z)·(origin − p) + pan
-     *
-     * which needs no assumption about the layout at all.
-     */
-    const style = getComputedStyle(surface);
-    const [originX = 0, originY = 0] = style.transformOrigin.split(' ').map(parseFloat);
-    const view = viewport.getBoundingClientRect();
+    placeFrame(view, fit);
+  }, [nodes, ports, areas, families, measure, placeFrame, onZoomFit]);
 
-    // Where the content's centre is on screen right now.
-    const rects = [...surface.querySelectorAll('.node')].map((el) => el.getBoundingClientRect());
-    if (rects.length === 0) {
-      onZoomFit();
-      return;
-    }
-    const seenX =
-      (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2 -
-      view.left;
-    const seenY =
-      (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2 -
-      view.top;
+  /*
+   * Clicking a group brings that group up close.
+   *
+   * The outline already says which cards are one part of the estate; being
+   * able to click it is what makes that grouping worth having on a map too big
+   * to read at once. Nothing about the estate changes — this is the view
+   * moving, exactly as the zoom buttons move it, which is why clicking away is
+   * enough to undo and nothing has to be put back.
+   */
+  const focusFamily = useCallback(
+    (area: FamilyArea) => {
+      const view = measure();
+      if (!view) return;
 
-    // `seenX` is where the cards' centre is now and `fit.centreX` is that same
-    // point in canvas coordinates — one point described two ways, which is what
-    // lets the pan be solved without knowing where the layout put the surface.
-    const shift = fit.zoom - zoom;
+      // The label rides just above the top edge, so the framed box starts
+      // there rather than at the line: a name cut off by the edge of the view
+      // is the same failure as a boundary that runs off it.
+      const top = area.y - LABEL_REACH;
+      const height = area.y + area.h - top;
 
-    onZoomFit({
-      zoom: fit.zoom,
-      panX: available / 2 - seenX + shift * (originX - fit.centreX) + panX,
-      panY: usable / 2 - seenY + shift * (originY - fit.centreY) + panY,
-    });
-  }, [nodes, ports, onZoomFit, zoom, panX, panY]);
+      placeFrame(view, {
+        zoom: Math.max(
+          ZOOM_MIN,
+          Math.min(
+            ZOOM_MAX,
+            Math.min(
+              view.available / (area.w + FIT_PAD * 2),
+              view.usable / (height + FIT_PAD * 2),
+            ),
+          ),
+        ),
+        centreX: area.x + area.w / 2,
+        centreY: top + height / 2,
+      });
+      setFocused(area.family);
+    },
+    [measure, placeFrame],
+  );
+
+  /** Back out of a group, to the estate entire. */
+  const showEstate = useCallback(() => {
+    setFocused(null);
+    fitToContent();
+  }, [fitToContent]);
+
+  /*
+   * And clicking outside it puts the whole estate back.
+   *
+   * Only the background counts as outside. A click on a card is someone asking
+   * about that device, and having the view jump at the same time would answer
+   * a question nobody asked — the inspector opening is the whole of what that
+   * click means.
+   */
+  const clickAway = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (panMoved.current || focused === null) return;
+      if (e.target instanceof Element && e.target.closest('.node')) return;
+      showEstate();
+    },
+    [focused, showEstate],
+  );
 
   /*
    * `?fit=1` frames the estate as soon as it is drawn.
@@ -324,6 +529,7 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
       ref={viewportRef}
       className={cx('canvas', panning && 'canvas--panning')}
       onMouseDown={startPan}
+      onClick={clickAway}
     >
       <div
         style={{
@@ -344,7 +550,7 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
           width={CANVAS_W}
           height={CANVAS_H}
           viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-          style={{ position: 'absolute', inset: 0, overflow: 'visible' }}
+          style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}
           aria-hidden="true"
         >
           {flows.map((f, i) => (
@@ -407,6 +613,112 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
             </g>
           ))}
         </svg>
+
+        {/*
+          * The families, behind everything: one plain rectangle each, because
+          * the layout keeps a family in its own column all the way down and a
+          * box that steps in and out on every row is harder to follow than the
+          * cards it was drawn to help with.
+          */}
+        {families.map((area, i) => (
+          <button
+            type="button"
+            key={`family-${area.family}-${i}`}
+            className={cx('family-area', focused === area.family && 'family-area--focused')}
+            title={
+              focused === area.family
+                ? t.topology.showEstate
+                : t.topology.focusFamily(t.topology.familyName[area.family])
+            }
+            aria-label={
+              focused === area.family
+                ? t.topology.showEstate
+                : t.topology.focusFamily(t.topology.familyName[area.family])
+            }
+            onClick={(e) => {
+              // The click that ends a pan is not a click on what it landed on.
+              if (panMoved.current) return;
+              e.stopPropagation();
+              /*
+               * The group already framed backs out again.
+               *
+               * The pointer says as much — it turns to a zoom-out over a
+               * framed group — and a control that shows one thing and does
+               * another is worse than one that does nothing. Clicking the
+               * background does this too; both are here because the reader
+               * whose eye is on the group they zoomed into does not
+               * necessarily have anywhere else to aim.
+               */
+              if (focused === area.family) showEstate();
+              else focusFamily(area);
+            }}
+            style={vars(
+              {
+                // One hue per family — the accent for the estate's own
+                // network, orange for the hypervisor, violet for the internet:
+                // see familyHue.
+                '--zone-line': tint(familyHue(area.family, palette, accent), '59'),
+                '--zone-fill': tint(familyHue(area.family, palette, accent), '0a'),
+                '--zone-label': familyHue(area.family, palette, accent),
+              },
+              { left: area.x, top: area.y, width: area.w, height: area.h },
+            )}
+          >
+            <span
+              className="family-area__label"
+              style={{
+                left: (labels.family[i]?.x ?? area.x) - area.x,
+                top: (labels.family[i]?.y ?? area.y) - area.y,
+              }}
+            >
+              {t.topology.familyName[area.family]}
+            </span>
+          </button>
+        ))}
+
+        {/*
+          * The outlines go on before the cards and after the cables: they are
+          * a backdrop, and a card or a port number disappearing behind one
+          * would be a poor trade for a grouping hint.
+          */}
+        {showZones
+          ? areas.map((area, i) => (
+              <div
+                key={`zone-${area.zone}-${i}`}
+                className="zone-area"
+                style={vars(
+                  {
+                    // The colour of the family this sits inside, not a
+                    // colour per zone: the status colours already mean
+                    // something on this map, and a second set of meanings in
+                    // the same picture is one too many. The zones are told
+                    // apart by their labels, and an inner outline in a hue
+                    // other than its own family's would read as belonging to
+                    // the other one.
+                    '--zone-line': tint(familyHue(area.family, palette, accent), '80'),
+                    // No wash: the family outline this sits inside already
+                    // carries one, and two washes over each other read as a
+                    // third colour nobody chose.
+                    '--zone-fill': 'transparent',
+                    '--zone-label': 'var(--text2)',
+                  },
+                  { left: area.x, top: area.y, width: area.w, height: area.h },
+                )}
+                aria-hidden="true"
+              >
+                <span
+                  className="zone-area__label"
+                  style={{
+                    left: (labels.zone[i]?.x ?? area.x) - area.x,
+                    top: (labels.zone[i]?.y ?? area.y) - area.y,
+                  }}
+                >
+                  <span className="zone-area__dot" />
+                  {t.topology.zoneName[area.zone]}
+                </span>
+              </div>
+            ))
+          : null}
 
         {nodes.map((node) => (
           <NodeCard
@@ -569,6 +881,22 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
             onClick={fitToContent}
           >
             {t.topology.fit}
+          </button>
+
+          <div style={{ width: 1, height: 16, background: 'var(--line)', margin: '0 3px' }} />
+          {/*
+            * Grouping is a way of reading the map, not a property of it, so it
+            * is a switch on the view rather than a setting to be found.
+            */}
+          <button
+            type="button"
+            className="zoom-btn"
+            style={{ padding: '0 9px', ...(showZones ? { color: 'var(--accent)' } : {}) }}
+            aria-pressed={showZones}
+            title={t.topology.zonesHint}
+            onClick={() => setShowZones((on) => !on)}
+          >
+            {t.topology.zonesToggle}
           </button>
 
           {/*

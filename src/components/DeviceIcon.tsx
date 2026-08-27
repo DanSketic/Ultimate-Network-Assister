@@ -27,6 +27,7 @@ export type DeviceGlyph =
   | 'gateway'
   | 'switch8'
   | 'switch24'
+  | 'bridge'
   | 'ap'
   | 'server'
   | 'nas'
@@ -119,6 +120,20 @@ const GLYPHS: Record<DeviceGlyph, (p: DeviceIconProps) => React.ReactElement> = 
       <circle cx="5.4" cy="10.2" r="0.7" fill="currentColor" stroke="none" />
       <PortRow count={8} y={13.2} />
       <PortRow count={8} y={15.7} />
+    </Svg>
+  ),
+
+  /*
+   * A software bridge: the switch face, drawn without a case.
+   *
+   * It is a switch — that is exactly what a bridge is — so it keeps the port
+   * row, and loses the box and the status light, because there is no hardware
+   * to have either.
+   */
+  bridge: (p) => (
+    <Svg {...p}>
+      <path d="M3 8.4v7.2M21 8.4v7.2M3 12h18" />
+      <PortRow count={4} />
     </Svg>
   ),
 
@@ -252,6 +267,8 @@ export function glyphFor(kind: NodeKind, model = '', name = ''): DeviceGlyph {
       return /(?:^|[^\d])(16|24|48)(?:[^\d]|$)/.test(m) ? 'switch24' : 'switch8';
     case 'ap':
       return 'ap';
+    case 'bridge':
+      return 'bridge';
     case 'host':
       return 'server';
     case 'storage':

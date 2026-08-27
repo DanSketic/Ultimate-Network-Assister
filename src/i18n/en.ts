@@ -38,6 +38,7 @@ export const en: Dict = {
       ap: 'Access point',
       clients: 'Client group',
       host: 'Proxmox host',
+      bridge: 'Bridge',
       storage: 'Storage',
       ct: 'LXC container',
       vm: 'Virtual machine',
@@ -243,6 +244,18 @@ export const en: Dict = {
     portUp: 'Up',
     portDown: 'No link',
     portUplink: 'Uplink',
+    portProfile: 'Profile',
+    portNative: 'Native',
+    portAll: '← All ports',
+    portForwardLabel: 'Forwards',
+    portForward: {
+      all: 'every VLAN',
+      native: 'one network',
+      customize: 'selected VLANs',
+      disabled: 'disabled',
+    },
+    portUplinkRole: 'uplink',
+    portNoProfile: 'no profile on the port',
     portUnnamed: 'Unnamed port',
     portNoLldp: 'the far end does not announce itself (no LLDP)',
     portVlanUnknown: 'VLAN pass-through not surveyed',
@@ -274,6 +287,21 @@ export const en: Dict = {
     zoomOut: 'Zoom out',
     fit: 'Fit',
     resetLayout: 'Automatic',
+    familyName: {
+      internet: 'Internet',
+      unifi: 'UniFi network',
+      proxmox: 'Proxmox',
+    },
+    focusFamily: (name: string) => `Fit ${name} in the view`,
+    showEstate: 'Back to the whole estate',
+    zonesToggle: 'Zones',
+    zonesHint: 'Outline the cards that belong to the same zone.',
+    zoneName: {
+      WAN: 'WAN',
+      Mgmt: 'Management',
+      IoT: 'IoT',
+      Servers: 'Servers',
+    },
     arrangedBy: (n: number) =>
       n === 1
         ? '1 device placed by hand — put the automatic layout back'
@@ -596,6 +624,8 @@ export const en: Dict = {
     free: 'free',
 
     unifiOneSided: 'The UniFi side appears in only one of the surveys, so it was not compared.',
+    wanOneSided:
+      'Only one of the surveys measured the WAN, so the way out was not compared. Surveys taken before the application collected it have no such reading.',
     proxmoxOneSided: 'The Proxmox side appears in only one of the surveys, so it was not compared.',
 
     deviceAppeared: 'New device appeared',
@@ -604,6 +634,20 @@ export const en: Dict = {
     deviceBack: 'Reachable again',
     firmwareChanged: 'Firmware changed',
     addressChanged: 'Address changed',
+
+    wanAppeared: 'New way out',
+    wanGone: 'The way out is no longer reported',
+    wanLost: 'The link stopped carrying traffic',
+    wanBack: 'The link is carrying traffic again',
+    wanAddressChanged: 'The public address changed',
+    wanIspChanged: 'A different provider is on the line',
+    wanKindChanged: 'The address is obtained differently',
+    wanGatewayChanged: 'The next hop changed',
+    wanDnsChanged: 'The resolvers changed',
+    wanSlower: 'The link negotiated slower',
+    wanFaster: 'The link negotiated faster',
+    wanThroughputDown: 'The measured throughput fell',
+    wanThroughputUp: 'The measured throughput rose',
 
     portDown: 'Port went down',
     portUp: 'Port came up',
@@ -636,6 +680,18 @@ export const en: Dict = {
     backupGained: 'Backup coverage established',
     bridgeVlanOn: 'Bridge became VLAN-aware',
     bridgeVlanOff: 'Bridge is no longer VLAN-aware',
+    bridgeAdded: 'New bridge',
+    bridgeRemoved: 'Bridge removed',
+    bridgeDown: 'The bridge is no longer up',
+    bridgeUp: 'The bridge is up again',
+    bridgePortsChanged: 'A different port carries the bridge',
+    guestBridgeChanged: 'The guest moved to another bridge',
+    guestVlanChanged: 'The guest is on a different VLAN',
+    guestNicAdded: 'New interface on the guest',
+    guestNicRemoved: 'An interface of the guest is gone',
+    guestFirewallOn: 'The Proxmox firewall was switched on for the interface',
+    guestFirewallOff: 'The Proxmox firewall was switched off for the interface',
+    untagged: 'untagged',
   },
 
   adviceRules: {
@@ -931,7 +987,7 @@ export const en: Dict = {
       ports: 'Ports',
       target: 'Target state',
       plan: 'Plan',
-      apply: 'Apply',
+      apply: 'Run',
     },
     modulesNote:
       'Turning a module off removes its networks, rules and machines from the target state, and its steps disappear from the plan too. Required modules form the backbone of the system and cannot be turned off.',
@@ -962,6 +1018,8 @@ export const en: Dict = {
       noApi: 'No API for this: the application prepares the exact values and you type them in.',
       commandOnly:
         'No API call in this step, only a command: the application prepares it, and where an SSH connection is set up it runs it on your approval.',
+      templateOnly:
+        'The command has a blank in it (say <template>): the application does not know what goes there, so it will not run this step itself.',
       notWritten:
         'The application does not write this kind of object. A wrong firewall rule or port assignment can lock you out of the controller that would fix it, so the values are prepared exactly and entered by you.',
     },
@@ -970,6 +1028,8 @@ export const en: Dict = {
         `“${title}” was left out because it is missing: ${missing}.`,
       moduleClash: (title: string, clash: string) =>
         `“${title}” cannot be enabled together with: ${clash}.`,
+      networkIncomplete: (name: string) =>
+        `The ${name} network has no range or no gateway — fill those in on the Parameters tab.`,
       vlanTwice: (vlan: number, previous: string, name: string) =>
         `VLAN ${vlan} appears twice: “${previous}” and “${name}”.`,
       vlanOutOfRange: (vlan: number, name: string) =>
@@ -1014,6 +1074,33 @@ export const en: Dict = {
     moduleCount: (n: number) => `${n} modules`,
     issuesShort: (n: number) => `${n} contradictions`,
     households: 'Households',
+    extraNetworks: 'Networks of your own',
+    extraNetworksNote:
+      'What the survey found and the blueprint does not describe. Part of the target state exactly as the preset\u2019s networks are: choosable as a port\u2019s native network, and present in the handbook and the plan. The role decides which trunks carry it — worth checking.',
+    extraNetworkCount: (n: number) => (n === 1 ? '1 network' : `${n} networks`),
+    extraNetworkNone: 'None. Loading the survey on the Ports tab offers them when it finds any.',
+    netVlan: 'VLAN',
+    netName: 'Name',
+    netCidr: 'Range',
+    netGateway: 'Gateway',
+    netRoleLabel: 'Role',
+    netPurpose: 'What it is for',
+    netRole: {
+      management: 'Management',
+      trusted: 'Trusted',
+      infra: 'Infrastructure',
+      printers: 'Printers',
+      dmz: 'DMZ',
+      vpn: 'VPN',
+      rdp: 'RDP',
+      media: 'Media',
+      'server-test': 'Test servers',
+      'server-prod': 'Production servers',
+      household: 'Household clients',
+      iot: 'IoT / Wi-Fi devices',
+      guest: 'Guest',
+      cameras: 'Cameras',
+    },
     householdsNote:
       'Every household gets a client network; whether IoT and guests are split the same way is decided under Addressing. Where the households are shut off from each other, the plan automatically carries the rule that does it — in both directions.',
     resetParams: 'Reset parameters to their defaults',
@@ -1098,6 +1185,24 @@ export const en: Dict = {
       'A shape to fill in, not a finished command: the application does not know what belongs in the blanks, so this one is yours to complete and run.',
     sshLocalConsoleNote:
       'This step needs someone at the machine: the change can cut the session it would be sent over. Copy it and run it at a console.',
+    stepDone: 'Done',
+    stepBlocked: (n: number) => (n === 1 ? '1 step first' : `${n} steps first`),
+    waitsFor: 'These come first:',
+    orderClear: 'What it rests on — all done:',
+    markDone: 'This step is done (by hand, or run here)',
+    orderBlockedNote:
+      'This step’s commands rest on things that are not there yet. Do those first, or tick them off if you did them elsewhere.',
+    runStep: 'Run the step',
+    whereTheQueueIs:
+      'One step runs here. The whole runnable queue — the controller write included, in the plan’s order, with a log — is carried out on the Run tab.',
+    runStepTitle: (n: number) => `The step’s ${n} commands, in one go`,
+    runStepNote:
+      'The commands run in order and stop at the first failure. Every one of them goes through the native policy: what that refuses, nothing here runs.',
+    runStepInterruptNote:
+      'The commands run in order and stop at the first failure. Some of them can interrupt a service or the SSH session itself — those are listed below. Have a local console within reach before you start.',
+    runStepConfirm: (n: number) =>
+      `I have read all ${n} commands and agree to them running on this machine.`,
+    mayInterrupt: 'May interrupt',
     sshRunHere: 'Run over SSH',
     sshFailed: 'Did not run',
     executionMode: 'Execution mode',
@@ -1410,6 +1515,96 @@ export const en: Dict = {
       'Remote administration works only over the tunnel.',
     ],
 
+    /* ------------------------------------------------- the host and its guests */
+    baseReposTitle: 'Package sources',
+    baseReposDetail:
+      'On a host with no subscription the enterprise source fails every update. The no-subscription source carries the same Proxmox packages, without support.',
+    baseReposVerify: [
+      'apt-get update completes without an error.',
+      'pve-enterprise.list is commented out and pve-no-subscription.list exists.',
+    ],
+    basePackagesTitle: 'Base packages and services',
+    basePackagesDetail:
+      'The rest of the plan assumes these: lldpd so the survey can see what is plugged into what, smartmontools for the disks, mergerfs for the media pool, zfsutils for the pools. The full upgrade can restart services.',
+    basePackagesVerify: [
+      'systemctl is-active lldpd smartd → active',
+      'LLDP neighbours appear on the controller\u2019s topology.',
+    ],
+    baseActions: {
+      check: 'What is on the host now',
+      noSubscription: 'Enterprise source off, no-subscription on',
+      update: 'Refresh the package list',
+      upgrade: 'Full upgrade (services may restart)',
+      packages: 'Install the base packages',
+      services: 'Enable the services',
+    },
+    templateTitle: 'Download the LXC template',
+    templateDetail:
+      'Every container is built from this. The command asks the mirror which Debian standard image is current, so it is not tied to a file name that goes stale.',
+    templateVerify: ['pveam list local → the downloaded template is listed.'],
+    templateActions: {
+      refresh: 'Refresh the template list',
+      download: 'Download the newest Debian template',
+    },
+    guest: {
+      title: (vmid: number, name: string) => `Create ${vmid} · ${name}`,
+      detail: (os: string, purpose: string) =>
+        `${os} — ${purpose}. The shell of the machine is built from the target state: cores, memory, disk, VLAN and address. If the machine already exists, the command leaves it alone.`,
+      createLxc: 'Create the container',
+      createVm: 'The virtual machine\u2019s shell',
+      install: 'Attach the installer image (fill this in yourself)',
+      start: 'Start it, and say what state it is in',
+      verify: (vmid: number) => [
+        `pct status ${vmid} or qm status ${vmid} → the machine exists.`,
+        'It answers on the address it was given, in the right VLAN.',
+      ],
+    },
+    snippetsTitle: 'Where cloud-init’s files live',
+    snippetsDetail:
+      'To install from a cloud image Proxmox hands the machine a file read on first boot, and it will only read that from a storage allowed to hold snippets. A stock install allows none. The existing content list is added to, never replaced.',
+    snippetsVerify: ['pvesm status → local lists snippets among its contents.'],
+    snippetsAction: 'Allow snippets on the local storage',
+    imageTitle: 'Download the Debian cloud image',
+    imageDetail:
+      'This disk already has the system on it and nothing decided: name, user and address are handed to it on first boot. Every Linux guest is installed from it, with nothing to click.',
+    imageVerify: ['sha512sum -c reports OK.'],
+    imageAction: 'Download it, and check it against the published sum',
+    system: {
+      title: (vmid: number, name: string) => `${vmid} · ${name} — operating system`,
+      detail: (os: string) =>
+        `The ${os} cloud image imported as the system disk, sized from the plan, with the address and the login handed over by cloud-init. The machine comes up on its own, with no installer screen. It is given the host’s own keys — whatever can already reach the hypervisor as root should be able to reach what the hypervisor builds.`,
+      applianceDetail: (os: string) =>
+        `${os} imported as a finished disk image. It comes up on its own but reads no cloud-init: the fixed address is set in its own console — the plan says which one.`,
+      importAppliance: 'Download the image, and import it',
+      applianceAddress: 'Set the address in the machine’s own console',
+      applianceVerify: (ip: string) => [
+        'The machine has started and its console shows the interface.',
+        ip ? `It answers on the network at ${ip}.` : 'The machine took an address from the network.',
+      ],
+      importDisk: 'Import the system disk, and size it',
+      firstBoot: 'First boot: user, key, address, guest agent',
+      start: 'Start it',
+      waitForAgent: 'Wait until the guest agent answers',
+      verify: (vmid: number, ip: string) => [
+        `qm guest exec ${vmid} -- true → runs without an error.`,
+        ip ? `The machine answers at ${ip}.` : 'The machine took an address from the network.',
+      ],
+    },
+    inGuest: {
+      title: (name: string) => `Install ${name} inside the machine`,
+      detail: (os: string) =>
+        `${os} — the shell of the machine exists; this is the software on it. For a container the host runs straight into it (pct exec); for a virtual machine the QEMU guest agent carries the command, so the operating system and qemu-guest-agent have to be there first.`,
+      reachable: 'Does the machine answer',
+      packages: 'Base packages inside the machine',
+      repo: 'Add the vendor’s package source',
+      download: 'Download, and the checksum of what arrived',
+      install: 'Install it',
+      configure: 'Set it up (fill in: token, password, domain)',
+      verify: (name: string, where: string) => [
+        `The ${name} service has started and is running.`,
+        `It answers at: ${where}`,
+      ],
+    },
     reviewVerify: ['The module’s content has been reviewed and accepted.'],
   },
 
@@ -1421,9 +1616,34 @@ export const en: Dict = {
     emptyBody:
       'Add them by hand, or — if a survey has run — load the ports that are actually plugged in and change what needs to be different.',
     importFromSurvey: 'Load from the survey',
-    importedCount: (n: number) => `${n} ports loaded from the survey`,
+    importSummary: (added: number, enriched: number, unused: number) =>
+      [
+        added > 0 ? `${added} new ports` : '',
+        enriched > 0 ? `${enriched} filled in from the survey` : '',
+        unused > 0 ? `${unused} of them free` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    importOnlyEmpty: (n: number) =>
+      `The survey found nothing new: all ${n} ports it saw are already here.`,
     importNothing: 'The survey found no ports.',
-    addPort: 'Add a port',
+    missingNetworks:
+      'The survey found networks on the ports that the target state does not describe. You can add them exactly as the controller has them — then set what they are for (which trunks carry them) on the Parameters tab.',
+    addMissingNetworks: (n: number) => (n === 1 ? 'Add the network' : `Add ${n} networks`),
+    missingNetworksAdded: (n: number) =>
+      `${n} networks added to the target state — check what they are for on the Parameters tab, then load the ports again.`,
+    importUnmatched: (names: string[]) =>
+      `The target state has no network for: ${names.join(', ')} — the native network on those ports was left empty.`,
+    addPort: 'Add a device',
+    addPortHint: 'The first port of a new device. Add further ports with the device’s own button.',
+    addPortTo: '+ port',
+    addPortToHint: (device: string) => `Add a port to ${device}`,
+    deviceUnnamed: 'Unnamed device',
+    devicePorts: (n: number) => (n === 1 ? '1 port' : `${n} ports`),
+    deviceUnusedCount: (n: number) => `${n} free`,
+    deviceName: 'Device name',
+    removeDevice: (device: string) => `Remove every port on ${device}`,
+    removeDeviceConfirm: 'Sure?',
     colDevice: 'Device',
     colPort: 'Port',
     colLabel: 'What is on it',
@@ -1439,6 +1659,7 @@ export const en: Dict = {
       trunk: 'Switch trunk',
       uplink: 'Uplink',
       off: 'Disabled',
+      unused: 'Free — nothing on it',
     },
     profiles: {
       accessPrefix: 'ACCESS',
@@ -1454,7 +1675,8 @@ export const en: Dict = {
         server: 'Every VLAN a guest machine can sit in',
         trunk: 'Every VLAN, switch to switch',
         uplink: 'Every VLAN, towards the gateway',
-        off: 'The port is not in use',
+        off: 'Switched off in the controller',
+        unused: 'A free port the plan leaves alone',
       },
     },
     issue: {
@@ -1469,7 +1691,7 @@ export const en: Dict = {
     },
     writeNote:
       'The application writes the port profiles. It does not write which physical port gets which one: a wrong port override can cut you off from the controller itself, and there is no way back from inside the application. The plan tells you the exact values to set on the port.',
-    profilesTitle: 'Port profiles',
+    profilesTitle: (n: number) => `Port profiles · ${n}`,
     portsTitle: 'Ports',
     usedBy: (n: number) => `on ${n} ports`,
   },
@@ -1510,6 +1732,17 @@ export const en: Dict = {
     factWireless: 'Wireless',
     factWired: 'Wired',
     factUnidentified: 'Unidentified',
+    factLink: 'Link',
+    factIsp: 'Provider',
+    factWanGateway: 'Next hop',
+    factDns: 'DNS',
+    factSpeedtest: 'Last speed test',
+    factAttached: 'Attached to',
+    factUplinkPort: 'Uplink port',
+    factVlanAware: 'VLAN-aware',
+    factAddress: 'Address',
+    factCarries: 'Carries',
+    untagged: 'untagged',
     metricCpu: 'CPU',
     metricMemory: 'Memory',
     metricDisk: 'Disk',
@@ -1517,11 +1750,27 @@ export const en: Dict = {
     metricClients: 'Clients',
     metricAvailability: 'Availability',
     metricVcpu: 'vCPU',
+    metricLatency: 'Latency',
+    metricGuests: 'Guests on it',
+    metricPortSpeed: 'Link speed',
+    milliseconds: (n: number) => `${n} ms`,
+    megabits: (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)} Gbit/s` : `${n} Mbit/s`),
+    speedtestResult: (down: number, up: number) => `${down} / ${up} Mbit/s`,
+    internet: 'Internet',
+    bridgeInactive: (name: string) =>
+      `${name} is configured but not up, so nothing on it has a network.`,
+    bridgeTagWithoutVlanAware: (name: string) =>
+      `A guest on ${name} is tagged into a VLAN, but the bridge is not VLAN-aware — the tag is not applied, and that guest is on the bridge's own network instead.`,
+    wanDown: (name: string) =>
+      `${name} is not carrying traffic, so the estate has no way out over this link.`,
     threads: (n: number) => `${n} threads`,
     days: (n: number) => `${n} days`,
     hours: (n: number) => `${n} hours`,
     offline: 'offline',
     vlanAware: 'VLAN-aware',
+    factOn: 'Reported by',
+    clientsMore: (n: number) => `+${n} more`,
+    clientsUnplaced: (n: number) => `Unplaced clients · ${n}`,
     clientsNode: (n: number) => `Clients · ${n}`,
     clientsSubtitle: (wireless: number, wired: number) => `${wireless} wireless · ${wired} wired`,
     guestNotRunning: (state: string) => `The guest is not running (${state}).`,
@@ -1597,6 +1846,39 @@ export const en: Dict = {
     'Before a network configuration change, the application asks for proven local console access.',
   ],
 
+  run: {
+    title: 'Run',
+    subtitle:
+      'What the application can carry out itself, queued in the plan’s order. Everything else — the decisions, the work done by hand, the destructive storage steps — stays on the Plan tab, which is where it belongs.',
+    summary: (steps: number, unifi: number, ssh: number, commands: number) =>
+      `${steps} steps · ${unifi} controller writes · ${ssh} over SSH, ${commands} commands in all`,
+    runAll: 'Run the queue',
+    running: 'Running…',
+    stop: 'Stop',
+    runThis: 'This step',
+    route: 'Route',
+    routeUnifi: 'controller API',
+    routeSsh: 'SSH',
+    commands: 'Commands',
+    empty:
+      'There is nothing in this blueprint the application can carry out on its own right now: the steps need a decision, a local console, or a value only you can fill in. Every one of them is on the Plan tab, with the exact commands.',
+    state: {
+      idle: 'waiting',
+      running: 'running',
+      done: 'done',
+      failed: 'failed',
+    },
+    byHandTitle: 'What has to be done by hand first',
+    byHandNote:
+      'The console cannot run these — they want a local console, because they can cut the very connection they would run over. The queue goes no further until you tick them off.',
+    haltedWaiting: (title: string, waiting: string) => `— ${title} is waiting for: ${waiting}`,
+    logTitle: 'What has happened so far',
+    stopped: '— stopped',
+    finished: '— the queue reached the end',
+    haltedHere: (title: string) => `— halted here: ${title}`,
+    controllerTitle: 'Controller write: backup, dry run, rollback',
+  },
+
   apply: {
     desktopOnly:
       'Only the desktop application writes to a live system. In the browser the target state and the plan are visible, but Apply cannot start.',
@@ -1665,6 +1947,19 @@ export const en: Dict = {
     applying: 'Applying…',
     whatChanges: 'What would change',
     fields: 'Fields',
+    field: {
+      name: 'Name',
+      purpose: 'Purpose',
+      vlan: 'VLAN id',
+      vlan_enabled: 'VLAN tagging',
+      ip_subnet: 'Subnet',
+      enabled: 'Enabled',
+      forward: 'Forwarding',
+      native_vlan: 'Native VLAN',
+      tagged_vlans: 'Tagged VLANs',
+      poe_mode: 'PoE',
+      action: 'Action',
+    } as Record<string, string>,
     journal: 'Run journal',
     journalCounts: (applied: number, failed: number, rolledBack: number) =>
       `${applied} applied · ${failed} failed · ${rolledBack} rolled back`,

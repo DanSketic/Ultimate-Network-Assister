@@ -15,7 +15,7 @@
  */
 
 import type { Dict } from '@/i18n';
-import type { ProxmoxSnapshot, SurveySnapshot, UnifiSnapshot } from './model';
+import type { ProxmoxSnapshot, SurveySnapshot, UnifiSnapshot, UnifiWan } from './model';
 
 /** How much attention a change deserves. */
 export type ChangeTone = 'bad' | 'warn' | 'good' | 'info';
@@ -206,6 +206,133 @@ function unifiChanges(before: UnifiSnapshot, after: UnifiSnapshot, t: Dict): Cha
   return out;
 }
 
+/* ---------------------------------------------------------------------- WAN */
+
+/**
+ * How far a speedtest has to move before it means anything.
+ *
+ * Two runs of the same test on the same line differ by a good deal on their
+ * own — the far end is shared, and the test competes with whatever else the
+ * household is doing. A threshold this wide reports the line that halved and
+ * stays quiet about the ordinary scatter, which is the only way the figure is
+ * worth showing at all.
+ */
+const SPEEDTEST_STEP = 25;
+
+/** Percent difference between two throughput figures. */
+const drift = (from: number, to: number) => (from > 0 ? Math.round(((to - from) / from) * 100) : 0);
+
+/**
+ * The link a change on which nobody gets told about.
+ *
+ * A public address changes on its own, at the provider's convenience: a lease
+ * expires, a session reconnects, a CGNAT pool moves. Nothing inside the estate
+ * causes it and nothing inside the estate announces it — the first sign is
+ * usually that something which pointed at the old address stopped working. It
+ * is exactly the kind of fact a survey history exists to catch.
+ *
+ * Identity is the interface, not the address: the address changing is the
+ * change being looked for, so keying on it would report every move as one link
+ * disappearing and another appearing.
+ */
+function wanChanges(before: UnifiWan[], after: UnifiWan[], t: Dict): Change[] {
+  const d = t.diff;
+  const out: Change[] = [];
+  const key = (w: UnifiWan) => w.ifname || w.name || 'wan';
+
+  const was = by(before, key);
+  const now = by(after, key);
+
+  for (const [id, wan] of now) {
+    const old = was.get(id);
+    const where = wan.name || wan.ifname || id;
+
+    if (!old) {
+      out.push({ tone: 'info', where, what: d.wanAppeared, detail: wan.ip || undefined });
+      continue;
+    }
+
+    if (old.up && !wan.up) {
+      out.push({ tone: 'bad', where, what: d.wanLost, detail: old.ip || undefined });
+    } else if (!old.up && wan.up) {
+      out.push({ tone: 'good', where, what: d.wanBack, detail: wan.ip || undefined });
+    }
+
+    if (old.ip && wan.ip && old.ip !== wan.ip) {
+      out.push({ tone: 'warn', where, what: d.wanAddressChanged, detail: `${old.ip} → ${wan.ip}` });
+    }
+
+    if (old.isp && wan.isp && old.isp !== wan.isp) {
+      out.push({ tone: 'warn', where, what: d.wanIspChanged, detail: `${old.isp} → ${wan.isp}` });
+    }
+
+    // How the address is obtained. A link that was static and is now DHCP is a
+    // different arrangement with the provider, not a reading that drifted.
+    if (old.kind && wan.kind && old.kind !== wan.kind) {
+      out.push({
+        tone: 'warn',
+        where,
+        what: d.wanKindChanged,
+        detail: `${old.kind.toUpperCase()} → ${wan.kind.toUpperCase()}`,
+      });
+    }
+
+    if (old.gatewayIp && wan.gatewayIp && old.gatewayIp !== wan.gatewayIp) {
+      out.push({
+        tone: 'info',
+        where,
+        what: d.wanGatewayChanged,
+        detail: `${old.gatewayIp} → ${wan.gatewayIp}`,
+      });
+    }
+
+    /*
+     * The resolvers the estate was handed.
+     *
+     * Worth a line because everything resolves through them and nothing in the
+     * interface shows them changing: a provider swapping its resolvers, or a
+     * reconnect that lost a hand-set pair, both look like nothing at all until
+     * a name stops resolving.
+     */
+    const wasDns = old.nameservers.join(', ');
+    const nowDns = wan.nameservers.join(', ');
+    if (wasDns && nowDns && wasDns !== nowDns) {
+      out.push({ tone: 'info', where, what: d.wanDnsChanged, detail: `${wasDns} → ${nowDns}` });
+    }
+
+    if (old.speed > 0 && wan.speed > 0 && old.speed !== wan.speed) {
+      out.push({
+        tone: wan.speed < old.speed ? 'bad' : 'good',
+        where,
+        what: wan.speed < old.speed ? d.wanSlower : d.wanFaster,
+        detail: `${old.speed} → ${wan.speed} Mb/s`,
+      });
+    }
+
+    // Only where both surveys have a figure: -1 is "never tested", and
+    // comparing against it would invent a collapse out of a first measurement.
+    if (old.xputDown > 0 && wan.xputDown > 0) {
+      const moved = drift(old.xputDown, wan.xputDown);
+      if (Math.abs(moved) >= SPEEDTEST_STEP) {
+        out.push({
+          tone: moved < 0 ? 'warn' : 'good',
+          where,
+          what: moved < 0 ? d.wanThroughputDown : d.wanThroughputUp,
+          detail: `${Math.round(old.xputDown)} → ${Math.round(wan.xputDown)} Mb/s`,
+        });
+      }
+    }
+  }
+
+  for (const [id, wan] of was) {
+    if (!now.has(id)) {
+      out.push({ tone: 'warn', where: wan.name || wan.ifname || id, what: d.wanGone });
+    }
+  }
+
+  return out;
+}
+
 /* ------------------------------------------------------------------ Proxmox */
 
 /** A store has to move by this much before it is worth mentioning. */
@@ -230,6 +357,71 @@ function proxmoxChanges(before: ProxmoxSnapshot, after: ProxmoxSnapshot, t: Dict
       });
     }
   }
+  /*
+   * Where a guest is plugged in.
+   *
+   * A guest that moved bridge or changed VLAN keeps running, keeps answering
+   * its console and shows nothing wrong anywhere — it is simply on a different
+   * network than it was, which is the whole point of the change and also the
+   * whole danger of it. Nothing else in the survey would report it.
+   *
+   * Only compared where both surveys read the guest's config: an empty list is
+   * "not measured" — a token without VM.Audit produces one, and so does every
+   * survey taken before the configs were read at all.
+   */
+  for (const guest of after.guests) {
+    const old = wasGuest.get(String(guest.vmid));
+    if (!old?.nics?.length || !guest.nics?.length) continue;
+    const name = guest.name || String(guest.vmid);
+
+    const wasNic = by(old.nics, (n) => n.name);
+    for (const nic of guest.nics) {
+      const previous = wasNic.get(nic.name);
+      const at = guest.nics.length > 1 ? `${name} · ${nic.name}` : name;
+
+      if (!previous) {
+        out.push({
+          tone: 'info',
+          where: at,
+          what: d.guestNicAdded,
+          detail: `${nic.bridge}${nic.vlan == null ? '' : ` · VLAN ${nic.vlan}`}`,
+        });
+        continue;
+      }
+
+      if (previous.bridge !== nic.bridge) {
+        out.push({
+          tone: 'warn',
+          where: at,
+          what: d.guestBridgeChanged,
+          detail: `${previous.bridge} → ${nic.bridge}`,
+        });
+      }
+      if (previous.vlan !== nic.vlan) {
+        out.push({
+          tone: 'warn',
+          where: at,
+          what: d.guestVlanChanged,
+          detail: `${previous.vlan ?? d.untagged} → ${nic.vlan ?? d.untagged}`,
+        });
+      }
+      if (previous.firewall !== nic.firewall) {
+        out.push({
+          tone: nic.firewall ? 'good' : 'warn',
+          where: at,
+          what: nic.firewall ? d.guestFirewallOn : d.guestFirewallOff,
+        });
+      }
+    }
+
+    const nowNic = by(guest.nics, (n) => n.name);
+    for (const nic of old.nics) {
+      if (!nowNic.has(nic.name)) {
+        out.push({ tone: 'warn', where: `${name} · ${nic.name}`, what: d.guestNicRemoved });
+      }
+    }
+  }
+
   const nowGuest = by(after.guests, (g) => String(g.vmid));
   for (const guest of before.guests) {
     if (!nowGuest.has(String(guest.vmid))) {
@@ -281,14 +473,38 @@ function proxmoxChanges(before: ProxmoxSnapshot, after: ProxmoxSnapshot, t: Dict
   const bridges = (snap: ProxmoxSnapshot) =>
     by(snap.interfaces.filter((i) => i.kind.includes('bridge')), (i) => `${i.node}/${i.name}`);
   const wasBridge = bridges(before);
-  for (const [key, iface] of bridges(after)) {
+  const nowBridge = bridges(after);
+  for (const [key, iface] of nowBridge) {
+    const where = `${iface.name} (${iface.node})`;
     const old = wasBridge.get(key);
-    if (!old || old.vlanAware === iface.vlanAware) continue;
-    out.push({
-      tone: 'info',
-      where: `${iface.name} (${iface.node})`,
-      what: iface.vlanAware ? d.bridgeVlanOn : d.bridgeVlanOff,
-    });
+
+    if (!old) {
+      out.push({ tone: 'info', where, what: d.bridgeAdded, detail: iface.bridgePorts || undefined });
+      continue;
+    }
+    if (old.vlanAware !== iface.vlanAware) {
+      out.push({ tone: 'info', where, what: iface.vlanAware ? d.bridgeVlanOn : d.bridgeVlanOff });
+    }
+    // The physical ports under a bridge: what changes when a NIC is swapped
+    // for another, or a bond loses a leg. Nothing else reports it.
+    if (old.bridgePorts && iface.bridgePorts && old.bridgePorts !== iface.bridgePorts) {
+      out.push({
+        tone: 'warn',
+        where,
+        what: d.bridgePortsChanged,
+        detail: `${old.bridgePorts} → ${iface.bridgePorts}`,
+      });
+    }
+    if (old.active && !iface.active) {
+      out.push({ tone: 'bad', where, what: d.bridgeDown });
+    } else if (!old.active && iface.active) {
+      out.push({ tone: 'good', where, what: d.bridgeUp });
+    }
+  }
+  for (const [key, iface] of wasBridge) {
+    if (!nowBridge.has(key)) {
+      out.push({ tone: 'warn', where: `${iface.name} (${iface.node})`, what: d.bridgeRemoved });
+    }
   }
 
   return out;
@@ -310,6 +526,20 @@ export function diffSurveys(before: SurveySnapshot, after: SurveySnapshot, t: Di
 
   if (before.unifi && after.unifi) changes.push(...unifiChanges(before.unifi, after.unifi, t));
   else if (before.unifi || after.unifi) notCompared.push(t.diff.unifiOneSided);
+
+  /*
+   * The way out, where both surveys looked for one.
+   *
+   * `wans` is absent from every survey taken before it was collected, and an
+   * absent field is not an estate with no internet — so one-sided is stated
+   * rather than reported as a link that appeared. Present and empty is a real
+   * comparison: it says the controller had nothing to say about a WAN.
+   */
+  if (before.unifi?.wans && after.unifi?.wans) {
+    changes.push(...wanChanges(before.unifi.wans, after.unifi.wans, t));
+  } else if (before.unifi && after.unifi && (before.unifi.wans || after.unifi.wans)) {
+    notCompared.push(t.diff.wanOneSided);
+  }
 
   if (before.proxmox && after.proxmox) {
     changes.push(...proxmoxChanges(before.proxmox, after.proxmox, t));

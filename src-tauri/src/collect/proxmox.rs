@@ -157,6 +157,37 @@ pub struct PveGuest {
     pub mem_total: u64,
     pub disk_total: u64,
     pub tags: String,
+    /*
+     * The guest's own network interfaces.
+     *
+     * Which bridge a guest hangs off and which VLAN it is tagged into is the
+     * one thing about a virtual machine that decides what it can reach, and it
+     * lived nowhere in the survey — the map could draw a guest but not say what
+     * network it was on. It comes from the guest's config, which is one call
+     * per guest and the only place Proxmox keeps it.
+     *
+     * Empty where the config could not be read, which a survey taken before
+     * this existed also produces; both mean "not measured", never "no network".
+     */
+    #[serde(default)]
+    pub nics: Vec<PveGuestNic>,
+}
+
+/// One virtual interface of a guest, as its configuration has it.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PveGuestNic {
+    /// "net0", as Proxmox numbers them.
+    pub name: String,
+    /// The device model — "virtio", "e1000" — or "veth" for a container.
+    pub model: String,
+    pub mac: String,
+    /// The bridge it is plugged into, e.g. "vmbr0".
+    pub bridge: String,
+    /// The VLAN it is tagged into; absent where the bridge passes it untagged.
+    pub vlan: Option<u64>,
+    /// Whether the Proxmox firewall is switched on for this interface.
+    pub firewall: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -241,6 +272,76 @@ fn array(v: &Value) -> Vec<Value> {
     v.as_array().cloned().unwrap_or_default()
 }
 
+/*
+ * One `netN` line of a guest's configuration.
+ *
+ * Proxmox writes it as comma-separated `key=value` pairs, and the two guest
+ * kinds spell the same facts differently: a virtual machine names the device
+ * model as the key carrying the MAC (`virtio=AA:BB:...`), a container puts the
+ * address in `hwaddr` and calls itself `veth`. Both shapes are read here rather
+ * than in two places, because the question — which bridge, which VLAN — is the
+ * same question.
+ *
+ * A line with no bridge is not a network interface this survey can say anything
+ * about, and is left out rather than reported as a guest on no network.
+ */
+fn parse_nic(name: &str, line: &str) -> Option<PveGuestNic> {
+    let mut nic = PveGuestNic {
+        name: name.to_string(),
+        ..Default::default()
+    };
+
+    for part in line.split(',') {
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+
+        match key {
+            "bridge" => nic.bridge = value.to_string(),
+            "tag" => nic.vlan = value.parse::<u64>().ok(),
+            "firewall" => nic.firewall = value == "1",
+            "hwaddr" => nic.mac = value.to_uppercase(),
+            "type" => {
+                if nic.model.is_empty() {
+                    nic.model = value.to_string();
+                }
+            }
+            // A virtual machine names its model as the key holding the MAC.
+            _ if value.len() == 17 && value.matches(':').count() == 5 => {
+                nic.model = key.to_string();
+                nic.mac = value.to_uppercase();
+            }
+            _ => {}
+        }
+    }
+
+    if nic.bridge.is_empty() {
+        return None;
+    }
+    Some(nic)
+}
+
+/// Every `netN` line of one guest configuration, in order.
+fn nics_of(config: &Value) -> Vec<PveGuestNic> {
+    let Some(map) = config.as_object() else {
+        return Vec::new();
+    };
+
+    let mut found: Vec<(u64, PveGuestNic)> = map
+        .iter()
+        .filter_map(|(key, value)| {
+            let index = key.strip_prefix("net")?.parse::<u64>().ok()?;
+            let nic = parse_nic(key, value.as_str()?)?;
+            Some((index, nic))
+        })
+        .collect();
+
+    found.sort_by_key(|(i, _)| *i);
+    found.into_iter().map(|(_, nic)| nic).collect()
+}
+
 pub async fn collect(
     client: &reqwest::Client,
     profile: &Profile,
@@ -293,6 +394,8 @@ pub async fn collect(
                 mem_total: as_u64(r, "maxmem"),
                 disk_total: as_u64(r, "maxdisk"),
                 tags: as_str(r, "tags"),
+                // Filled in below, one config call per guest.
+                nics: Vec::new(),
             });
         }
     }
@@ -302,6 +405,47 @@ pub async fn collect(
         SOURCE,
         format!("GET /cluster/resources → {vms} VM, {cts} LXC"),
     ));
+
+    /*
+     * What each guest is plugged into.
+     *
+     * One call per guest, which is the only way Proxmox offers it — the cluster
+     * resource list carries no network detail at all. A guest whose config
+     * cannot be read keeps an empty list and the run carries on: a token
+     * without VM.Audit on one pool is a normal setup, and losing the whole
+     * survey over it would be the wrong trade.
+     */
+    let mut with_nics = 0usize;
+    let mut refused = 0usize;
+    for i in 0..snap.guests.len() {
+        let (node, kind, vmid) = {
+            let g = &snap.guests[i];
+            (g.node.clone(), g.kind.clone(), g.vmid)
+        };
+        match get(client, base, &token, &format!("/nodes/{node}/{kind}/{vmid}/config")).await {
+            Ok(config) => {
+                let nics = nics_of(&config);
+                if !nics.is_empty() {
+                    with_nics += 1;
+                }
+                snap.guests[i].nics = nics;
+            }
+            Err(_) => refused += 1,
+        }
+    }
+    if !snap.guests.is_empty() {
+        log.push(LogEntry::ok(
+            SOURCE,
+            format!(
+                "GET /nodes/*/*/config → {with_nics} vendéggép hálózati beállítása{}",
+                if refused > 0 {
+                    format!(", {refused} nem volt olvasható")
+                } else {
+                    String::new()
+                }
+            ),
+        ));
+    }
 
     // Per-node detail. One node failing must not lose the others.
     for node in snap.nodes.clone() {
@@ -618,5 +762,68 @@ async fn collect_backups(
             }
             Err(e) => log.push(LogEntry::fail(SOURCE, format!("{e} — {store} kimarad"))),
         }
+    }
+}
+
+/// How a guest says what it is plugged into.
+///
+/// The two guest kinds write the same facts in different words, and both
+/// spellings come off real configurations. Reading either one wrong is silent:
+/// the guest still appears on the map, just on no network — which is worse than
+/// not drawing it, because it looks like an answer.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_virtual_machine_names_its_model_as_the_key_holding_the_mac() {
+        let nic = parse_nic("net0", "virtio=DE:AD:BE:EF:00:01,bridge=vmbr0,tag=20,firewall=1")
+            .expect("a nic");
+        assert_eq!(nic.model, "virtio");
+        assert_eq!(nic.mac, "DE:AD:BE:EF:00:01");
+        assert_eq!(nic.bridge, "vmbr0");
+        assert_eq!(nic.vlan, Some(20));
+        assert!(nic.firewall);
+    }
+
+    #[test]
+    fn a_container_keeps_the_address_under_hwaddr() {
+        let nic = parse_nic(
+            "net0",
+            "name=eth0,bridge=vmbr1,hwaddr=aa:bb:cc:dd:ee:ff,ip=dhcp,type=veth",
+        )
+        .expect("a nic");
+        assert_eq!(nic.mac, "AA:BB:CC:DD:EE:FF");
+        assert_eq!(nic.model, "veth");
+        assert_eq!(nic.bridge, "vmbr1");
+        assert_eq!(nic.vlan, None, "an untagged interface has no VLAN, not zero");
+    }
+
+    #[test]
+    fn an_interface_with_no_bridge_is_not_reported_as_a_network() {
+        assert!(parse_nic("net0", "virtio=DE:AD:BE:EF:00:01").is_none());
+    }
+
+    #[test]
+    fn every_interface_is_read_in_order() {
+        let config: Value = serde_json::from_str(
+            r#"{
+                "name": "docker",
+                "net1": "virtio=DE:AD:BE:EF:00:02,bridge=vmbr1",
+                "net0": "virtio=DE:AD:BE:EF:00:01,bridge=vmbr0,tag=20",
+                "scsi0": "local-zfs:vm-101-disk-0,size=32G"
+            }"#,
+        )
+        .unwrap();
+        let nics = nics_of(&config);
+        assert_eq!(nics.len(), 2, "{nics:?}");
+        assert_eq!(nics[0].name, "net0");
+        assert_eq!(nics[1].bridge, "vmbr1");
+    }
+
+    #[test]
+    fn a_config_that_says_nothing_about_networks_yields_none() {
+        let config: Value = serde_json::from_str(r#"{ "name": "x", "cores": 2 }"#).unwrap();
+        assert!(nics_of(&config).is_empty());
     }
 }

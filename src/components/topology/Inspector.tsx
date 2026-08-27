@@ -83,6 +83,16 @@ export function Inspector({
           id: other.id,
           name: other.name,
           meta: `${t.labels.nodeKind[other.kind]} · ${other.subtitle}`,
+          /*
+           * The far end's addresses, on their own line and always.
+           *
+           * The subtitle carries an address for some kinds of card and a model
+           * or a host for others, so "which machine is this" was answerable
+           * for some neighbours and not for others. These two are the answer
+           * wherever anything measured them.
+           */
+          ip: other.ip ?? '',
+          mac: other.mac ?? '',
           kindLabel: t.labels.linkKind[link.kind],
           provenance: t.labels.provenance[linkProvenance(link)],
           directionLabel,
@@ -319,9 +329,9 @@ export function Inspector({
         ) : null}
 
         {tab === 'conns' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {node.ports && node.ports.length > 0 ? (
-              <div style={{ marginBottom: 6 }}>
+              <div>
                 <PortStrip
                   ports={node.ports}
                   palette={palette}
@@ -329,40 +339,79 @@ export function Inspector({
                   selected={port}
                   onSelect={setPort}
                 />
-                <PortList ports={node.ports} palette={palette} selected={port} />
+                <PortList
+                  ports={node.ports}
+                  palette={palette}
+                  accent={accent}
+                  selected={port}
+                  onSelect={setPort}
+                />
               </div>
             ) : null}
-            {connections.map((c, i) => (
-              <button
-                key={`${c.id}-${i}`}
-                type="button"
-                className="soft soft--link"
-                style={{
-                  padding: '11px 12px',
-                  textAlign: 'left',
-                  fontFamily: 'inherit',
-                  color: 'inherit',
-                }}
-                onClick={() => onSelectNode(c.id)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                  <Dot color={c.statusColor} size={7} />
-                  <div style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{c.name}</div>
-                  <Pill color={c.directionColor}>{c.directionLabel}</Pill>
-                  <Pill color={c.toneColor}>{c.provenance}</Pill>
-                  {/* kindLabel already comes from the dictionary */}
+
+            {/*
+              * The cables, under the sockets they leave from.
+              *
+              * Two different questions sit on this tab — "what is this device
+              * wired to" and "what is on socket 7" — and they used to run into
+              * each other as one column of cards. A heading each is the whole
+              * fix: the reader picks the question before reading the answer.
+              */}
+            <div>
+              <SectionLabel style={{ marginBottom: 9 }}>
+                {t.inspector.tabs.conns}
+              </SectionLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {connections.map((c, i) => (
+                  <button
+                    key={`${c.id}-${i}`}
+                    type="button"
+                    className="soft soft--link"
+                    style={{
+                      padding: '11px 12px',
+                      textAlign: 'left',
+                      fontFamily: 'inherit',
+                      color: 'inherit',
+                    }}
+                    onClick={() => onSelectNode(c.id)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                      <Dot color={c.statusColor} size={7} />
+                      <div style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{c.name}</div>
+                      <Pill color={c.directionColor}>{c.directionLabel}</Pill>
+                      <Pill color={c.toneColor}>{c.provenance}</Pill>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5 }}>
+                      {c.kindLabel}
+                      <span style={{ color: 'var(--text3)' }}> · {c.meta}</span>
+                    </div>
+                    {/* The same chips the ports use, for the same reason: which
+                        machine, not what kind of machine. */}
+                    {c.ip || c.mac ? (
+                      <div className="fact-chips">
+                        {c.ip ? (
+                          <span className="fact-chip">
+                            <span className="fact-chip__k">IP</span>
+                            <span className="fact-chip__v">{c.ip}</span>
+                          </span>
+                        ) : null}
+                        {c.mac ? (
+                          <span className="fact-chip">
+                            <span className="fact-chip__k">MAC</span>
+                            <span className="fact-chip__v">{c.mac}</span>
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </button>
+                ))}
+                <div
+                  className="pretty"
+                  style={{ marginTop: 3, fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.6 }}
+                >
+                  {t.inspector.connectionsNote}
                 </div>
-                <div className="mono" style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6 }}>
-                  {c.meta}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5 }}>{c.kindLabel}</div>
-              </button>
-            ))}
-            <div
-              className="pretty"
-              style={{ marginTop: 6, fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.6 }}
-            >
-              {t.inspector.connectionsNote}
+              </div>
             </div>
           </div>
         ) : null}

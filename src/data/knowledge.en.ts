@@ -50,6 +50,18 @@ export const KB_BY_KIND_EN: Record<NodeKind, KbTeaser[]> = {
       tag: 'Wi-Fi',
     },
   ],
+  bridge: [
+    {
+      title: 'VLAN-aware bridge or VLAN interfaces',
+      subtitle: 'Which one when, and what the switch-over breaks',
+      tag: 'Proxmox',
+    },
+    {
+      title: 'The bridge uplink and the switch port it lands on',
+      subtitle: 'Trunk, native VLAN, and the mismatch that catches everyone',
+      tag: 'Network',
+    },
+  ],
   host: [
     {
       title: 'Changing the Proxmox bridge safely',
@@ -174,6 +186,21 @@ export const CONFIG_BY_KIND_EN: Record<NodeKind, ConfigGuide> = {
     commands: [
       { label: 'Radio status', command: 'ssh admin@10.0.1.22 "iwconfig"' },
       { label: 'Clients', command: 'ssh admin@10.0.1.22 "wstalist | head -40"' },
+    ],
+  },
+  bridge: {
+    note: 'Reworking a bridge cuts the network of every guest on it — and usually of the host itself. Without a local console it cannot be undone.',
+    steps: [
+      'Survey: which guest sits on which bridge and which VLAN',
+      'Pre-check: whether the switch port is a trunk, and what its native VLAN is',
+      'Backup: a copy of /etc/network/interfaces',
+      'Execute: one bridge at a time, with a local console at hand',
+      'Verify: reach every affected guest from its own VLAN',
+    ],
+    commands: [
+      { label: 'Bridges', command: 'brctl show' },
+      { label: 'VLANs on the bridge', command: 'bridge vlan show' },
+      { label: 'Network configuration', command: 'cat /etc/network/interfaces' },
     ],
   },
   host: {
