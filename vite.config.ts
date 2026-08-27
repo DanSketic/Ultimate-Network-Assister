@@ -38,5 +38,40 @@ export default defineConfig({
     target: 'es2021',
     sourcemap: !!process.env.TAURI_DEBUG,
     minify: process.env.TAURI_DEBUG ? false : 'esbuild',
+    rollupOptions: {
+      output: {
+        /*
+         * Three groups that are genuinely three things.
+         *
+         * Not to make the application load faster — it is loaded from disk
+         * inside a desktop binary, where a chunk boundary buys nothing — but
+         * because one 860 kB file says nothing about what is in it. Split
+         * this way, a build tells you at a glance whether the thing that grew
+         * was the interface, the words, or the target states.
+         *
+         * Everything is still imported eagerly. Splitting a chunk out and
+         * loading it on demand would trade a few milliseconds of parse time
+         * for a blank panel the first time a view is opened, which is a bad
+         * trade for an application whose files are already on the machine.
+         */
+        manualChunks: {
+          // React and the runtime, which change when a dependency is upgraded
+          // and not otherwise.
+          vendor: ['react', 'react-dom', 'react-dom/client'],
+          // Every string the interface says, in both languages. Prose does not
+          // minify, so this is large and honestly so.
+          i18n: ['./src/i18n/hu.ts', './src/i18n/en.ts'],
+          // The blueprint presets: the target states and the handbook text
+          // that comes with them.
+          presets: [
+            './src/blueprint/presets/multiHousehold.ts',
+            './src/blueprint/presets/multiHousehold.text.ts',
+            './src/blueprint/presets/multiHousehold.modules.ts',
+            './src/blueprint/presets/proxmoxHost.ts',
+            './src/blueprint/presets/kubernetesHomelab.ts',
+          ],
+        },
+      },
+    },
   },
 });
