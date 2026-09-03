@@ -98,6 +98,20 @@ for (const { name, size: [width, height], query, view } of SHOTS) {
     );
     console.log(`docs/media/screenshots/${name}.png  ${width}x${height} @2x`);
   } finally {
-    rmSync(profile, { recursive: true, force: true });
+    /*
+     * Tidying up must not be able to lose the run.
+     *
+     * On Windows the browser is still letting go of its profile when this
+     * line is reached, and the delete fails with ENOTEMPTY — which used to
+     * throw out of the loop and abandon every capture after it. The retries
+     * are for the usual case, the catch for the rest: a directory left in the
+     * system's temp folder is a smaller problem than a missing screenshot,
+     * and it is the operating system's to clean up anyway.
+     */
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+    } catch {
+      console.warn(`  (left ${profile} behind — the browser was still holding it)`);
+    }
   }
 }
