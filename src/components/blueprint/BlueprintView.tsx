@@ -324,6 +324,7 @@ export function BlueprintView({
               {tab === 'target' ? <TargetStateTab resolved={resolved} palette={palette} /> : null}
               {tab === 'plan' ? (
                 <PlanTab
+                  blueprintId={current.id}
                   plan={plan}
                   profiles={estate.profiles}
                   palette={palette}
@@ -333,6 +334,7 @@ export function BlueprintView({
               ) : null}
               {tab === 'apply' ? (
                 <ApplyTab
+                  blueprintId={current.id}
                   plan={plan}
                   resolved={resolved}
                   estate={estate}
@@ -356,12 +358,14 @@ export function BlueprintView({
  * confirmation instead of leaving it armed.
  */
 function ApplyTab({
+  blueprintId,
   plan,
   resolved,
   estate,
   palette,
   accent,
 }: {
+  blueprintId: string;
   plan: Plan;
   resolved: ResolvedBlueprint;
   estate: EstateApi;
@@ -376,6 +380,7 @@ function ApplyTab({
 
   return (
     <RunConsole
+      blueprintId={blueprintId}
       plan={plan}
       apply={apply}
       profiles={estate.profiles}

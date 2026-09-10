@@ -400,5 +400,64 @@ const empty = importPortsFromSurvey(null, corrected, NETWORKS);
 check('no survey leaves the layout exactly as it was', empty.ports === corrected && empty.added === 0);
 
 console.log(`\n${failures === 0 ? 'all checks passed' : failures + ' failed'}`);
+/* ---------------------------------------------------- the gateway's way out */
+
+// A gateway reports its WAN apart from its port table, and the port table
+// does not flag that socket as an uplink — so every gateway used to arrive
+// with no uplink at all and its WAN port as an access port with no network.
+const gw = device({ mac: 'gw', name: 'Gateway', model: 'UCGF', kind: 'ucg', ports: [port(1), port(5)] });
+const wanSurvey = snapshot({
+  devices: [gw],
+  wans: [{ deviceMac: 'GW', name: 'WAN', portIdx: 5, isp: 'Provider' }],
+});
+const wanned = importPortsFromSurvey(wanSurvey, [], NETWORKS);
+check('the port the gateway reports as its WAN comes in as the uplink', at(wanned, 5)?.role === 'uplink', at(wanned, 5)?.role);
+check('named after the provider', at(wanned, 5)?.label === 'Provider', at(wanned, 5)?.label);
+
+const unfinished = importPortsFromSurvey(
+  wanSurvey,
+  [{ id: 'g5', device: 'Gateway', idx: 5, label: '', role: 'access', nativeVlan: 0, poe: false }],
+  NETWORKS,
+);
+check(
+  'an unfinished access row on the WAN port, left by an earlier import, becomes the uplink',
+  at(unfinished, 5)?.role === 'uplink' && unfinished.enriched === 1,
+  `${at(unfinished, 5)?.role}, enriched ${unfinished.enriched}`,
+);
+
+const givenWan = importPortsFromSurvey(
+  wanSurvey,
+  [{ id: 'g5', device: 'Gateway', idx: 5, label: '', role: 'access', nativeVlan: 20, poe: false }],
+  NETWORKS,
+);
+check('a WAN port somebody gave a network is left as they set it', at(givenWan, 5)?.role === 'access', at(givenWan, 5)?.role);
+
+/* ------------------------------------- a link between two of our own devices */
+
+// The estate this was found on: a switch port to an access point, on the
+// controller's stock "Default" profile, left by an earlier import as an access
+// port with no network — and kept that way by every survey after it, although
+// each one saw the access point on the far end by LLDP and by its own report.
+const apDevice = device({ mac: 'ap7', name: 'AC HD', model: 'U7HD', kind: 'uap', uplinkMac: 'sw', uplinkRemotePort: 7 });
+const linkSurvey = snapshot({
+  devices: [device({ ports: [port(7, { neighbourMac: 'AP7' })] }), apDevice],
+});
+const staleLink = importPortsFromSurvey(
+  linkSurvey,
+  [{ id: 's7', device: 'Switch', idx: 7, label: 'AC HD', role: 'access', nativeVlan: 0, poe: false }],
+  NETWORKS,
+);
+check(
+  'an unfinished access row towards one of our own access points becomes an AP port',
+  at(staleLink, 7)?.role === 'ap',
+  at(staleLink, 7)?.role,
+);
+const chosenLink = importPortsFromSurvey(
+  linkSurvey,
+  [{ id: 's7', device: 'Switch', idx: 7, label: 'AC HD', role: 'access', nativeVlan: 20, poe: false }],
+  NETWORKS,
+);
+check('the same row with a network chosen is left as it was', at(chosenLink, 7)?.role === 'access', at(chosenLink, 7)?.role);
+
 rmSync(OUT, { force: true });
 process.exit(failures === 0 ? 0 : 1);

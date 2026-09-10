@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useProgress } from '@/state/useProgress';
 import {
   isDestructiveCommand,
   isDisruptiveCommand,
@@ -99,12 +100,15 @@ function queueOf(plan: Plan): QueueItem[] {
 }
 
 export function RunConsole({
+  blueprintId,
   plan,
   apply,
   profiles,
   palette,
   accent,
 }: {
+  /** Whose plan this is, for the ticks it shares with the plan tab. */
+  blueprintId: string;
   plan: Plan;
   apply: ApplyApi;
   profiles: Profile[];
@@ -114,6 +118,7 @@ export function RunConsole({
   const t = useT();
   const x = t.run;
   const runner = usePlanRunner(profiles);
+  const progress = useProgress(blueprintId, plan.steps);
 
   const queue = useMemo(() => queueOf(plan), [plan]);
   const [state, setState] = useState<Record<string, StepState>>({});
@@ -121,7 +126,9 @@ export function RunConsole({
   const [log, setLog] = useState<string[]>([]);
   const stop = useRef(false);
 
-  const stateOf = (id: string) => state[id] ?? 'idle';
+  // What ran in this sitting first; then the saved ticks, so a queue picked up
+  // on another evening starts where the last one stopped.
+  const stateOf = (id: string) => state[id] ?? (progress.done.has(id) ? 'done' : 'idle');
   const setStep = (id: string, value: StepState) =>
     setState((prev) => ({ ...prev, [id]: value }));
   const note = (line: string) => setLog((prev) => [...prev, line]);
@@ -141,7 +148,7 @@ export function RunConsole({
    * that is not there — so it is listed here, and ticking it off is how
    * someone says they did it at the console.
    */
-  const [handDone, setHandDone] = useState<Set<string>>(new Set());
+  // Ticked in the shared progress, so a tick made on the plan tab counts here.
   const byId = useMemo(() => new Map(plan.steps.map((s) => [s.id, s])), [plan]);
   const inQueue = useMemo(() => new Set(queue.map((q) => q.step.id)), [queue]);
 
@@ -163,7 +170,7 @@ export function RunConsole({
       .filter((q) => stateOf(q.step.id) !== 'done')
       .map((q) => q.step.title);
     const byHand = item.step.requires
-      .filter((id) => !inQueue.has(id) && byId.has(id) && !handDone.has(id))
+      .filter((id) => !inQueue.has(id) && byId.has(id) && !progress.done.has(id))
       .map((id) => byId.get(id)!.title);
     return [...byHand, ...earlier];
   };
@@ -208,12 +215,14 @@ export function RunConsole({
         await apply.applyShown();
         const failed = apply.error !== null;
         setStep(item.step.id, failed ? 'failed' : 'done');
+        if (!failed) progress.mark(item.step, 'applied');
         note(`${failed ? '✕' : '✓'} ${item.step.title}`);
         return !failed;
       }
 
       const ok = await runner.runSequence(item.commands);
       setStep(item.step.id, ok ? 'done' : 'failed');
+      if (ok) progress.mark(item.step, 'ran');
       note(`${ok ? '✓' : '✕'} ${item.step.title}`);
       return ok;
     } finally {
@@ -356,14 +365,9 @@ export function RunConsole({
             >
               <input
                 type="checkbox"
-                checked={handDone.has(step.id)}
+                checked={progress.done.has(step.id)}
                 onChange={(e) =>
-                  setHandDone((prev) => {
-                    const next = new Set(prev);
-                    if (e.target.checked) next.add(step.id);
-                    else next.delete(step.id);
-                    return next;
-                  })
+                  e.target.checked ? progress.mark(step, 'manual') : progress.unmark(step)
                 }
               />
               <span>{step.title}</span>

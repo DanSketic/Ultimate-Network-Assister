@@ -127,8 +127,64 @@ export interface Blueprint {
    * Read it as `extraNetworks ?? []` and it is simply empty for those.
    */
   extraNetworks?: ExtraNetwork[];
+  /**
+   * What the guided path was told, when the guided path made this blueprint.
+   *
+   * Optional in storage for the same reason as `extraNetworks`: every
+   * blueprint saved before the interview existed has no such field, and is
+   * simply one the planner made.
+   */
+  interview?: InterviewRecord;
   createdAt: string;
   updatedAt: string;
+}
+
+/* --------------------------------------------------------------- interview */
+
+/**
+ * Whether there is a hypervisor, and whether it is already in use.
+ *
+ * The distinction between the last two is the one that decides whether the
+ * plan may propose building storage: on a machine that is already running,
+ * the disks hold somebody's data, and a plan that starts with `zpool create`
+ * is a plan nobody should follow.
+ */
+export type InterviewServer = 'none' | 'existing' | 'new';
+
+/** How the household is reached from outside, if at all. */
+export type InterviewRemote = 'none' | 'vpn' | 'tunnel';
+
+/** What somebody wants the server for, in their words rather than a module's. */
+export type InterviewService = 'home-assistant' | 'adguard' | 'media' | 'nextcloud' | 'windows';
+
+/**
+ * What somebody said about their home.
+ *
+ * Questions a person can answer without knowing the vocabulary: who shares
+ * the network, what is in the house, what the server is for. Everything a
+ * preset needs beyond that — VLAN ids, zones, address plans — is derived, and
+ * stays editable in the planner for whoever wants to.
+ */
+export interface InterviewAnswers {
+  /** One household, or several that must not see each other's devices. */
+  homes: 'one' | 'several';
+  /** The households' names, when there are several. */
+  homeNames: string[];
+  cameras: boolean;
+  cameraCount: number;
+  /** A printer the households share. Only asked when there are several. */
+  sharedPrinter: boolean;
+  server: InterviewServer;
+  services: InterviewService[];
+  remote: InterviewRemote;
+  wifiName: string;
+  guestWifiName: string;
+}
+
+export interface InterviewRecord {
+  /** Null when the guided path adopted a blueprint made in the planner, as it stood. */
+  answers: InterviewAnswers | null;
+  answeredAt: string;
 }
 
 /**

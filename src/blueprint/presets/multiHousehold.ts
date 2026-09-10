@@ -433,7 +433,11 @@ function makeBuild(x: MhText) {
     /* ------------------------------------------------------- named objects */
 
     if (enabled.has('firewall')) {
-      addressObjects.push({ name: 'PVE-MGMT', address: ctx.str('ipPve'), purpose: x.object.pveMgmt });
+      // Only where there is a hypervisor to reach: a home with no server has
+      // nothing at that address, and a rule naming it would name nothing.
+      if (enabled.has('pve-base')) {
+        addressObjects.push({ name: 'PVE-MGMT', address: ctx.str('ipPve'), purpose: x.object.pveMgmt });
+      }
       if (enabled.has('adguard')) {
         addressObjects.push({ name: 'ADGUARD', address: ctx.str('ipAdguard'), purpose: x.object.adguard });
       }
@@ -886,7 +890,9 @@ function makeBuild(x: MhText) {
 
     /* -------------------------------------------------------------- storage */
 
-    if (enabled.has('storage')) {
+    // On a machine already in use the plan builds nothing: its disks hold
+    // somebody's data, and the guests go onto the store it already has.
+    if (enabled.has('storage') && ctx.str('storageMode') !== 'existing') {
       storage.push({
         name: ctx.str('fastPoolName'),
         kind: 'zfs-mirror',

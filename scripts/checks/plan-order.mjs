@@ -54,6 +54,20 @@ const runs = presets('en').map((preset) => {
   return { preset, plan: buildPlan(resolved, t) };
 });
 
+/*
+ * And each preset as it is created, with its own modules switched off.
+ *
+ * Everything on is the largest plan, and the one that hid a real miss: the
+ * flat Proxmox preset starts with its trunk-bridge module off, and every
+ * machine in it waited for the trunk bridge — a step that was not in the plan
+ * and could never be ticked. Measuring only the plan with everything on never
+ * saw it.
+ */
+for (const preset of presets('en')) {
+  const blueprint = createBlueprint(preset);
+  runs.push({ preset: { ...preset, id: `${preset.id} (defaults)` }, plan: buildPlan(resolveBlueprint(blueprint, preset, t), t) });
+}
+
 /* ------------------------------------------- every prerequisite is a real step */
 
 const dangling = [];

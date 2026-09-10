@@ -11,6 +11,101 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.11.0] — 2026-09-10
+
+### Added
+
+- **The guided path asks what you want before it writes anything.** It used to
+  write whichever blueprint happened to be open — out of the box, the
+  handbook's own three-household estate — to somebody who had never been asked
+  what their home is. Now there is a step between looking and writing: a
+  handful of questions about the house, in its words rather than the planner's.
+  Who shares the network, and whether they may see each other's devices; what
+  else is in the house — cameras, a printer the households share; whether there
+  is a server, and whether it is already in use or being built; what it should
+  run; whether anything is reached from outside; what the Wi-Fi is called.
+
+  What the survey already measured is filled in rather than asked: the address
+  range the estate runs on, the Wi-Fi names in use — so nobody reconnects a
+  single device — the store a running server keeps its machines on, and which
+  services look already to be running, said next to the box rather than ticked.
+  Beside the questions is what they turn into, recomputed on every answer: the
+  networks with what each is for, the Wi-Fi, the machines, the size of the job,
+  and the networks on the controller the plan leaves exactly as they are. What
+  is agreed to is the blueprint that gets saved, not a description of it.
+
+  A server that is already in use keeps its disks: the plan uses the storage it
+  has and erases nothing. One that is being built gets its disks prepared — by
+  hand, at the machine, as always.
+
+- **The rest of the plan, one step at a time.** The guided path used to end once
+  the controller had its networks, which is where most of the work begins. It
+  now carries on through the whole plan, showing one step: the first that is
+  not done and has nothing left to wait for. On it, in a sentence each, who does
+  it — this application, you in the controller, you at the machine — and where;
+  below it, the step itself, with the same commands, approvals and refusals as
+  the planner, because it is the planner's step body and not a copy. How far
+  along the whole thing is sits above it, the whole list one click away, and
+  "skip for now" moves on without claiming anything.
+
+- **Ticks are kept, and say how they were made.** A plan worked through over
+  several evenings used to lose its place every time the window closed. A tick
+  is now saved with how it came about — run here without a failure, ticked by
+  hand, written by the applier, or found already in place by a dry run — and
+  when, and both are shown. A tick stops counting the moment the step it was
+  made on changes, and survives a change of interface language, which changes
+  the words and not the work. The planner, the run console and the guided path
+  share one set.
+
+- **Ports between two of the controller's own devices are recognised.** A port
+  from a switch to an access point, sitting on the controller's stock "Default"
+  profile, read as an access port with no network chosen — and stayed one on
+  every later survey, because a row an earlier import had written was never
+  revisited, although each survey could see the access point on the far end.
+  Where the far end is one of the controller's own devices, by LLDP or by that
+  device's own uplink report, an unfinished row now takes the role that was
+  measured. The Ports tab lists those links — port, far end, role — with one
+  button to set them all.
+
+- **Access ports with no network are answered in one place.** On a stock estate
+  the wired machines sit on the controller's default LAN, which has no VLAN and
+  so no counterpart in a plan that numbers everything. The Ports tab gathers
+  them with one choice of network, offered already made where there is a single
+  household; the guided path puts them on the household's own network with one
+  household and asks which household with several.
+
+### Changed
+
+- **The server is optional in the multi-household preset.** A home with a UniFi
+  network and no server was handed a plan that opened by building ZFS pools.
+  The server's chapters can now be switched off, and every service names the
+  template it is built from, so they go with it rather than being planned onto
+  nothing. Switching a module on or off takes its whole chain of prerequisites
+  and dependents with it.
+- **Storage can be used as it is.** Both server presets can use the storage a
+  running machine already has instead of building pools, and then touch no disk.
+- **The target state lists the port profiles**, with how many ports use each and
+  which of them still have no network.
+- The guided path's plan follows the interface language in its title until
+  somebody renames it. The names it gave households and Wi-Fi do not: those end
+  up as network names on the controller.
+
+### Fixed
+
+- **Running a step whole ticked it even when it failed.** A sequence that
+  stopped at its second command counted as done and unblocked everything after
+  it. It now counts only when every command ran without a failure.
+- **The single-Proxmox preset built machines onto a bridge that is not there.**
+  Every machine waited for the trunk-bridge step, which the preset leaves out on
+  a flat network, so none could ever be ticked through; and each was created on
+  `vmbr1` with `tag=0`. It now uses the installer's own `vmbr0` untagged, and no
+  step waits for one in a module the blueprint does not include.
+- **The gateway's WAN port is read as its way out** where the gateway names the
+  port, rather than as an access port with no network beside a warning that the
+  gateway reaches nothing.
+
+---
+
 ## [1.10.0] — 2026-08-27
 
 ### Added

@@ -26,35 +26,40 @@ const MODULE_SHAPES: ModuleShape[] = [
   { id: 'firewall', code: '10', group: 'network', targets: ['unifi'], risk: 'high', minutes: 60, optional: false, requires: ['vlan-wifi'] },
   { id: 'shared-printer', code: '10A', group: 'network', targets: ['unifi'], risk: 'medium', minutes: 30, optional: true, requires: ['firewall'] },
   { id: 'gateway-hardening', code: '10B', group: 'network', targets: ['unifi', 'proxmox'], risk: 'high', minutes: 45, optional: true, requires: ['firewall'] },
-  { id: 'pve-bridges', code: '11', group: 'network', targets: ['proxmox'], risk: 'high', minutes: 30, optional: false },
+  { id: 'pve-bridges', code: '11', group: 'network', targets: ['proxmox'], risk: 'high', minutes: 30, optional: true, requires: ['pve-base'] },
   { id: 'cameras', code: '10C', group: 'network', targets: ['unifi'], risk: 'medium', minutes: 45, optional: true, requires: ['firewall'] },
   { id: 'public-access', code: '25', group: 'network', targets: ['unifi'], risk: 'high', minutes: 30, optional: true, requires: ['firewall'] },
 
   // --------------------------------------------------------------- server
+  // Optional since the guided path: a home can have a UniFi network and no
+  // server at all, and a plan that opens by building ZFS pools on a machine
+  // that does not exist is one nobody finishes reading. Every service names
+  // the template it is built from, so switching the server off takes the
+  // machines with it rather than leaving them planned onto nothing.
   { id: 'physical', code: '5', group: 'server', targets: ['host'], risk: 'medium', minutes: 60, optional: true },
   { id: 'bios', code: '6', group: 'server', targets: ['host'], risk: 'medium', minutes: 20, optional: true },
-  { id: 'pve-base', code: '7', group: 'server', targets: ['proxmox'], risk: 'low', minutes: 25, optional: false },
-  { id: 'disk-validation', code: '8', group: 'server', targets: ['proxmox'], risk: 'medium', minutes: 40, optional: false, requires: ['pve-base'] },
-  { id: 'storage', code: '12', group: 'server', targets: ['proxmox'], risk: 'high', minutes: 60, optional: false, requires: ['disk-validation'] },
-  { id: 'resources', code: '13', group: 'server', targets: ['proxmox'], risk: 'medium', minutes: 20, optional: false },
-  { id: 'vm-template', code: '14', group: 'server', targets: ['proxmox'], risk: 'medium', minutes: 35, optional: false, requires: ['storage'] },
+  { id: 'pve-base', code: '7', group: 'server', targets: ['proxmox'], risk: 'low', minutes: 25, optional: true },
+  { id: 'disk-validation', code: '8', group: 'server', targets: ['proxmox'], risk: 'medium', minutes: 40, optional: true, requires: ['pve-base'] },
+  { id: 'storage', code: '12', group: 'server', targets: ['proxmox'], risk: 'high', minutes: 60, optional: true, requires: ['disk-validation'] },
+  { id: 'resources', code: '13', group: 'server', targets: ['proxmox'], risk: 'medium', minutes: 20, optional: true, requires: ['pve-base'] },
+  { id: 'vm-template', code: '14', group: 'server', targets: ['proxmox'], risk: 'medium', minutes: 35, optional: true, requires: ['storage'] },
 
   // ------------------------------------------------------------- services
-  { id: 'adguard', code: '15', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 30, optional: true },
-  { id: 'home-assistant', code: '16', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 40, optional: true },
-  { id: 'windows-rdp', code: '17', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 60, optional: true },
-  { id: 'gitlab', code: '18', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 60, optional: true },
+  { id: 'adguard', code: '15', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 30, optional: true, requires: ['vm-template'] },
+  { id: 'home-assistant', code: '16', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 40, optional: true, requires: ['vm-template'] },
+  { id: 'windows-rdp', code: '17', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 60, optional: true, requires: ['vm-template'] },
+  { id: 'gitlab', code: '18', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 60, optional: true, requires: ['vm-template'] },
   { id: 'gitlab-runner', code: '19', group: 'services', targets: ['proxmox', 'docker'], risk: 'medium', minutes: 45, optional: true, requires: ['gitlab'] },
-  { id: 'prod-docker', code: '20', group: 'services', targets: ['proxmox', 'docker'], risk: 'medium', minutes: 45, optional: true },
-  { id: 'media-docker', code: '21', group: 'services', targets: ['proxmox', 'docker'], risk: 'high', minutes: 90, optional: true, requires: ['storage'] },
+  { id: 'prod-docker', code: '20', group: 'services', targets: ['proxmox', 'docker'], risk: 'medium', minutes: 45, optional: true, requires: ['vm-template'] },
+  { id: 'media-docker', code: '21', group: 'services', targets: ['proxmox', 'docker'], risk: 'high', minutes: 90, optional: true, requires: ['storage', 'vm-template'] },
   { id: 'media-stack', code: '22', group: 'services', targets: ['docker'], risk: 'medium', minutes: 60, optional: true, requires: ['media-docker'] },
-  { id: 'nextcloud', code: '23', group: 'services', targets: ['proxmox', 'docker'], risk: 'medium', minutes: 60, optional: true },
-  { id: 'cloudflare-tunnel', code: '24', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 30, optional: true },
+  { id: 'nextcloud', code: '23', group: 'services', targets: ['proxmox', 'docker'], risk: 'medium', minutes: 60, optional: true, requires: ['vm-template'] },
+  { id: 'cloudflare-tunnel', code: '24', group: 'services', targets: ['proxmox'], risk: 'medium', minutes: 30, optional: true, requires: ['vm-template'] },
 
   // ------------------------------------------------------------------ ops
-  { id: 'boot-order', code: '26', group: 'ops', targets: ['proxmox'], risk: 'low', minutes: 20, optional: false },
-  { id: 'monitoring', code: '27', group: 'ops', targets: ['proxmox'], risk: 'low', minutes: 40, optional: true },
-  { id: 'updates', code: '28', group: 'ops', targets: ['proxmox', 'docker'], risk: 'medium', minutes: 30, optional: true },
+  { id: 'boot-order', code: '26', group: 'ops', targets: ['proxmox'], risk: 'low', minutes: 20, optional: true, requires: ['pve-base'] },
+  { id: 'monitoring', code: '27', group: 'ops', targets: ['proxmox'], risk: 'low', minutes: 40, optional: true, requires: ['pve-base'] },
+  { id: 'updates', code: '28', group: 'ops', targets: ['proxmox', 'docker'], risk: 'medium', minutes: 30, optional: true, requires: ['pve-base'] },
   { id: 'troubleshooting', code: '29', group: 'ops', targets: ['proxmox'], risk: 'low', minutes: 0, optional: true },
   { id: 'handover', code: '30', group: 'ops', targets: ['unifi', 'proxmox'], risk: 'low', minutes: 45, optional: false },
 ];
@@ -169,6 +174,16 @@ const PARAM_SHAPES: ParamShape[] = [
   { id: 'trunkBridge', type: 'text', default: 'vmbr1', group: 'server', moduleId: 'pve-bridges' },
 
   // -------------------------------------------------------------- storage
+  // Whether the plan builds its pools or uses what a running machine already
+  // has. Only the first touches a disk; see the note on `InterviewServer`.
+  {
+    id: 'storageMode',
+    type: 'enum',
+    default: 'build',
+    optionValues: ['build', 'existing'],
+    group: 'storage',
+    moduleId: 'storage',
+  },
   { id: 'fastPoolName', type: 'text', default: 'fastpool', group: 'storage', moduleId: 'storage' },
   {
     id: 'fastPoolDevices',

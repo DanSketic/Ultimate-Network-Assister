@@ -143,6 +143,14 @@ const HU: HostText = {
       label: 'Külön management interfész',
       help: 'A Proxmox felület és a vendéggépek trunkja külön fizikai porton fut, így a trunk átalakítása nem vágja el a felületet.',
     },
+    storageMode: {
+      label: 'Tárhely',
+      help: 'Új gépen a terv poolokat épít a lent megadott lemezekből — ez a lemezeket törli. Már használt gépen a meglévő tárhelyet veszi: ekkor a pool neve annak a tárolónak a neve, amire a vendéggépek kerülnek, és lemezhez a terv nem nyúl.',
+      options: {
+        build: 'Új tárhelyet építünk (a lemezek törlődnek)',
+        existing: 'A meglévő tárhelyet használjuk',
+      },
+    },
     fastPoolName: { label: 'Gyors pool neve' },
     fastPoolDevices: {
       label: 'Gyors pool lemezei',
@@ -296,6 +304,14 @@ const EN: HostText = {
       label: 'Separate management interface',
       help: 'The Proxmox interface and the guests’ trunk run on separate physical ports, so reworking the trunk does not cut the interface.',
     },
+    storageMode: {
+      label: 'Storage',
+      help: 'On a new machine the plan builds pools from the disks given below — which erases them. On a machine already in use it takes the storage that is there: the pool name is then the store the guests go onto, and the plan touches no disk.',
+      options: {
+        build: 'Build new storage (the disks are erased)',
+        existing: 'Use the storage already there',
+      },
+    },
     fastPoolName: { label: 'Fast pool name' },
     fastPoolDevices: {
       label: 'Fast pool disks',
@@ -402,6 +418,14 @@ const PARAM_SHAPES: ParamShape[] = [
   { id: 'trunkBridge', type: 'text', default: 'vmbr1', group: 'network', moduleId: 'pve-bridges' },
   { id: 'mgmtSeparateNic', type: 'boolean', default: true, group: 'network', moduleId: 'pve-bridges' },
 
+  {
+    id: 'storageMode',
+    type: 'enum',
+    default: 'build',
+    optionValues: ['build', 'existing'],
+    group: 'storage',
+    moduleId: 'storage',
+  },
   { id: 'fastPoolName', type: 'text', default: 'fastpool', group: 'storage', moduleId: 'storage' },
   {
     id: 'fastPoolDevices',
@@ -510,7 +534,9 @@ function makeBuild(x: HostText) {
     }
 
     const storage: PlannedStorage[] = [];
-    if (enabled.has('storage')) {
+    // On a machine already in use the plan builds nothing: its disks hold
+    // somebody's data, and the guests go onto the store it already has.
+    if (enabled.has('storage') && ctx.str('storageMode') !== 'existing') {
       storage.push({
         name: ctx.str('fastPoolName'),
         kind: 'zfs-mirror',

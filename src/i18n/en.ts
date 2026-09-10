@@ -124,13 +124,13 @@ export const en: Dict = {
     title: 'Let me walk you through it',
     subtitle: 'Connect, look, and change what is worth changing',
     desktopOnly:
-      'This is the browser preview, which can show but not touch a live system. The desktop application is the one that connects.',
+      'This is the browser preview, which can show but not touch a live system. The questions and the plan they produce can be tried here; connecting and writing anything is the desktop application’s job.',
     steps: {
       connect: 'Connect',
       look: 'Look',
-      prepare: 'Prepare',
-      confirm: 'Decide',
-      done: 'Done',
+      want: 'What you want',
+      network: 'Network',
+      steps: 'Step by step',
     },
 
     connectTitle: 'First, a way in',
@@ -210,6 +210,175 @@ export const en: Dict = {
         ? `${applied} changes went through and ${failed} did not. The run stopped at the first failure, and everything before it can be put back.`
         : `${applied} changes went through. Nothing was left half-finished.`,
     undo: 'Put it back',
+
+    networkLead:
+      'This is the first part of the plan, the network: the networks and port profiles are written to the controller by this application itself. The rest comes after, one step at a time.',
+    continueToSteps: 'On to the other steps',
+    skipNetwork: 'Skip this for now and go on',
+
+    want: {
+      title: 'What do you want?',
+      lead: 'A few questions about your home, with no networking vocabulary. The plan is put together from your answers, and what the survey has already seen — your Wi-Fi names, your address range, your server’s storage — is filled in rather than asked. What it turns into is shown alongside as you go.',
+      leadNoSurvey:
+        'A few questions about your home, with no networking vocabulary. This preview cannot see your network, so everything starts from the usual defaults.',
+      homesTitle: 'Who uses the network?',
+      homesOne: 'One family, one household',
+      homesOneHint:
+        'Everybody sees the shared devices. Smart devices and guests still get networks of their own.',
+      homesSeveral: 'Several families or flats',
+      homesSeveralHint:
+        'They cannot see each other’s computers, printers or televisions: every household gets its own network and its own Wi-Fi password.',
+      homeNamesLabel: 'The households’ names',
+      homeNamesHint:
+        'How they appear in the plan and in the list of Wi-Fi passwords. “Ground floor”, “Upstairs”, “Grandma’s”, for instance.',
+      addHome: '+ one more household',
+      removeHome: 'Remove',
+      houseTitle: 'What else is in the house?',
+      cameras: 'Security cameras',
+      camerasHint:
+        'They get a closed network of their own: the cameras never reach the internet, and the households cannot reach them directly.',
+      cameraCount: 'How many cameras?',
+      printer: 'A shared printer',
+      printerHint: 'Every household can print to it, and none can see through it to another.',
+      serverTitle: 'Do you have a server?',
+      serverHint:
+        'A Proxmox machine that runs virtual machines — a smart-home hub, say, or a cloud of your own.',
+      serverOnlyHint: 'This is the machine you connected to. The network is left as it is.',
+      serverNone: 'No, just put the network in order',
+      serverNoneHint: 'The plan is about the UniFi side only.',
+      serverExisting: 'Yes, and it is already in use',
+      serverExistingHint: 'Its disks are not touched: the new machines go onto the storage it already has.',
+      serverNew: 'Yes, and I am building it now',
+      serverNewHint:
+        'An empty machine: the plan starts by preparing the disks. That erases them — it can only be done by hand, at the machine, and exactly which disk is shown to you first.',
+      serverSeen: (name: string) => `The survey saw: ${name}.`,
+      servicesTitle: 'What should the server run?',
+      services: {
+        'home-assistant': {
+          label: 'A smart-home hub',
+          hint: 'Home Assistant: lights, sensors and heating in one place.',
+        },
+        adguard: {
+          label: 'Ad and malware filtering',
+          hint: 'AdGuard Home: for the whole network, on every device, with nothing to set up on them.',
+        },
+        media: {
+          label: 'Films and series at home',
+          hint: 'A media server on a network of its own; televisions and phones play from it.',
+        },
+        nextcloud: {
+          label: 'A cloud of your own',
+          hint: 'Nextcloud: files, photos, calendars — on your machine rather than somebody else’s.',
+        },
+        windows: {
+          label: 'Windows you can reach from outside',
+          hint: 'A Windows virtual machine, reached over VPN.',
+        },
+      },
+      alreadyRunning: (what: string) =>
+        `This looks already to be running: ${what}. If that is it, leave it unticked — otherwise a second one is built beside it.`,
+      remoteTitle: 'Do you want to reach it from outside?',
+      remoteNone: 'No need',
+      remoteNoneHint: 'Nothing can be reached from outside.',
+      remoteVpn: 'Only me, over VPN',
+      remoteVpnHint:
+        'The plan keeps a network for it. The VPN server itself is switched on under Settings → VPN in the controller; this application does not write it.',
+      remoteTunnel: 'My services too, without opening a port',
+      remoteTunnelHint:
+        'Cloudflare Tunnel: the connection is made from the inside, so no port is opened on the router. It needs a domain of your own.',
+      wifiTitle: 'The Wi-Fi names',
+      wifiMain: 'The home Wi-Fi name',
+      wifiGuest: 'The guest Wi-Fi name',
+      wifiKept: 'This is the one you use now. Keep it and no device has to reconnect.',
+      wifiNew: 'Smart devices get a separate name from it, ending in “-IoT”.',
+
+      previewTitle: 'What this turns into',
+      previewNetworks: (n: number) => (n === 1 ? '1 network' : `${n} networks`),
+      previewNoNetworks: 'The network is not touched: everything stays on the network you have now, as it is.',
+      previewWifi: 'Wi-Fi',
+      previewMachines: (n: number) => (n === 1 ? '1 machine on the server' : `${n} machines on the server`),
+      previewStorageBuild:
+        'The plan builds the storage. That erases disks — the step can only be done by hand, at the machine, and exactly which disk is shown to you first.',
+      previewStorageExisting: (store: string) =>
+        `The new machines go onto the storage already there (${store}); the plan touches no disk.`,
+      previewUntouched: 'These are left exactly as they are:',
+      previewNoDelete:
+        'This application never deletes a network that exists, and takes a backup of the controller before it writes anything.',
+      previewPlan: (steps: number, hours: string, auto: number, assisted: number, manual: number) =>
+        `${steps} steps, about ${hours} hours of work. ${auto} of them I can do myself, ${assisted} come with the exact values and commands, and ${manual} can only be yours.`,
+      previewErrors: 'This needs sorting out before going on:',
+      save: 'That is right — make the plan from this',
+      saveAgain: 'Save the new answers',
+      cancel: 'Cancel, keep what there is',
+      adopt: (name: string) => `Carry on with the plan I already have instead: ${name}`,
+      editedWarning:
+        'The plan has been changed in the detailed view since. Saving these answers loses those changes — the names written onto ports stay.',
+
+      portsTitle: 'Which network should these machines be on?',
+      portsHint:
+        'The survey saw a machine on each of these ports, on a network the plan has no counterpart for — usually the controller’s default LAN. Say where they belong; until then the plan cannot tell what to set on them.',
+      portsPlacedHint:
+        'With one household its own network is the natural place, so that is where they are. If one belongs elsewhere — a smart device, say — change it here.',
+      portsUnset: '— choose —',
+      portName: (device: string, idx: number) => `${device} · port ${idx}`,
+      portsPlaced: (n: number) =>
+        n === 1
+          ? '1 machine now on the default LAN moves to the home network. The port is set by hand in the port-assignment step, with the exact values.'
+          : `${n} machines now on the default LAN move to the home network. The ports are set by hand in the port-assignment step, with the exact values.`,
+
+      defaultWifi: 'Home',
+      defaultGuestWifi: 'Guest',
+      homeDefault: 'Home',
+      homeNumbered: (n: number) => `Flat ${n}`,
+      blueprintName: 'My home',
+      blueprintDescription:
+        'Made from the answers given on the guided path. Every value can be edited in the detailed view.',
+    },
+
+    walk: {
+      progress: (done: number, total: number) => `${done} of ${total} steps done`,
+      remaining: (hours: string) => `about ${hours} hours to go`,
+      nowTitle: 'Next up',
+      whoTitle: 'Who does it',
+      whereTitle: 'Where',
+      who: {
+        read: 'This is reading: go through it, and mark it done if it is right.',
+        applier:
+          'This application writes it to the controller, in the Network step, after a backup and a dry run. If you skipped it there, the Run tab of the detailed view does the same — or set it in the controller with the values below.',
+        run: (host: string) =>
+          `I can run its commands from here, on ${host}. Each one is shown to you first, and none starts without your say-so.`,
+        copy: 'Its commands are run on the machine: copy them from here. Give the machine SSH access too and they can be run from here.',
+        ui: 'This is set in the UniFi controller’s interface, with the exact values given below.',
+        console:
+          'This needs you at the machine: the change can cut the very connection you would be working over. Copy the commands from here.',
+        manual:
+          'This is yours alone, by hand — the application deliberately does not run it. Slowly, with the checks before it.',
+      },
+      where: {
+        unifi: 'in the UniFi controller',
+        proxmox: 'on the Proxmox machine',
+        docker: 'on the Docker machine',
+        kubernetes: 'on the cluster',
+        host: 'at the machine, or on paper',
+      },
+      blocked: 'This needs these first:',
+      goTo: 'Go there',
+      doneNext: 'Done, next one',
+      notDone: 'Not done after all',
+      next: 'Next',
+      skip: 'Skip for now',
+      allTitle: 'The whole plan',
+      showAll: 'Show all of it',
+      hideAll: 'Hide',
+      status: { done: 'done', stale: 'changed', blocked: 'waiting', open: 'to do' },
+      finishedTitle: 'The whole plan is done',
+      finishedBody:
+        'Every step is behind you. Now is a good time to survey the network once more: that shows whether it really stands the way it was planned — not only that the ticks are in place.',
+      surveyAgain: 'Survey it again',
+      editAnswers: 'Change my answers',
+      sshHint:
+        'The server’s commands can be run from here too, once SSH access to the Proxmox machine is added in the Survey view.',
+    },
 
     footnote:
       'Everything here is the same machinery the other views use, in the order it is meant to happen. Nothing is written without a backup taken first, nothing is written that this could not read back afterwards, and anything that could cut off your own connection is refused rather than attempted.',
@@ -1128,6 +1297,13 @@ export const en: Dict = {
     guests: 'Guests',
     storage: 'Storage',
     services: 'Services',
+    portProfiles: 'Port profiles',
+    portProfilesHint:
+      'Derived from the port layout, one per purpose rather than one per port. This is one of the two object kinds the application writes to the controller; which physical port gets which profile it does not write.',
+    colNative: 'Native',
+    colTagged: 'Tagged',
+    colUsedBy: 'Used by',
+    noNetworkChosen: 'no network chosen',
     colName: 'Name',
     colRange: 'Range',
     colGateway: 'Gateway',
@@ -1186,6 +1362,16 @@ export const en: Dict = {
     sshLocalConsoleNote:
       'This step needs someone at the machine: the change can cut the session it would be sent over. Copy it and run it at a console.',
     stepDone: 'Done',
+    stepChanged: 'Changed',
+    markHow: {
+      ran: (when: string) => `Ran here without a failure · ${when}.`,
+      manual: (when: string) => `Marked done by hand · ${when}.`,
+      applied: (when: string) => `Written to the controller · ${when}.`,
+      verified: (when: string) => `Already in place, by the controller · ${when}.`,
+    },
+    markStale: 'The step has changed since, so it no longer counts as done — look it over again.',
+    markEarlier:
+      'This is a tick from an earlier sitting. If you are not sure of it, the reading commands above show whether it still holds.',
     stepBlocked: (n: number) => (n === 1 ? '1 step first' : `${n} steps first`),
     waitsFor: 'These come first:',
     orderClear: 'What it rests on — all done:',
@@ -1634,6 +1820,18 @@ export const en: Dict = {
       `${n} networks added to the target state — check what they are for on the Parameters tab, then load the ports again.`,
     importUnmatched: (names: string[]) =>
       `The target state has no network for: ${names.join(', ')} — the native network on those ports was left empty.`,
+    linksTitle: (n: number) =>
+      n === 1
+        ? '1 port links two UniFi devices, yet it is entered as an access port.'
+        : `${n} ports link two UniFi devices, yet they are entered as access ports.`,
+    linksBody:
+      'On the controller these ports sit on the stock “Default” profile: the Default (1) network untagged, and everything else passed through. In the plan that is not an access port but a trunk — otherwise the access point on the far end loses all its Wi-Fi networks but one, and a switch loses every VLAN. The survey sees what is on the far end, and the role follows from it:',
+    linkLine: (device: string, idx: number, far: string, role: string) =>
+      `${device} · port ${idx}  →  ${far}  →  ${role}`,
+    linksApply: (n: number) => `Set them all (${n})`,
+    orphans: (n: number) =>
+      `${n === 1 ? '1 access port has' : `${n} access ports have`} no network. The survey saw a machine on each, on a network the plan has no counterpart for — usually the controller’s default LAN. Pick where they belong; each row can still be changed on its own.`,
+    orphansApply: (n: number) => `Set them (${n === 1 ? '1 port' : `${n} ports`})`,
     addPort: 'Add a device',
     addPortHint: 'The first port of a new device. Add further ports with the device’s own button.',
     addPortTo: '+ port',
@@ -1693,7 +1891,7 @@ export const en: Dict = {
       'The application writes the port profiles. It does not write which physical port gets which one: a wrong port override can cut you off from the controller itself, and there is no way back from inside the application. The plan tells you the exact values to set on the port.',
     profilesTitle: (n: number) => `Port profiles · ${n}`,
     portsTitle: 'Ports',
-    usedBy: (n: number) => `on ${n} ports`,
+    usedBy: (n: number) => (n === 1 ? 'on 1 port' : `on ${n} ports`),
   },
 
   backupFindings: {

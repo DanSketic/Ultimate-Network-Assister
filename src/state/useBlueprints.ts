@@ -60,6 +60,12 @@ export interface BlueprintApi {
   removeHousehold: (id: string) => void;
 
   importJson: (json: string) => void;
+
+  /**
+   * Puts a whole blueprint in place and opens it — replacing the one with the
+   * same id, or adding it. The guided path's interview writes one this way.
+   */
+  upsert: (blueprint: Blueprint) => void;
 }
 
 const SAVE_DEBOUNCE_MS = 400;
@@ -194,10 +200,18 @@ export function useBlueprints(): BlueprintApi {
       // The blueprint's own title, on the same test: a name nobody has changed
       // is still one of the app's, whichever language it was written in.
       const untitled = LANGS.some((other) => dict(other).blueprint.starterName === bp.name);
+      // The guided path names the plan it makes, and that name is the app's
+      // too until somebody changes it. Only the title: the households and the
+      // Wi-Fi names it chose end up in network names on the controller, and
+      // renaming those because the interface language moved would be a change
+      // to the estate, not to the words.
+      const guidedTitle = LANGS.some((other) => dict(other).guided.want.blueprintName === bp.name);
       const named =
         bp.source === 'preset' || untitled
           ? { name: t.blueprint.starterName, description: t.blueprint.starterDescription }
-          : {};
+          : guidedTitle
+            ? { name: t.guided.want.blueprintName, description: t.guided.want.blueprintDescription }
+            : {};
 
       return { ...bp, params, households, ...named };
     },
@@ -291,18 +305,30 @@ export function useBlueprints(): BlueprintApi {
     toggleModule: (moduleId) =>
       mutate((bp) => {
         const on = bp.enabledModules.includes(moduleId);
+        const modules = preset?.modules ?? [];
         if (on) {
-          // Dropping a module also drops anything that depended on it, so the
-          // checkbox never leaves the blueprint in a state resolve has to fix.
-          const dependents = (preset?.modules ?? [])
-            .filter((m) => (m.requires ?? []).includes(moduleId))
-            .map((m) => m.id);
-          const drop = new Set([moduleId, ...dependents]);
+          // Dropping a module also drops anything that depended on it, all the
+          // way down, so the checkbox never leaves the blueprint in a state
+          // resolve has to fix. Since the server became optional the chains
+          // are long: switching off the base system takes every machine.
+          const drop = new Set<string>();
+          const cut = (id: string) => {
+            if (drop.has(id)) return;
+            drop.add(id);
+            for (const m of modules) if ((m.requires ?? []).includes(id)) cut(m.id);
+          };
+          cut(moduleId);
           return { ...bp, enabledModules: bp.enabledModules.filter((id) => !drop.has(id)) };
         }
-        // Enabling pulls in what it needs.
-        const module = preset?.modules.find((m) => m.id === moduleId);
-        const add = new Set([moduleId, ...(module?.requires ?? [])]);
+        // Enabling pulls in what it needs, and what that needs in turn.
+        const byId = new Map(modules.map((m) => [m.id, m]));
+        const add = new Set<string>();
+        const pull = (id: string) => {
+          if (add.has(id)) return;
+          add.add(id);
+          for (const r of byId.get(id)?.requires ?? []) pull(r);
+        };
+        pull(moduleId);
         return { ...bp, enabledModules: [...new Set([...bp.enabledModules, ...add])] };
       }),
 
@@ -395,6 +421,19 @@ export function useBlueprints(): BlueprintApi {
 
     removeHousehold: (id) =>
       mutate((bp) => ({ ...bp, households: bp.households.filter((h) => h.id !== id) })),
+
+    upsert: (blueprint) => {
+      setBlueprints((prev) => {
+        const exists = prev.some((b) => b.id === blueprint.id);
+        const next = exists
+          ? prev.map((b) => (b.id === blueprint.id ? blueprint : b))
+          : [blueprint, ...prev];
+        latest.current = next;
+        return next;
+      });
+      setSelectedId(blueprint.id);
+      scheduleSave(blueprint);
+    },
 
     importJson: (json) => {
       try {

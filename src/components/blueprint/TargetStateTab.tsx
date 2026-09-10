@@ -186,6 +186,54 @@ export function TargetStateTab({
         </Block>
       ) : null}
 
+      {/*
+        * The port profiles.
+        *
+        * They belong here for the same reason the networks do: they are part
+        * of the state the estate is meant to end up in, and one of the two
+        * kinds of object this application writes to the controller. They were
+        * visible only on the Ports tab, next to the layout that produces them
+        * — which answers "what did my editing just do" and not "what is the
+        * estate supposed to look like", the question this tab exists for.
+        *
+        * The count of ports on each is what makes the list readable: a profile
+        * used by nine ports and one used by none are different facts about the
+        * same layout.
+        */}
+      {resolved.portProfiles.length > 0 ? (
+        <Block title={t.target.portProfiles} hint={t.target.portProfilesHint}>
+          <DataTable
+            columns={[
+              { label: t.target.colName, mono: true },
+              { label: t.target.colNative, mono: true, width: '90px' },
+              { label: t.target.colTagged, mono: true },
+              { label: t.target.colUsedBy, width: '90px' },
+              { label: t.target.colRole },
+            ]}
+            rows={resolved.portProfiles.map((p) => [
+              <Mono>{p.name}</Mono>,
+              p.nativeVlan || '—',
+              p.taggedVlans.length > 0 ? p.taggedVlans.join(', ') : '—',
+              t.ports.usedBy(p.portCount),
+              <span style={{ color: 'var(--text2)' }}>
+                {p.purpose}
+                {/* A profile nobody chose: it exists because some ports are
+                    access ports with no network picked, and it says so here
+                    rather than only in the plan's error list. */}
+                {p.role === 'access' && p.nativeVlan === 0 ? (
+                  <>
+                    {' '}
+                    <Pill color={palette.bad} tight>
+                      {t.target.noNetworkChosen}
+                    </Pill>
+                  </>
+                ) : null}
+              </span>,
+            ])}
+          />
+        </Block>
+      ) : null}
+
       {resolved.guests.length > 0 ? (
         <Block title={t.target.guests}>
           <DataTable

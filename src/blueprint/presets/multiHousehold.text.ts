@@ -388,6 +388,14 @@ const HU: MhText = {
       help: 'A Proxmox felület és a vendéggépek VLAN-trunkja külön fizikai porton fut, így a trunk átalakítása nem vágja el a felületet.',
     },
     trunkBridge: { label: 'Trunk bridge neve' },
+    storageMode: {
+      label: 'Tárhely',
+      help: 'Új gépen a terv poolokat és médialemezeket épít a megadott lemezekből — ez a lemezeket törli. Már használt gépen a meglévő tárhelyet veszi: ekkor a pool neve annak a tárolónak a neve, amire a vendéggépek kerülnek, a médiakönyvtárat pedig neked kell kijelölnöd.',
+      options: {
+        build: 'Új tárhelyet építünk (a lemezek törlődnek)',
+        existing: 'A meglévő tárhelyet használjuk',
+      },
+    },
     fastPoolName: { label: 'Gyors pool neve' },
     fastPoolDevices: {
       label: 'Gyors pool lemezei',
@@ -817,6 +825,14 @@ const EN: MhText = {
       help: 'The Proxmox interface and the guests’ VLAN trunk run on different physical ports, so converting the trunk does not cut the interface.',
     },
     trunkBridge: { label: 'Trunk bridge name' },
+    storageMode: {
+      label: 'Storage',
+      help: 'On a new machine the plan builds pools and media disks from the disks given — which erases them. On a machine already in use it takes the storage that is there: the pool name is then the store the guests go onto, and the media library is yours to point at.',
+      options: {
+        build: 'Build new storage (the disks are erased)',
+        existing: 'Use the storage already there',
+      },
+    },
     fastPoolName: { label: 'Fast pool name' },
     fastPoolDevices: {
       label: 'Fast pool disks',

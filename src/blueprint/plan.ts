@@ -878,10 +878,18 @@ function prefixOf(cidr: string): number {
   return Number.isInteger(bits) && bits > 0 && bits <= 32 ? bits : 24;
 }
 
-/** The storage a guest's disk goes on: the pool the plan built for them. */
+/**
+ * The storage a guest's disk goes on: the pool the plan built for them, or —
+ * on a machine already in use, where the plan builds none — the store it
+ * already has, which the pool-name field names in that mode.
+ */
 function guestStore(r: ResolvedBlueprint): string {
   const pool = r.storage.find((x) => x.kind === 'zfs-mirror' || x.kind === 'lvm-thin');
-  return pool?.name ?? 'local-lvm';
+  if (pool) return pool.name;
+  if (r.blueprint.params['storageMode'] === 'existing') {
+    return String(r.blueprint.params['fastPoolName'] || 'local-lvm');
+  }
+  return 'local-lvm';
 }
 
 function trunkBridge(r: ResolvedBlueprint): string {
@@ -898,7 +906,16 @@ function guestSteps(moduleId: string): StepBuilder {
   return (r, p) => {
     const guests = r.guests.filter((g) => g.moduleId === moduleId);
     const store = guestStore(r);
-    const bridge = trunkBridge(r);
+    /*
+     * The bridge the network card plugs into.
+     *
+     * The trunk only where the plan builds one. A flat network keeps the
+     * installer's own `vmbr0` and no VLAN tag: `bridge=vmbr1,tag=0` on a host
+     * with neither is a machine that is created and never reaches anything.
+     */
+    const bridged = r.modules.some((m) => m.id === 'pve-bridges');
+    const bridge = bridged ? trunkBridge(r) : 'vmbr0';
+    const tagOf = (vlan: number) => (vlan > 0 ? `,tag=${vlan}` : '');
 
     /*
      * What has to exist before a machine can be built on it.
@@ -945,7 +962,7 @@ function guestSteps(moduleId: string): StepBuilder {
                   `pct create ${g.vmid} "$TPL" \\`,
                   `  --hostname ${slug(g.name)} --cores ${cores} --memory ${memory} --swap 0 \\`,
                   `  --rootfs ${store}:${disk} \\`,
-                  `  --net0 name=eth0,bridge=${bridge},tag=${g.vlan}${address} \\`,
+                  `  --net0 name=eth0,bridge=${bridge}${tagOf(g.vlan)}${address} \\`,
                   `  --unprivileged 1 --onboot 1 --features nesting=1`,
                 ].join('\n'),
               ),
@@ -967,7 +984,7 @@ function guestSteps(moduleId: string): StepBuilder {
                   // until cloud-init has finished: without this the console is
                   // blank and the machine looks hung while it is working.
                   cloudInit ? '  --serial0 socket --vga serial0 \\' : '',
-                  `  --net0 virtio,bridge=${bridge},tag=${g.vlan} \\`,
+                  `  --net0 virtio,bridge=${bridge}${tagOf(g.vlan)} \\`,
                   `  --boot order=scsi0`,
                 ]
                   .filter(Boolean)
@@ -1405,6 +1422,7 @@ export function buildPlan(resolved: ResolvedBlueprint, t: Dict): Plan {
   const p = t.planText;
   const modules: PlanModule[] = [];
   const all: PlanStep[] = [];
+  const present = new Set(resolved.modules.map((m) => m.id));
 
   for (const module of resolved.modules) {
     const builder = BUILDERS[module.id];
@@ -1438,7 +1456,17 @@ export function buildPlan(resolved: ResolvedBlueprint, t: Dict): Plan {
         prechecks: d.prechecks ?? [],
         // A bare id is a sibling in the same module; anything with a dot in it
         // names a step somewhere else in the plan.
-        requires: (d.requires ?? []).map((id) => (id.includes('.') ? id : `${module.id}.${id}`)),
+        requires: (d.requires ?? [])
+          .map((id) => (id.includes('.') ? id : `${module.id}.${id}`))
+          /*
+           * Nothing waits for a module this blueprint does not include. A
+           * guest names the trunk bridge it plugs into; on a flat network
+           * there is no bridge module, and a prerequisite nobody can ever
+           * tick would hold the machine back for good. A step missing from a
+           * module that *is* here stays named — that is a mistake in the
+           * plan, and the plan-order check is there to catch it.
+           */
+          .filter((id) => present.has(id.slice(0, id.indexOf('.')))),
         actions,
         verification: d.verification ?? [],
         ...(capability.reason ? { capabilityReason: capability.reason } : {}),

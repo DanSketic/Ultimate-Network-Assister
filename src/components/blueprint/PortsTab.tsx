@@ -70,6 +70,48 @@ export function PortsTab({
     [resolved.ports],
   );
 
+  /*
+   * Access ports on no network the plan has, answered in one place.
+   *
+   * On a stock estate this is most of them: the wired machines sit on the
+   * controller's default LAN, which has no VLAN and so no counterpart in a
+   * plan that numbers everything. Eight rows each with the same error and
+   * the same select is eight chances to pick differently by accident. With a
+   * single household network the choice is offered already made; with several
+   * it is left for the reader, since it is the one thing the plan cannot know.
+   */
+  /*
+   * Ports between two of the controller's own devices, set up as though a
+   * machine were on them.
+   *
+   * On the controller they sit on the stock "Default" profile — the default
+   * LAN untagged, everything else passed through — which is why an earlier
+   * import took them for access ports. In the plan they cannot be: an access
+   * point on an access port loses every SSID but one, a switch loses every
+   * VLAN. The survey measured what is on the far end, so the role follows
+   * from it, and what is offered here is exactly what reading the survey
+   * again would change: the import is the one place that decision lives.
+   */
+  const links = useMemo(() => {
+    if (!estate.snapshot) return [];
+    const fresh = new Map(
+      importPortsFromSurvey(estate.snapshot, ports, networks).ports.map((p) => [p.id, p]),
+    );
+    return ports.flatMap((p) => {
+      const f = fresh.get(p.id);
+      return f && f.role !== p.role ? [{ port: p, role: f.role, far: f.label || p.label }] : [];
+    });
+  }, [estate.snapshot, ports, networks]);
+  const linkIds = new Set(links.map((l) => l.port.id));
+
+  const orphans = ports.filter(
+    (p) =>
+      p.role === 'access' && !linkIds.has(p.id) && !networks.some((n) => n.vlan === p.nativeVlan),
+  );
+  const homes = networks.filter((n) => n.role === 'household');
+  const [target, setTarget] = useState(0);
+  const chosen = target || (homes.length === 1 ? (homes[0]?.vlan ?? 0) : 0);
+
   /**
    * Seeds the layout from the survey.
    *
@@ -219,6 +261,72 @@ export function PortsTab({
             >
               {x.addMissingNetworks(missing.length)}
             </button>
+          </div>
+        ) : null}
+
+        {links.length > 0 ? (
+          <div className="soft" style={{ padding: '11px 13px', marginBottom: 12, borderColor: palette.bad }}>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>{x.linksTitle(links.length)}</div>
+            <div className="pretty" style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}>
+              {x.linksBody}
+            </div>
+            <div style={{ display: 'grid', gap: 3, margin: '8px 0 10px' }}>
+              {links.map((l) => (
+                <div key={l.port.id} className="mono" style={{ fontSize: 10.5, color: 'var(--text2)' }}>
+                  {x.linkLine(l.port.device, l.port.idx, l.far, x.roles[l.role])}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => {
+                const next = new Map(links.map((l) => [l.port.id, l]));
+                api.setPorts(
+                  ports.map((p) => {
+                    const l = next.get(p.id);
+                    return l ? { ...p, role: l.role, label: p.label.trim() && !/^port\s*\d+$/i.test(p.label.trim()) ? p.label : l.far } : p;
+                  }),
+                );
+              }}
+            >
+              {x.linksApply(links.length)}
+            </button>
+          </div>
+        ) : null}
+
+        {orphans.length > 0 ? (
+          <div className="soft" style={{ padding: '11px 13px', marginBottom: 12, borderColor: palette.bad }}>
+            <div className="pretty" style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}>
+              {x.orphans(orphans.length)}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 9, flexWrap: 'wrap' }}>
+              <select
+                className="input"
+                style={{ fontSize: 11, maxWidth: 280 }}
+                aria-label={x.colNative}
+                value={chosen}
+                onChange={(e) => setTarget(Number(e.target.value) || 0)}
+              >
+                <option value={0}>—</option>
+                {networks.map((n) => (
+                  <option key={n.vlan} value={n.vlan}>
+                    {n.vlan} · {n.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={chosen === 0}
+                onClick={() => {
+                  const ids = new Set(orphans.map((p) => p.id));
+                  api.setPorts(ports.map((p) => (ids.has(p.id) ? { ...p, nativeVlan: chosen } : p)));
+                }}
+              >
+                {x.orphansApply(orphans.length)}
+              </button>
+            </div>
           </div>
         ) : null}
 

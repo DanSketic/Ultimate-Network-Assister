@@ -77,7 +77,7 @@ export interface PortImport {
 /** How a device announces what it is, in the controller's vocabulary. */
 function roleForKind(kind: string, model: string): PortRole | null {
   const k = `${kind} ${model}`.toLowerCase();
-  if (/ugw|udm|uxg|gateway/.test(k)) return 'uplink';
+  if (/ugw|udm|uxg|ucg|udr|gateway/.test(k)) return 'uplink';
   if (/usw|usl|switch|flex/.test(k)) return 'trunk';
   if (/uap|u6|u7|u5|uwb|access.?point/.test(k)) return 'ap';
   return null;
@@ -89,7 +89,7 @@ function roleForName(name: string): PortRole | null {
   if (!n) return null;
   if (/\bap\b|u6|u7|uap|access.?point/.test(n)) return 'ap';
   if (/usw|switch|flex|swit/.test(n)) return 'trunk';
-  if (/udm|ugw|uxg|gateway|router|edgerouter/.test(n)) return 'uplink';
+  if (/udm|ugw|uxg|ucg|udr|gateway|router|edgerouter/.test(n)) return 'uplink';
   if (/pve|proxmox|esxi|hyperv|server|nas|truenas|unraid/.test(n)) return 'server';
   return null;
 }
@@ -435,9 +435,11 @@ function poeOf(port: UnifiPort, profiles: Map<string, UnifiPortProfile>): boolea
  * to every free port on the switch. It is free, and `unused` says exactly that
  * and asks nothing of anybody.
  */
-function roleOf(port: UnifiPort, far: FarEnd): PortRole {
+function roleOf(port: UnifiPort, far: FarEnd, wan: boolean): PortRole {
   if (!port.enabled) return 'off';
-  if (port.isUplink) return 'uplink';
+  // The socket the internet comes in on counts as the way out, as the port
+  // table's own uplink flag does; see `wanPorts` for why it needs saying.
+  if (port.isUplink || wan) return 'uplink';
   if (far.device) {
     const byKind = roleForKind(far.device.kind, far.device.model);
     if (byKind) return byKind;
@@ -481,8 +483,30 @@ export function importPortsFromSurvey(
   const profiles = new Map(unifi.portProfiles.map((p) => [p.id, p]));
   const netById = new Map(unifi.networks.map((n) => [n.id, n]));
 
+  /*
+   * The gateway's own way out, by port.
+   *
+   * A gateway reports its WAN apart from its port table, and the port table
+   * does not flag that socket as an uplink. So every gateway came in with no
+   * uplink at all: its WAN port read as an access port with no network, and
+   * the layout warned that the gateway could not reach the rest of the
+   * network. The WAN report names the port — a measurement, not a guess.
+   */
+  const wanPorts = new Map(
+    (unifi.wans ?? [])
+      .filter((w) => w.deviceMac && w.portIdx > 0)
+      .map((w) => [`${w.deviceMac.toLowerCase()}#${w.portIdx}`, w]),
+  );
+
   const measured = new Map<string, PortAssignment>();
   const unmatched = new Map<number, ExtraNetwork>();
+  /**
+   * Layout keys of the ports whose role is measured rather than suggested:
+   * the gateway's WAN, a port the device flags as its own uplink, and a port
+   * with a managed device of this controller's on the far end — found by LLDP
+   * or by that device's own uplink report, never by a name.
+   */
+  const measuredRole = new Set<string>();
 
   for (const d of devices) {
     const deviceName = d.name || d.model || d.mac;
@@ -500,7 +524,9 @@ export function importPortsFromSurvey(
      */
     for (const p of d.ports) {
       const far = farEndOf(d, p, byMac, uplinks, clients);
-      const role = roleOf(p, far);
+      const wan = wanPorts.get(`${d.mac.toLowerCase()}#${p.idx}`);
+      const role = roleOf(p, far, wan !== undefined);
+      if (wan || p.isUplink || far.device) measuredRole.add(`${deviceName}#${p.idx}`);
       /*
        * The measurement is already a planned VLAN or it is nothing.
        *
@@ -517,7 +543,7 @@ export function importPortsFromSurvey(
        * network this estate is running. Only the ports with nothing on them
        * are left out of it, where there is nothing to say.
        */
-      if (vlan === 0 && role !== 'unused' && role !== 'off') {
+      if (vlan === 0 && role !== 'unused' && role !== 'off' && !wan) {
         const net = measuredNetwork(p, far.client, profiles, netById);
         if (net && !unmatched.has(net.vlan)) unmatched.set(net.vlan, net);
       }
@@ -526,7 +552,8 @@ export function importPortsFromSurvey(
         id: `port-${d.mac}-${p.idx}`,
         device: deviceName,
         idx: p.idx,
-        label: far.label || ownName(p.name),
+        // The provider, where the controller knows it, is what is on a WAN port.
+        label: far.label || ownName(p.name) || (wan ? wan.isp || wan.name : ''),
         role,
         /*
          * The network measured on the port, whatever role was suggested for it.
@@ -567,11 +594,34 @@ export function importPortsFromSurvey(
      */
     const merged: PortAssignment = {
       ...row,
+      /*
+       * One kind of role is replaced rather than kept: an access port with no
+       * network, where the survey measured what the port really is — the
+       * gateway's WAN, or a link to another of the controller's own devices.
+       *
+       * Such a row cannot have been a choice, since an access port with no
+       * network cannot be finished; it is what an earlier import left behind
+       * before it could read the far end. Kept, it stayed an error for good:
+       * a port between a switch and an access point, sitting on the
+       * controller's "Default" profile, read as an access port with nothing
+       * chosen, survey after survey, while the survey could see the access
+       * point on the other end. A row somebody did give a network stays
+       * exactly as they left it, and a role guessed only from a name is still
+       * only a suggestion.
+       */
+      role:
+        row.role === 'access' &&
+        !row.nativeVlan &&
+        found.role !== 'access' &&
+        measuredRole.has(`${row.device}#${row.idx}`)
+          ? found.role
+          : row.role,
       label: ownName(row.label) || found.label || row.label,
       nativeVlan: row.nativeVlan || found.nativeVlan,
       poe: row.poe || found.poe,
     };
     const changed =
+      merged.role !== row.role ||
       merged.label !== row.label ||
       merged.nativeVlan !== row.nativeVlan ||
       merged.poe !== row.poe;

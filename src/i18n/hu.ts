@@ -133,13 +133,13 @@ export const hu = {
     title: 'Végigviszlek rajta',
     subtitle: 'Csatlakozás, megnézzük, aztán megcsináljuk, amit érdemes',
     desktopOnly:
-      'Ez a böngészős előnézet: megmutatni tud, hozzányúlni nem. Az asztali alkalmazás az, amelyik csatlakozik.',
+      'Ez a böngészős előnézet: megmutatni tud, hozzányúlni nem. A kérdéseket és a belőlük készülő tervet itt is végig lehet nézni; csatlakozni és bármit kiírni az asztali alkalmazás tud.',
     steps: {
       connect: 'Csatlakozás',
       look: 'Megnézzük',
-      prepare: 'Előkészítés',
-      confirm: 'Döntés',
-      done: 'Kész',
+      want: 'Mit szeretnél',
+      network: 'Hálózat',
+      steps: 'Lépésről lépésre',
     },
 
     connectTitle: 'Először is: hogyan érjük el',
@@ -219,6 +219,173 @@ export const hu = {
         ? `${applied} változtatás ment át, ${failed} nem. A futás az első hibánál megállt, és ami addig történt, visszaállítható.`
         : `${applied} változtatás ment át. Semmi nem maradt félbe.`,
     undo: 'Állítsd vissza',
+
+    networkLead:
+      'Ez a terv első, hálózati része: a hálózatokat és a portprofilokat ez az alkalmazás maga írja ki a vezérlőbe. A többit utána lépésenként végigvesszük.',
+    continueToSteps: 'Tovább a többi lépéshez',
+    skipNetwork: 'Ezt most kihagyom, jöhet a többi',
+
+    want: {
+      title: 'Mit szeretnél?',
+      lead: 'Néhány kérdés az otthonodról, hálózati szakszavak nélkül. A válaszaidból állítom össze a tervet, és amit a felmérés már látott — a Wi-Fi-neveidet, a címtartományodat, a szervered tárhelyét —, azt nem kérdezem, hanem beírom helyetted. Mellette rögtön látod, mi lesz belőle.',
+      leadNoSurvey:
+        'Néhány kérdés az otthonodról, hálózati szakszavak nélkül. Ez az előnézet nem látja a hálózatodat, ezért minden a szokásos alapértékekkel indul.',
+      homesTitle: 'Kik használják a hálózatot?',
+      homesOne: 'Egy család, egy háztartás',
+      homesOneHint:
+        'Mindenki látja a közös eszközöket. Az okoseszközök és a vendégek így is külön hálózatra kerülnek.',
+      homesSeveral: 'Több család vagy lakás',
+      homesSeveralHint:
+        'Egymás gépeit, nyomtatóit, tévéit nem láthatják: mindegyik háztartás saját hálózatot és saját Wi-Fi-jelszót kap.',
+      homeNamesLabel: 'A háztartások nevei',
+      homeNamesHint:
+        'Így szerepelnek a tervben és a Wi-Fi-jelszavak listájában. Például „Földszint”, „Emelet”, „Nagymamáék”.',
+      addHome: '+ még egy háztartás',
+      removeHome: 'Törlés',
+      houseTitle: 'Mi van még a házban?',
+      cameras: 'Biztonsági kamerák',
+      camerasHint:
+        'Saját, elzárt hálózatot kapnak: a kamerák nem mennek ki az internetre, és a háztartások sem érik el őket közvetlenül.',
+      cameraCount: 'Hány kamera?',
+      printer: 'Közös nyomtató',
+      printerHint: 'Minden háztartás nyomtathat rá, de a nyomtatón keresztül sem látnak át egymáshoz.',
+      serverTitle: 'Van szervered?',
+      serverHint:
+        'Egy Proxmox gép, amin virtuális gépek futnak — például egy okosotthon-központ vagy egy saját felhő.',
+      serverOnlyHint: 'Ehhez a géphez kapcsolódtál. A hálózatot úgy hagyjuk, ahogy van.',
+      serverNone: 'Nincs, csak a hálózatot rakjuk rendbe',
+      serverNoneHint: 'A terv csak a UniFi-részről szól.',
+      serverExisting: 'Van, és már használom',
+      serverExistingHint: 'A lemezeihez nem nyúlunk: az új gépek a meglévő tárhelyére kerülnek.',
+      serverNew: 'Van, most rakom össze',
+      serverNewHint:
+        'Üres gép: a terv a lemezek előkészítésével kezd. Ez törli őket — ezt csak kézzel, a gép mellett lehet, és előtte pontosan megmutatjuk, melyik lemezről van szó.',
+      serverSeen: (name: string) => `A felmérés látta: ${name}.`,
+      servicesTitle: 'Mit futtasson a szerver?',
+      services: {
+        'home-assistant': {
+          label: 'Okosotthon-központ',
+          hint: 'Home Assistant: a lámpák, a szenzorok és a fűtés egy helyen.',
+        },
+        adguard: {
+          label: 'Reklám- és kártevőszűrés',
+          hint: 'AdGuard Home: az egész hálózatnak, minden eszközön, külön beállítás nélkül.',
+        },
+        media: {
+          label: 'Filmek, sorozatok otthonra',
+          hint: 'Médiaszerver a saját hálózatán; a tévék és a telefonok innen játszanak le.',
+        },
+        nextcloud: {
+          label: 'Saját felhő',
+          hint: 'Nextcloud: fájlok, fotók, naptár — a saját gépeden, nem valaki máséban.',
+        },
+        windows: {
+          label: 'Távolról elérhető Windows',
+          hint: 'Egy Windows virtuális gép, amit VPN-en keresztül érsz el.',
+        },
+      },
+      alreadyRunning: (what: string) =>
+        `Úgy tűnik, ez már fut: ${what}. Ha ez az, ne pipáld be — különben egy második készül mellé.`,
+      remoteTitle: 'Elérnéd kívülről is?',
+      remoteNone: 'Nem kell',
+      remoteNoneHint: 'Kívülről semmi nem érhető el.',
+      remoteVpn: 'Csak én, VPN-nel',
+      remoteVpnHint:
+        'A terv fenntart neki egy hálózatot. Magát a VPN-szervert a vezérlő Beállítások → VPN oldalán kapcsolod be; azt ez az alkalmazás nem írja.',
+      remoteTunnel: 'A szolgáltatásaimat is, port nyitása nélkül',
+      remoteTunnelHint:
+        'Cloudflare Tunnel: a kapcsolat belülről épül ki, a routeren nem kell portot nyitni. Kell hozzá egy saját domain.',
+      wifiTitle: 'A Wi-Fi nevei',
+      wifiMain: 'Az otthoni Wi-Fi neve',
+      wifiGuest: 'A vendég Wi-Fi neve',
+      wifiKept: 'Ezt használod most. Ha megtartod, egyik eszközt sem kell újra csatlakoztatni.',
+      wifiNew: 'Az okoseszközök ebből kapnak egy „-IoT” végű külön nevet.',
+
+      previewTitle: 'Ebből ez lesz',
+      previewNetworks: (n: number) => `${n} hálózat`,
+      previewNoNetworks: 'A hálózathoz nem nyúlunk: minden a mostani hálózaton marad, ahogy van.',
+      previewWifi: 'Wi-Fi',
+      previewMachines: (n: number) => (n === 1 ? '1 gép a szerveren' : `${n} gép a szerveren`),
+      previewStorageBuild:
+        'A tárhelyet a terv építi fel. Ez lemezeket töröl — ezt a lépést csak kézzel, a gép mellett lehet elvégezni, és előtte pontosan megmutatjuk, melyik lemezről van szó.',
+      previewStorageExisting: (store: string) =>
+        `Az új gépek a meglévő tárhelyre kerülnek (${store}); lemezhez a terv nem nyúl.`,
+      previewUntouched: 'Ezekhez nem nyúlunk, maradnak, ahogy vannak:',
+      previewNoDelete:
+        'Meglévő hálózatot ez az alkalmazás nem töröl, és mielőtt bármit kiírna, mentést készít a vezérlőről.',
+      previewPlan: (steps: number, hours: string, auto: number, assisted: number, manual: number) =>
+        `${steps} lépés, nagyjából ${hours} óra munka. ${auto} lépést én magam el tudok végezni, ${assisted} lépéshez pontos értékeket és parancsokat kapsz, ${manual} lépés csak a te kezedben lehet.`,
+      previewErrors: 'Ezt még rendbe kell tenni, mielőtt továbbmegyünk:',
+      save: 'Ez így jó — ebből legyen a terv',
+      saveAgain: 'Elmentem az új válaszokat',
+      cancel: 'Mégse, maradjon a mostani',
+      adopt: (name: string) => `Inkább a meglévő tervemmel megyek tovább: ${name}`,
+      editedWarning:
+        'A tervet azóta a részletes nézetben módosítottad. Ha most mented a válaszokat, azok a módosítások elvesznek — a portokra írt nevek maradnak.',
+
+      portsTitle: 'Melyik hálózatra kerüljenek ezek a gépek?',
+      portsHint:
+        'Ezeken a portokon a felmérés gépet látott, de olyan hálózaton, aminek a tervben nincs párja — többnyire a gyári alaphálózaton. Mondd meg, hová tartozzanak; amíg ez nincs meg, a terv nem tudja, mit állítson be rájuk.',
+      portsPlacedHint:
+        'Egy háztartásnál az otthoni hálózat a természetes helyük, ezért oda tettem őket. Ha valamelyik máshová tartozik — például egy okoseszköz —, itt átírhatod.',
+      portsUnset: '— válassz —',
+      portName: (device: string, idx: number) => `${device} · ${idx}. port`,
+      portsPlaced: (n: number) =>
+        `${n} gép, ami most a gyári alaphálózaton van, az otthoni hálózatra kerül. A portokat a port-kiosztás lépésben kézzel állítod át, a pontos értékekkel.`,
+
+      defaultWifi: 'Otthon',
+      defaultGuestWifi: 'Vendég',
+      homeDefault: 'Otthon',
+      homeNumbered: (n: number) => `${n}. lakás`,
+      blueprintName: 'Az otthonom',
+      blueprintDescription:
+        'A vezetett út kérdéseire adott válaszokból készült. A részletes nézetben minden értéke szerkeszthető.',
+    },
+
+    walk: {
+      progress: (done: number, total: number) => `${done} / ${total} lépés kész`,
+      remaining: (hours: string) => `még nagyjából ${hours} óra`,
+      nowTitle: 'Most ez jön',
+      whoTitle: 'Ki csinálja',
+      whereTitle: 'Hol',
+      who: {
+        read: 'Ez olvasnivaló: nézd át, és ha rendben van, jelöld késznek.',
+        applier:
+          'Ezt ez az alkalmazás írja ki a vezérlőbe, a Hálózat lépésben, mentés és próbafuttatás után. Ha ott kihagytad, a részletes nézet Futtatás fülén ugyanezt megteheted — vagy a vezérlőben, a lenti értékekkel.',
+        run: (host: string) =>
+          `Ennek a parancsait innen le tudom futtatni a(z) ${host} gépen. Mindegyiket előbb megmutatom, és csak a jóváhagyásoddal indul.`,
+        copy: 'Ennek a parancsait a gépen kell lefuttatnod: innen másolhatod ki őket. Ha a géphez SSH-hozzáférést is adsz, innen is futtathatók.',
+        ui: 'Ezt a UniFi vezérlő felületén állítod be, a lent megadott pontos értékekkel.',
+        console:
+          'Ehhez a gép mellett kell ülnöd: a változtatás elvághatja azt a kapcsolatot, amin keresztül távolról dolgoznál. A parancsokat innen másolod.',
+        manual:
+          'Ezt csak te csinálhatod, kézzel — ez az alkalmazás szándékosan nem futtatja. Lassan, a lépés előtti ellenőrzésekkel.',
+      },
+      where: {
+        unifi: 'a UniFi vezérlőben',
+        proxmox: 'a Proxmox gépen',
+        docker: 'a Docker-gépen',
+        kubernetes: 'a fürtön',
+        host: 'a gépnél, illetve papíron',
+      },
+      blocked: 'Ehhez előbb ezek kellenek:',
+      goTo: 'Odaugrom',
+      doneNext: 'Kész, jöhet a következő',
+      notDone: 'Mégsem kész',
+      next: 'Következő',
+      skip: 'Most kihagyom',
+      allTitle: 'Az egész terv',
+      showAll: 'Mutasd az egészet',
+      hideAll: 'Elrejtés',
+      status: { done: 'kész', stale: 'megváltozott', blocked: 'vár', open: 'hátravan' },
+      finishedTitle: 'Kész az egész terv',
+      finishedBody:
+        'Minden lépés megvan. Érdemes most még egyszer felmérni a hálózatot: az megmutatja, hogy tényleg úgy áll-e, ahogy terveztük — nem csak azt, hogy a pipák a helyükön vannak.',
+      surveyAgain: 'Felmérem újra',
+      editAnswers: 'Módosítom a válaszaimat',
+      sshHint:
+        'A szerver parancsait innen is le tudom futtatni, ha a Felmérés nézetben a Proxmox géphez SSH-hozzáférést is megadsz.',
+    },
 
     footnote:
       'Itt ugyanaz a gépezet fut, mint a többi nézetben, csak abban a sorrendben, ahogy történnie kell. Mentés nélkül semmi nem íródik, olyat nem írunk, amit utána ne tudnánk visszaolvasni, és amit elvághatná a saját kapcsolatodat, azt inkább elutasítjuk, mint megpróbáljuk.',
@@ -1151,6 +1318,13 @@ export const hu = {
     guests: 'Vendéggépek',
     storage: 'Tárhely',
     services: 'Szolgáltatások',
+    portProfiles: 'Port profilok',
+    portProfilesHint:
+      'A portkiosztásból jönnek, célonként egy — nem portonként. Ez a két objektumfajta egyike, amit az alkalmazás meg is ír a vezérlőbe; hogy melyik fizikai portra kerüljön, azt nem írja.',
+    colNative: 'Natív',
+    colTagged: 'Tagelt',
+    colUsedBy: 'Használat',
+    noNetworkChosen: 'nincs hálózat választva',
     colName: 'Név',
     colRange: 'Tartomány',
     colGateway: 'Átjáró',
@@ -1209,6 +1383,16 @@ export const hu = {
     sshLocalConsoleNote:
       'Ehhez a lépéshez ott kell lenni a gépnél: a változtatás elvághatja azt a kapcsolatot, amin átmenne. Másold ki, és futtasd konzolon.',
     stepDone: 'Kész',
+    stepChanged: 'Megváltozott',
+    markHow: {
+      ran: (when: string) => `Itt futott le hibátlanul · ${when}.`,
+      manual: (when: string) => `Kézzel jelölted késznek · ${when}.`,
+      applied: (when: string) => `A vezérlőbe kiírva · ${when}.`,
+      verified: (when: string) => `A vezérlő szerint már megvolt · ${when}.`,
+    },
+    markStale: 'Azóta a lépés megváltozott, ezért nem számít késznek — nézd át újra.',
+    markEarlier:
+      'Ez egy korábbi jelölés. Ha nem vagy biztos benne, a fenti olvasó parancsokkal megnézheted, hogy most is így van-e.',
     stepBlocked: (n: number) => (n === 1 ? 'Előbb 1 lépés' : `Előbb ${n} lépés`),
     waitsFor: 'Ezek után jöhet:',
     orderClear: 'Amin múlik — mind kész:',
@@ -1687,6 +1871,16 @@ export const hu = {
       `${n} hálózat felkerült a célállapotba — a szerepüket a Paraméterek fülön nézd át, majd töltsd be újra a portokat.`,
     importUnmatched: (names: string[]) =>
       `A célállapotban nincs ilyen hálózat: ${names.join(', ')} — ezeken a portokon a natív hálózat üresen maradt.`,
+    linksTitle: (n: number) =>
+      `${n} port két UniFi eszközt köt össze, mégis access portként van felvéve.`,
+    linksBody:
+      'A vezérlőben ezek a portok a gyári „Default” profilon ülnek: tageletlenül a Default (1) hálózat, és minden más átmegy rajtuk. A tervben ez nem access port, hanem trunk — különben a túloldali access point egy kivételével elveszítené a Wi-Fi-hálózatait, a switch pedig minden VLAN-t. A felmérés látja, mi van a túloldalon, ebből adódik a szerep:',
+    linkLine: (device: string, idx: number, far: string, role: string) =>
+      `${device} · ${idx}. port  →  ${far}  →  ${role}`,
+    linksApply: (n: number) => `Beállítom mind (${n})`,
+    orphans: (n: number) =>
+      `${n} access portnak nincs hálózata. Ezeken a felmérés olyan hálózaton látott gépet, aminek a tervben nincs párja — többnyire a vezérlő gyári alaphálózatán. Válaszd ki, hová kerüljenek; egyenként a sorokban is átírhatod.`,
+    orphansApply: (n: number) => `Beállítom (${n} port)`,
     addPort: 'Új eszköz',
     addPortHint: 'Új eszköz első portja. További portokat az eszköz saját gombjával vehetsz fel.',
     addPortTo: '+ port',
