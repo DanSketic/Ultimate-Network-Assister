@@ -1372,11 +1372,12 @@ export const hu = {
     actionApi: 'API',
     actionCommand: 'parancs',
     actionUi: 'felület',
-    sshTarget: 'Parancsok futtatása ezen',
+    sshTargetFor: (system: string) => `${system} parancsai ezen futnak`,
     sshTargetNote:
-      'Az alábbi lépések parancsai ezen a gépen futnak. Az alkalmazás előbb besorolja mindegyiket, a romboló műveletek pedig maradnak konzolon, kézzel.',
-    sshNoProfiles:
-      'Nincs elfogadott gazdakulcsú SSH-kapcsolat. Vedd fel a Felmérés nézetben, és az alábbi parancsok innen is futtathatóvá válnak.',
+      'Minden parancs arra a géptípusra megy, amelyikről a lépése szól: a Proxmox-parancsok a Proxmox gépre, soha nem a UniFi átjáróra. Az alkalmazás előbb besorolja mindegyiket, a romboló műveletek pedig maradnak konzolon, kézzel.',
+    sshNoRoute: (system: string) =>
+      `Nincs ${system} géphez elfogadott gazdakulcsú SSH-kapcsolat. Vedd fel a Felmérés nézetben, és ezek a parancsok innen is futtathatók lesznek — addig kimásolhatók.`,
+    flavour: { proxmox: 'Proxmox', unifi: 'UniFi', other: 'Egyéb gép' },
     sshClassifying: 'Kérdezzük, mit tehet ez a parancs…',
     sshTemplateNote:
       'Ez kitöltendő minta, nem kész parancs: az alkalmazás nem tudja, mi kerül a helyére, ezért ezt neked kell befejezned és lefuttatnod.',
@@ -2106,6 +2107,7 @@ export const hu = {
     route: 'Út',
     routeUnifi: 'vezérlő API',
     routeSsh: 'SSH',
+    needsRoute: (system: string) => `egy ${system} gép SSH-kapcsolata`,
     commands: 'Parancs',
     empty:
       'Ebből az összeállításból most semmit nem tud magától elvégezni: a lépések vagy döntést, vagy helyi konzolt, vagy kitöltendő értéket igényelnek. A Terv fülön mindegyik ott van, pontos parancsokkal.',

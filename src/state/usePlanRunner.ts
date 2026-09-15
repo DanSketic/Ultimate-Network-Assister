@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import type { TargetPlatform } from '@/blueprint/model';
+import { flavourFor, routesFor } from '@/blueprint/routes';
 import * as api from '@/survey/client';
-import type { Clearance, CommandOutput, Profile } from '@/survey/model';
+import type { Clearance, CommandOutput, Profile, SshFlavour } from '@/survey/model';
 
 /**
  * Running a plan step's commands over SSH.
@@ -16,6 +18,8 @@ import type { Clearance, CommandOutput, Profile } from '@/survey/model';
  *     one approval authorises one run.
  *   - A forbidden command is not offered at all. The plan already marks the
  *     destructive ones; the policy refuses them regardless of what is asked.
+ *   - A command goes to a machine of the kind its step is about, and to no
+ *     other. See `blueprint/routes.ts`.
  *
  * Output is kept per action rather than as a session log: while working through
  * a step, what matters is what this command just did, next to the command.
@@ -29,12 +33,17 @@ export interface PlanRun extends CommandOutput {
 export interface PlanRunnerApi {
   /** Live running is possible at all in this build. */
   supported: boolean;
-  /** Profiles that can carry a command: ssh on, host key pinned. */
+  /** Every profile that can carry a command somewhere: ssh on, host key pinned. */
   profiles: Profile[];
-  selected: Profile | undefined;
-  select: (id: string) => void;
-  /** A command may actually be sent somewhere. */
-  ready: boolean;
+
+  /** The machines a target's commands may go to, of the right kind only. */
+  routesOf: (target: TargetPlatform) => Profile[];
+  /** The one they do go to: the one chosen for that kind of machine, or the first. */
+  routeFor: (target: TargetPlatform) => Profile | undefined;
+  /** Chooses the machine for every target of the same kind. */
+  choose: (target: TargetPlatform, profileId: string) => void;
+  /** A command for this target may actually be sent somewhere. */
+  readyFor: (target: TargetPlatform) => boolean;
 
   /** Asks the native policy about a command. Cached; safe to call on render. */
   classify: (command: string) => void;
@@ -46,10 +55,10 @@ export interface PlanRunnerApi {
 
   running: (key: string) => boolean;
   runOf: (key: string) => PlanRun | null;
-  run: (key: string, command: string) => Promise<void>;
+  run: (key: string, command: string, target: TargetPlatform) => Promise<void>;
 
   /**
-   * A whole step, in order, on one approval.
+   * A whole step, in order, on one approval, on the machine its target routes to.
    *
    * What `auto` means for a step made of commands: the operator reads the
    * commands once, together, and approves the sequence rather than each line.
@@ -61,7 +70,10 @@ export interface PlanRunnerApi {
    * is a sequence: carrying on past a failure means running step four against
    * a state step three never reached.
    */
-  runSequence: (keys: { key: string; command: string }[]) => Promise<boolean>;
+  runSequence: (
+    keys: { key: string; command: string }[],
+    target: TargetPlatform,
+  ) => Promise<boolean>;
   /** True while any command of that sequence is in flight. */
   runningSequence: (keys: string[]) => boolean;
 }
@@ -76,13 +88,25 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
     [profiles],
   );
 
-  const [selectedId, setSelectedId] = useState('');
+  // One choice per kind of machine: which Proxmox host, which gateway.
+  const [chosen, setChosen] = useState<Partial<Record<SshFlavour, string>>>({});
   const [clearances, setClearances] = useState<Record<string, Clearance>>({});
   const [approvals, setApprovals] = useState<Record<string, string>>({});
   const [runs, setRuns] = useState<Record<string, PlanRun>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
-  const selected = sshProfiles.find((p) => p.id === selectedId) ?? sshProfiles[0];
+  const routesOf = useCallback(
+    (target: TargetPlatform) => routesFor(sshProfiles, target),
+    [sshProfiles],
+  );
+
+  const routeFor = useCallback(
+    (target: TargetPlatform) => {
+      const list = routesFor(sshProfiles, target);
+      return list.find((p) => p.id === chosen[flavourFor(target)]) ?? list[0];
+    },
+    [sshProfiles, chosen],
+  );
 
   // Verdicts are cached by command text, so the same command in two steps is
   // asked about once and answered the same way in both.
@@ -117,11 +141,19 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
    * later is a race it would sometimes lose.
    */
   const runOne = useCallback(
-    async (key: string, command: string, confirmed: boolean): Promise<PlanRun | null> => {
-      if (!selected || !command.trim()) return null;
+    async (
+      key: string,
+      command: string,
+      confirmed: boolean,
+      target: TargetPlatform,
+    ): Promise<PlanRun | null> => {
+      // No route for this kind of machine is no run at all — never a run
+      // somewhere else.
+      const route = routeFor(target);
+      if (!route || !command.trim()) return null;
       setBusy((prev) => ({ ...prev, [key]: true }));
       try {
-        const output = await api.runSshCommand(selected.id, command, confirmed);
+        const output = await api.runSshCommand(route.id, command, confirmed);
         setRuns((prev) => ({ ...prev, [key]: output }));
         return output;
       } catch (e) {
@@ -150,12 +182,12 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
         });
       }
     },
-    [selected, clearances],
+    [routeFor, clearances],
   );
 
   const run = useCallback(
-    async (key: string, command: string) => {
-      await runOne(key, command, approvals[key] === command);
+    async (key: string, command: string, target: TargetPlatform) => {
+      await runOne(key, command, approvals[key] === command, target);
     },
     [runOne, approvals],
   );
@@ -169,9 +201,9 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
    * in the state the next command expects.
    */
   const runSequence = useCallback(
-    async (steps: { key: string; command: string }[]) => {
+    async (steps: { key: string; command: string }[], target: TargetPlatform) => {
       for (const { key, command } of steps) {
-        const result = await runOne(key, command, true);
+        const result = await runOne(key, command, true, target);
         const failed =
           result === null ||
           result.error !== undefined ||
@@ -189,9 +221,11 @@ export function usePlanRunner(profiles: Profile[]): PlanRunnerApi {
   return {
     supported,
     profiles: sshProfiles,
-    selected,
-    select: setSelectedId,
-    ready: supported && selected !== undefined,
+    routesOf,
+    routeFor,
+    choose: (target, profileId) =>
+      setChosen((prev) => ({ ...prev, [flavourFor(target)]: profileId })),
+    readyFor: (target) => supported && routeFor(target) !== undefined,
     classify,
     clearanceOf: (command) => clearances[command] ?? null,
     approved: (key, command) => approvals[key] === command,

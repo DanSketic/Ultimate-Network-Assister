@@ -11,6 +11,28 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.11.1] — 2026-09-15
+
+### Fixed
+
+- **A command goes to the kind of machine its step is about.** The plan and
+  the run console had one SSH machine selected for every command, whatever the
+  step was for. With a UniFi gateway and a Proxmox host both reachable over
+  SSH — which the guided connection offers for both — choosing the gateway
+  there meant a `pct create` was one approval away from being sent to it.
+
+  Every action already says what it is for, so the route is decided by that:
+  Proxmox commands go to a Proxmox machine, Docker's to the Proxmox host that
+  runs its machines, a cluster's to the cluster, and only to one whose host key
+  was accepted. None of the plans' commands is meant for the gateway, and the
+  gateway is never offered for one. The plan and the run console show one
+  choice per kind of machine the steps need, each listing only machines of that
+  kind; the queue says which machine each step runs on, and a step whose kind
+  of machine is not connected is held — with that as the reason — rather than
+  run somewhere else.
+
+---
+
 ## [1.11.0] — 2026-09-10
 
 ### Added

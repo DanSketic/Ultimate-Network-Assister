@@ -1038,7 +1038,7 @@ function Walk({
             color={palette.ok}
           />
         </div>
-        {runner.supported && !runner.ready && hasCommands ? (
+        {runner.supported && !runner.readyFor('proxmox') && hasCommands ? (
           <div className="pretty" style={{ fontSize: 11, color: 'var(--text3)', marginTop: 10, lineHeight: 1.55 }}>
             {w.sshHint}
           </div>
@@ -1214,8 +1214,8 @@ function CurrentStep({
         : step.requiresLocalConsole
           ? w.who.console
           : commands.length > 0
-            ? runner.ready
-              ? w.who.run(runner.selected?.sshHost ?? '')
+            ? runner.readyFor(commands[0]?.target ?? 'proxmox')
+              ? w.who.run(runner.routeFor(commands[0]?.target ?? 'proxmox')?.sshHost ?? '')
               : w.who.copy
             : w.who.ui;
 

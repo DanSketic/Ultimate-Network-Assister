@@ -18,6 +18,7 @@ import type { Palette } from '@/lib/palette';
 import type { CopyApi } from '@/state/useAppState';
 import { usePlanRunner, type PlanRun, type PlanRunnerApi } from '@/state/usePlanRunner';
 import { useProgress, type StepStatus } from '@/state/useProgress';
+import { flavourFor } from '@/blueprint/routes';
 import type { Clearance, Profile } from '@/survey/model';
 import { Pill, StatCard } from '../ui';
 
@@ -273,47 +274,7 @@ export function PlanTab({
           {t.plan.whereTheQueueIs}
         </div>
 
-        {runner.supported ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              flexWrap: 'wrap',
-              marginTop: 12,
-              paddingTop: 12,
-              borderTop: '1px solid var(--line)',
-            }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 500 }}>{t.plan.sshTarget}</span>
-            {runner.profiles.length > 0 ? (
-              <>
-                <select
-                  className="input"
-                  style={{ maxWidth: 320, fontSize: 11.5 }}
-                  value={runner.selected?.id ?? ''}
-                  onChange={(e) => runner.select(e.target.value)}
-                >
-                  {runner.profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label} · {p.sshUsername}@{p.sshHost}
-                    </option>
-                  ))}
-                </select>
-                <span
-                  className="pretty"
-                  style={{ fontSize: 11, color: 'var(--text2)', flex: 1, minWidth: 220 }}
-                >
-                  {t.plan.sshTargetNote}
-                </span>
-              </>
-            ) : (
-              <span className="pretty" style={{ fontSize: 11, color: 'var(--text2)' }}>
-                {t.plan.sshNoProfiles}
-              </span>
-            )}
-          </div>
-        ) : null}
+        <SshRoutes runner={runner} targets={commandTargets(plan.steps)} palette={palette} />
       </div>
       </div>
 
@@ -625,8 +586,14 @@ export function StepBody({
    * send those; running them as a sequence would be the same act with less
    * ceremony, which is the wrong direction.
    */
+  // The machine the sequence goes to: the one its commands' target routes to.
+  const seqTarget = sequence[0]?.action.target ?? 'proxmox';
+  const seqRoute = runner.routeFor(seqTarget);
   const offersSequence =
-    effective === 'auto' && runner.ready && sequence.length > 0 && !step.requiresLocalConsole;
+    effective === 'auto' &&
+    runner.readyFor(seqTarget) &&
+    sequence.length > 0 &&
+    !step.requiresLocalConsole;
   const blocked = blockedBy.length > 0;
   const sequenceBusy = runner.runningSequence(sequence.map((x) => x.key));
   const [sequenceApproved, setSequenceApproved] = useState(false);
@@ -743,7 +710,10 @@ export function StepBody({
               onClick={() => {
                 setSequenceApproved(false);
                 void runner
-                  .runSequence(sequence.map(({ key, action }) => ({ key, command: action.body })))
+                  .runSequence(
+                    sequence.map(({ key, action }) => ({ key, command: action.body })),
+                    seqTarget,
+                  )
                   // Behind us only when every command of it ran and none
                   // failed. This used to tick the step whatever came back,
                   // so a sequence that stopped at its second command
@@ -756,7 +726,7 @@ export function StepBody({
               {sequenceBusy ? t.ssh.runningNow : t.plan.runStep}
             </button>
             <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
-              {runner.selected?.label} · {runner.selected?.sshHost}
+              {seqRoute?.label} · {seqRoute?.sshHost}
             </span>
           </div>
         </div>
@@ -900,8 +870,14 @@ function ActionCard({
    * enough.
    */
   const consoleOnly = localConsole && clearance !== null && clearance !== 'readOnly';
+  // Only ever the machine of the kind this command was written for.
+  const route = runner.routeFor(action.target);
   const offered =
-    isCommand && runner.ready && clearance !== null && clearance !== 'forbidden' && !consoleOnly;
+    isCommand &&
+    runner.readyFor(action.target) &&
+    clearance !== null &&
+    clearance !== 'forbidden' &&
+    !consoleOnly;
   const needsApproval = offered && clearance === 'mutating';
   const approved = runner.approved(actionKey, action.body);
 
@@ -967,7 +943,7 @@ function ActionCard({
         {action.body}
       </pre>
 
-      {action.kind === 'command' && runner.ready && !offered ? (
+      {action.kind === 'command' && runner.readyFor(action.target) && !offered ? (
         <div
           className="pretty"
           style={{
@@ -1015,13 +991,13 @@ function ActionCard({
               type="button"
               className="btn-primary"
               disabled={busy || (needsApproval && !approved)}
-              onClick={() => void runner.run(actionKey, action.body)}
+              onClick={() => void runner.run(actionKey, action.body, action.target)}
               style={vars({ '--btn-bg': accent })}
             >
               {busy ? t.ssh.runningNow : t.plan.sshRunHere}
             </button>
             <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
-              {runner.selected?.label} · {runner.selected?.sshHost}
+              {route?.label} · {route?.sshHost}
             </span>
           </div>
         </div>
@@ -1096,6 +1072,90 @@ function Stream({ text, color }: { text: string; color: string }) {
     >
       {text}
     </pre>
+  );
+}
+
+/** The targets a set of steps has commands for, in the order they first appear. */
+export function commandTargets(steps: PlanStep[]): TargetPlatform[] {
+  return [
+    ...new Set(
+      steps.flatMap((s) =>
+        s.actions.filter((a) => a.kind === 'command' && !a.destructive).map((a) => a.target),
+      ),
+    ),
+  ];
+}
+
+/**
+ * Where the commands go, one line per kind of machine.
+ *
+ * Replaces a single "run commands on" choice that applied to every step, which
+ * sent a Proxmox step's commands to whichever machine was first in the list —
+ * the UniFi gateway, as often as not. Each kind of machine the steps need gets
+ * its own choice, offering only machines of that kind, and a kind with none
+ * says so instead of borrowing another's.
+ */
+export function SshRoutes({
+  runner,
+  targets,
+  palette,
+}: {
+  runner: PlanRunnerApi;
+  targets: TargetPlatform[];
+  palette: Palette;
+}) {
+  const t = useT();
+  if (!runner.supported || targets.length === 0) return null;
+  // One line per kind, not per target: Docker's commands go to the Proxmox host.
+  const kinds = [...new Map(targets.map((target) => [flavourFor(target), target])).values()];
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gap: 8,
+        marginTop: 12,
+        paddingTop: 12,
+        borderTop: '1px solid var(--line)',
+      }}
+    >
+      {kinds.map((target) => {
+        const system = t.plan.flavour[flavourFor(target)];
+        const routes = runner.routesOf(target);
+        const route = runner.routeFor(target);
+        return (
+          <div
+            key={target}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 500, minWidth: 180 }}>
+              {t.plan.sshTargetFor(system)}
+            </span>
+            {routes.length > 0 ? (
+              <select
+                className="input"
+                style={{ maxWidth: 320, fontSize: 11.5 }}
+                value={route?.id ?? ''}
+                onChange={(e) => runner.choose(target, e.target.value)}
+              >
+                {routes.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label} · {p.sshUsername}@{p.sshHost}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="pretty" style={{ fontSize: 11, color: palette.warn, flex: 1, minWidth: 220 }}>
+                {t.plan.sshNoRoute(system)}
+              </span>
+            )}
+          </div>
+        );
+      })}
+      <div className="pretty" style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.55 }}>
+        {t.plan.sshTargetNote}
+      </div>
+    </div>
   );
 }
 

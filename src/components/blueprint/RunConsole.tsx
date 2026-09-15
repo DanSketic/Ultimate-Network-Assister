@@ -5,7 +5,8 @@ import {
   isDisruptiveCommand,
   isTemplateCommand,
 } from '@/blueprint/automation';
-import type { Plan, PlanStep } from '@/blueprint/model';
+import type { Plan, PlanStep, TargetPlatform } from '@/blueprint/model';
+import { flavourFor } from '@/blueprint/routes';
 import { useT } from '@/i18n';
 import { cx, vars } from '@/lib/css';
 import type { Palette } from '@/lib/palette';
@@ -14,6 +15,7 @@ import { usePlanRunner } from '@/state/usePlanRunner';
 import type { Profile } from '@/survey/model';
 import { SectionLabel } from '../ui';
 import { ApplyPanel } from './ApplyPanel';
+import { SshRoutes } from './PlanTab';
 
 /**
  * The run console.
@@ -52,6 +54,8 @@ type Route = 'unifi' | 'ssh';
 interface QueueItem {
   step: PlanStep;
   route: Route;
+  /** What the commands are for, which decides the machine they go to. */
+  target: TargetPlatform;
   /** The commands, with the key each action card uses, for an SSH step. */
   commands: { key: string; command: string }[];
   disruptive: boolean;
@@ -79,7 +83,7 @@ function queueOf(plan: Plan): QueueItem[] {
     // The applier's own two object kinds go through the apply machinery, which
     // has the backup and the dry run this console has no business repeating.
     if (step.actions.some((a) => a.kind === 'api' && a.writable)) {
-      out.push({ step, route: 'unifi', commands: [], disruptive: false });
+      out.push({ step, route: 'unifi', target: 'unifi', commands: [], disruptive: false });
       continue;
     }
 
@@ -92,6 +96,7 @@ function queueOf(plan: Plan): QueueItem[] {
     out.push({
       step,
       route: 'ssh',
+      target: step.actions.find((a) => a.kind === 'command')?.target ?? 'proxmox',
       commands,
       disruptive: commands.some((c) => isDisruptiveCommand(c.command)),
     });
@@ -136,6 +141,7 @@ export function RunConsole({
   const sshCount = queue.filter((q) => q.route === 'ssh').length;
   const unifiCount = queue.filter((q) => q.route === 'unifi').length;
   const commandCount = queue.reduce((sum, q) => sum + q.commands.length, 0);
+  const sshTargets = [...new Set(queue.filter((q) => q.route === 'ssh').map((q) => q.target))];
   const running = active !== null;
 
   /*
@@ -164,6 +170,12 @@ export function RunConsole({
 
   /** What is still in this one's way: earlier queue work, or a step done by hand. */
   const blockedBy = (item: QueueItem): string[] => {
+    // No machine of the right kind is the first thing in the way, and it is
+    // named — the queue stops there rather than running the step elsewhere.
+    const noRoute =
+      item.route === 'ssh' && !runner.readyFor(item.target)
+        ? [x.needsRoute(t.plan.flavour[flavourFor(item.target)])]
+        : [];
     const at = queue.indexOf(item);
     const earlier = queue
       .slice(0, at)
@@ -172,7 +184,7 @@ export function RunConsole({
     const byHand = item.step.requires
       .filter((id) => !inQueue.has(id) && byId.has(id) && !progress.done.has(id))
       .map((id) => byId.get(id)!.title);
-    return [...byHand, ...earlier];
+    return [...noRoute, ...byHand, ...earlier];
   };
 
   const blocked = (item: QueueItem) => blockedBy(item).length > 0;
@@ -220,7 +232,7 @@ export function RunConsole({
         return !failed;
       }
 
-      const ok = await runner.runSequence(item.commands);
+      const ok = await runner.runSequence(item.commands, item.target);
       setStep(item.step.id, ok ? 'done' : 'failed');
       if (ok) progress.mark(item.step, 'ran');
       note(`${ok ? '✓' : '✕'} ${item.step.title}`);
@@ -283,7 +295,7 @@ export function RunConsole({
             <button
               type="button"
               className="btn-primary"
-              disabled={running || queue.length === 0 || !runner.ready}
+              disabled={running || queue.length === 0}
               style={vars({ '--btn-bg': accent })}
               onClick={() => void runAll()}
             >
@@ -301,38 +313,8 @@ export function RunConsole({
             </button>
           </div>
 
-          {/* Which machine the commands go to. Without one, nothing here runs. */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 10,
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              marginTop: 12,
-              paddingTop: 12,
-              borderTop: '1px solid var(--line)',
-            }}
-          >
-            <span className="mono" style={{ fontSize: 10.5, color: 'var(--text3)' }}>
-              {t.plan.sshTarget}
-            </span>
-            {runner.profiles.length > 0 ? (
-              <select
-                className="input"
-                style={{ fontSize: 11, maxWidth: 320 }}
-                value={runner.selected?.id ?? ''}
-                onChange={(e) => runner.select(e.target.value)}
-              >
-                {runner.profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label} · {p.sshUsername}@{p.sshHost}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span style={{ fontSize: 11, color: palette.warn }}>{t.plan.sshNoProfiles}</span>
-            )}
-          </div>
+          {/* Which machine each kind of command goes to. Without one, those do not run. */}
+          <SshRoutes runner={runner} targets={sshTargets} palette={palette} />
         </div>
       </div>
 
@@ -408,7 +390,9 @@ export function RunConsole({
                   <span className="fact-chip">
                     <span className="fact-chip__k">{x.route}</span>
                     <span className="fact-chip__v">
-                      {item.route === 'unifi' ? x.routeUnifi : x.routeSsh}
+                      {item.route === 'unifi'
+                        ? x.routeUnifi
+                        : `${x.routeSsh} · ${runner.routeFor(item.target)?.label ?? '—'}`}
                     </span>
                   </span>
                   {item.commands.length > 0 ? (
@@ -431,7 +415,7 @@ export function RunConsole({
                 type="button"
                 className="btn-ghost"
                 style={{ fontSize: 10.5, padding: '4px 9px' }}
-                disabled={running || !runner.ready || blocked(item)}
+                disabled={running || blocked(item)}
                 title={blockedBy(item).join(' · ') || undefined}
                 onClick={() => void runOne(item)}
               >

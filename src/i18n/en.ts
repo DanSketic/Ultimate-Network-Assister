@@ -1351,11 +1351,12 @@ export const en: Dict = {
     actionApi: 'API',
     actionCommand: 'command',
     actionUi: 'screen',
-    sshTarget: 'Run commands on',
+    sshTargetFor: (system: string) => `${system} commands run on`,
     sshTargetNote:
-      'Commands in the steps below run on this machine. The application classifies each one first, and anything destructive stays yours to run at a console.',
-    sshNoProfiles:
-      'No SSH connection with an accepted host key. Add one in the Survey view and the commands below become runnable from here.',
+      'Every command goes to the kind of machine its step is about: Proxmox commands to the Proxmox machine, never to the UniFi gateway. The application classifies each one first, and anything destructive stays yours to run at a console.',
+    sshNoRoute: (system: string) =>
+      `No ${system} machine has an SSH connection with an accepted host key. Add one in the Survey view and these commands can be run from here — until then they can be copied.`,
+    flavour: { proxmox: 'Proxmox', unifi: 'UniFi', other: 'Other machine' },
     sshClassifying: 'Asking what this command is allowed to do…',
     sshTemplateNote:
       'A shape to fill in, not a finished command: the application does not know what belongs in the blanks, so this one is yours to complete and run.',
@@ -2057,6 +2058,7 @@ export const en: Dict = {
     route: 'Route',
     routeUnifi: 'controller API',
     routeSsh: 'SSH',
+    needsRoute: (system: string) => `an SSH connection to a ${system} machine`,
     commands: 'Commands',
     empty:
       'There is nothing in this blueprint the application can carry out on its own right now: the steps need a decision, a local console, or a value only you can fill in. Every one of them is on the Plan tab, with the exact commands.',
