@@ -640,6 +640,21 @@ export const en: Dict = {
     secretStored: (label: string) =>
       `The secret for “${label}” went into the Windows Credential Manager.`,
     partialRun: (errors: string) => `The survey ran only partially: ${errors}`,
+    reachCheck: 'Check reachability',
+    reachCheckAll: 'Check all',
+    reachNote:
+      'The check connects to the port the survey itself uses and drops the connection at once. It is not an ICMP ping: a ping answers even when Proxmox or the controller is stopped.',
+    reachUp: (ms: number) => `answering · ${ms} ms`,
+    reachDown: 'not answering',
+    reachUnchecked: 'reachability not checked',
+    reachIncomplete: 'no address given',
+    reachAt: (time: string) => `checked at ${time}`,
+    reachApi: 'API',
+    reachSsh: 'SSH',
+    allDown: (labels: string) =>
+      `The survey did not start: none of the chosen systems answered (${labels}). Check that the machine is switched on and the address is right.`,
+    someDown: (labels: string) =>
+      `Skipped because it is not answering: ${labels}. The other systems were surveyed.`,
 
     addSsh: 'Add SSH access',
     editSsh: 'Edit SSH access',

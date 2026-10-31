@@ -5,6 +5,7 @@ import type {
   EndpointProbe,
   HostKeyProbe,
   Profile,
+  Reach,
   SnapshotHeader,
   SurveySnapshot,
 } from './model';
@@ -79,6 +80,17 @@ export function probeSshHost(
   pinned: string | null,
 ): Promise<HostKeyProbe> {
   return invoke<HostKeyProbe>('probe_ssh_host', { host, port, pinned });
+}
+
+/**
+ * Whether a machine answers on the port given, with a deadline.
+ *
+ * Nothing is sent and nothing is trusted: the socket is dropped the moment it
+ * opens. This is the "is it even switched on" question, kept separate from
+ * whether its certificate or host key has been accepted.
+ */
+export function checkReach(host: string, port: number, timeoutMs = 2500): Promise<Reach> {
+  return invoke<Reach>('check_reach', { host, port, timeoutMs });
 }
 
 /** The native policy's verdict on a command, without running it. */

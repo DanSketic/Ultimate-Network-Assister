@@ -659,6 +659,21 @@ export const hu = {
       `„${label}” tanúsítványa rögzítve. Változás esetén a kapcsolat megszakad.`,
     secretStored: (label: string) => `„${label}” titka a Windows Credential Managerbe került.`,
     partialRun: (errors: string) => `A felmérés részben futott le: ${errors}`,
+    reachCheck: 'Elérés ellenőrzése',
+    reachCheckAll: 'Mind ellenőrzése',
+    reachNote:
+      'Az elérés-ellenőrzés azt a portot próbálja, amin a felmérés is dolgozik, és azonnal elbontja a kapcsolatot. Nem ICMP ping: egy ping akkor is válaszol, ha a Proxmox vagy a kontroller le van állítva.',
+    reachUp: (ms: number) => `válaszol · ${ms} ms`,
+    reachDown: 'nem válaszol',
+    reachUnchecked: 'elérés nincs ellenőrizve',
+    reachIncomplete: 'nincs megadva cím',
+    reachAt: (time: string) => `ellenőrizve ${time}`,
+    reachApi: 'API',
+    reachSsh: 'SSH',
+    allDown: (labels: string) =>
+      `A felmérés nem indult el: egyik kiválasztott rendszer sem válaszol (${labels}). Nézd meg, be van-e kapcsolva a gép, és jó-e a cím.`,
+    someDown: (labels: string) =>
+      `Kihagyva, mert nem válaszol: ${labels}. A többi rendszer felmérése lefutott.`,
 
     addSsh: 'SSH elérés hozzáadása',
     editSsh: 'SSH elérés szerkesztése',

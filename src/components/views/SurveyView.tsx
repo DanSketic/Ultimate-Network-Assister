@@ -4,6 +4,14 @@ import { useT } from '@/i18n';
 import { vars } from '@/lib/css';
 import { tint, type Palette } from '@/lib/palette';
 import type { EndpointProbe, Profile, ProfileKind, SshFlavour } from '@/survey/model';
+import {
+  healthOf,
+  healthTone,
+  reachKey,
+  socketsOf,
+  type Health,
+  type ReachMap,
+} from '@/survey/reach';
 import type { EstateApi } from '@/state/useEstate';
 import { Dot, Pill, ViewHeading } from '../ui';
 
@@ -57,6 +65,95 @@ function addressOf(p: Profile): string {
   return [p.baseUrl, ssh].filter(Boolean).join(' · ');
 }
 
+/** The addresses in play, as one string, so an effect can depend on them. */
+function addresses(profiles: Profile[]): string {
+  return profiles
+    .map((p) => `${p.id}|${p.baseUrl}|${p.sshEnabled ? `${p.sshHost}:${p.sshPort}` : ''}`)
+    .join(';');
+}
+
+/** What a profile's light means, spelled out next to it. */
+function healthLabel(health: Health, t: ReturnType<typeof useT>): string {
+  switch (health) {
+    case 'notAccepted':
+      return t.survey.certNotAccepted;
+    case 'incomplete':
+      return t.survey.reachIncomplete;
+    case 'checking':
+      return t.survey.checking;
+    case 'unchecked':
+      return t.survey.reachUnchecked;
+    case 'down':
+      return t.survey.reachDown;
+    default:
+      return '';
+  }
+}
+
+/**
+ * One line per socket: where it is, and what the last connect found.
+ *
+ * Both halves of a profile are shown even though only one decides the light,
+ * because a Proxmox host whose API answers and whose ssh does not is a real
+ * state and the plan runner cares about the second one.
+ */
+function ReachLines({
+  profile,
+  reach,
+  palette,
+  t,
+}: {
+  profile: Profile;
+  reach: ReachMap;
+  palette: Palette;
+  t: ReturnType<typeof useT>;
+}) {
+  const sockets = socketsOf(profile);
+  if (sockets.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, marginLeft: 27 }}>
+      {sockets.map((socket) => {
+        const state = reach[reachKey(profile.id, socket.ssh)];
+        const up = state && state !== 'checking' ? state.reach.up : null;
+        return (
+          <div
+            key={socket.ssh ? 'ssh' : 'api'}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+          >
+            <Dot
+              color={up === null ? palette.idle : up ? palette.ok : palette.bad}
+              size={6}
+              style={{ flex: 'none' }}
+            />
+            <span className="mono" style={{ fontSize: 9.5, color: 'var(--text3)' }}>
+              {socket.ssh ? t.survey.reachSsh : t.survey.reachApi} {socket.host}:{socket.port}
+            </span>
+            <span
+              style={{
+                fontSize: 9.5,
+                color: up === false ? palette.bad : 'var(--text3)',
+              }}
+            >
+              {state === undefined
+                ? t.survey.reachUnchecked
+                : state === 'checking'
+                  ? t.survey.checking
+                  : state.reach.up
+                    ? t.survey.reachUp(state.reach.ms)
+                    : `${t.survey.reachDown} — ${state.reach.message}`}
+            </span>
+            {state && state !== 'checking' ? (
+              <span className="mono" style={{ fontSize: 9, color: 'var(--text3)' }}>
+                {t.survey.reachAt(state.at.slice(11, 19))}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SurveyView({
   api,
   palette,
@@ -91,6 +188,20 @@ export function SurveyView({
   useEffect(() => {
     setSelected(api.profiles.filter((p) => p.fingerprint).map((p) => p.id));
   }, [api.profiles]);
+
+  /*
+   * Look whether the machines are there, as soon as there is a list of them.
+   *
+   * Without this the lights would open "unchecked" and the user would have to
+   * know to press something — which is how a stale green got believed in the
+   * first place. The check is a TCP connect per socket, so it costs nothing
+   * worth saving.
+   */
+  const checkAllReach = api.checkAllReach;
+  useEffect(() => {
+    void checkAllReach();
+    // Keyed on the addresses, so editing one re-checks and nothing else does.
+  }, [checkAllReach, addresses(api.profiles)]);
 
   if (!api.supported) {
     return (
@@ -282,9 +393,35 @@ export function SurveyView({
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="panel" style={{ padding: '15px 16px 6px' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              {t.survey.profiles}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 10,
+                marginBottom: 4,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.survey.profiles}</div>
+              {api.profiles.length > 0 ? (
+                <button type="button" className="link" onClick={() => void api.checkAllReach()}>
+                  {t.survey.reachCheckAll}
+                </button>
+              ) : null}
             </div>
+            {api.profiles.length > 0 ? (
+              <div
+                className="pretty"
+                style={{
+                  fontSize: 10.5,
+                  color: 'var(--text3)',
+                  lineHeight: 1.5,
+                  marginBottom: 2,
+                }}
+              >
+                {t.survey.reachNote}
+              </div>
+            ) : null}
 
             {api.profiles.length === 0 ? (
               <div
@@ -306,7 +443,11 @@ export function SurveyView({
               // An ssh-only profile has no API to survey, so it is never a
               // survey target — but it can still be accepted and used.
               const surveyable = p.kind !== 'ssh';
-              const ready = surveyable ? Boolean(p.fingerprint) : Boolean(p.sshFingerprint);
+              // The light is a measurement now: accepting a fingerprint is a
+              // decision made once and says nothing about whether the machine
+              // is switched on, which is what someone reading a dot wants.
+              const health = healthOf(p, api.reach);
+              const note = healthLabel(health, t);
               return (
                 <div key={p.id} style={{ padding: '12px 0', borderTop: '1px solid var(--line)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -318,9 +459,24 @@ export function SurveyView({
                       style={{ accentColor: 'var(--accent)' }}
                       aria-label={p.label}
                     />
-                    <Dot color={ready ? palette.ok : palette.warn} size={7} />
+                    <Dot color={palette[healthTone(health)]} size={7} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500 }}>{p.label}</div>
+                      <div
+                        style={{ fontSize: 12, fontWeight: 500, display: 'flex', gap: 7, alignItems: 'baseline' }}
+                      >
+                        <span>{p.label}</span>
+                        {note ? (
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              fontWeight: 400,
+                              color: health === 'down' ? palette.bad : 'var(--text3)',
+                            }}
+                          >
+                            {note}
+                          </span>
+                        ) : null}
+                      </div>
                       <div
                         className="mono ellipsis"
                         style={{ fontSize: 9.5, color: 'var(--text3)', marginTop: 3 }}
@@ -349,6 +505,15 @@ export function SurveyView({
                       alignItems: 'center',
                     }}
                   >
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={health === 'checking'}
+                      onClick={() => void api.checkReach(p)}
+                    >
+                      {health === 'checking' ? t.survey.checking : t.survey.reachCheck}
+                    </button>
+
                     {surveyable ? (
                       <>
                         <button
@@ -441,6 +606,8 @@ export function SurveyView({
                       </>
                     ) : null}
                   </div>
+
+                  <ReachLines profile={p} reach={api.reach} palette={palette} t={t} />
 
                   {sshEdit?.id === p.id ? (
                     <div

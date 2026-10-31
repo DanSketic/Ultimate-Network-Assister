@@ -304,6 +304,20 @@ pub struct EndpointProbe {
     pub message: String,
 }
 
+/// Whether a machine is answering, and how long it took to answer.
+///
+/// A connect to the port the survey would actually use, not an ICMP echo: a
+/// ping needs a raw socket, and a host that answers one can still have the
+/// service switched off — which is the question being asked.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Reach {
+    pub up: bool,
+    pub ms: u32,
+    /// Why it is not answering, empty when it is.
+    pub message: String,
+}
+
 pub fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }

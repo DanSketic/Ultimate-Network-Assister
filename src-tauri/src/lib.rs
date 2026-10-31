@@ -12,7 +12,8 @@ use rusqlite::Connection;
 use tauri::{Manager, State};
 
 use collect::{
-    now_iso, validate_base_url, validate_host, EndpointProbe, LogEntry, Profile, SurveySnapshot,
+    now_iso, validate_base_url, validate_host, EndpointProbe, LogEntry, Profile, Reach,
+    SurveySnapshot,
 };
 
 /// Application store.
@@ -460,6 +461,47 @@ async fn probe_endpoint(base_url: String, pinned: Option<String>) -> Result<Endp
         }
         (Ok(_), None) => Err("a kapcsolat létrejött, de tanúsítvány nélkül".to_string()),
     }
+}
+
+/// Whether the machine is answering on the port the app would use.
+///
+/// A plain TCP connect, dropped the moment it succeeds: nothing is sent, no
+/// certificate is looked at and no credential is offered. An ICMP ping was the
+/// obvious thing to reach for and is the wrong measure — it needs a raw socket
+/// on Windows, and a host that answers a ping can still have Proxmox or the
+/// controller stopped, so it would keep saying "fine" about a machine the
+/// survey cannot read.
+#[tauri::command]
+async fn check_reach(host: String, port: u16, timeout_ms: u64) -> Result<Reach, String> {
+    let host = validate_host(&host)?;
+    if port == 0 {
+        return Err("a port nem lehet nulla".to_string());
+    }
+    let wait = std::time::Duration::from_millis(timeout_ms.clamp(200, 10_000));
+    let started = std::time::Instant::now();
+    let outcome = tokio::time::timeout(
+        wait,
+        tokio::net::TcpStream::connect(format!("{host}:{port}")),
+    )
+    .await;
+    let ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
+    Ok(match outcome {
+        Ok(Ok(_)) => Reach {
+            up: true,
+            ms,
+            message: String::new(),
+        },
+        Ok(Err(e)) => Reach {
+            up: false,
+            ms,
+            message: e.to_string(),
+        },
+        Err(_) => Reach {
+            up: false,
+            ms,
+            message: "nem válaszolt időben".to_string(),
+        },
+    })
 }
 
 /* -------------------------------------------------------------------- ssh */
@@ -1253,6 +1295,7 @@ pub fn run() {
             delete_profile_secret,
             probe_endpoint,
             probe_ssh_host,
+            check_reach,
             classify_ssh_command,
             run_ssh_command,
             run_survey,

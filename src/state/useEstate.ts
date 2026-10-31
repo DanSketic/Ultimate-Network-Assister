@@ -11,6 +11,13 @@ import { openTextFile, saveTextFile } from '@/blueprint/store';
 import { diffSurveys, type SurveyDiff } from '@/survey/diff';
 import { estateFromSnapshot, type Estate } from '@/survey/mapping';
 import { surveyReport } from '@/survey/report';
+import {
+  healthOf,
+  reachKey,
+  socketsOf,
+  type ReachMap,
+  type ReachState,
+} from '@/survey/reach';
 import type {
   EndpointProbe,
   HostKeyProbe,
@@ -57,6 +64,17 @@ export interface EstateApi {
   probe: (baseUrl: string, pinned: string | null) => Promise<EndpointProbe | null>;
   /** The ssh counterpart: reads the host key without ever authenticating. */
   probeSsh: (host: string, port: number, pinned: string | null) => Promise<HostKeyProbe | null>;
+  /**
+   * Whether the machines answer, keyed by profile and half — see
+   * `@/survey/reach`. Accepting a fingerprint says nothing about this, so the
+   * two are never mixed: without a check here a profile reads "unchecked",
+   * not "ready".
+   */
+  reach: ReachMap;
+  /** Tries every socket one profile has, and also returns what it found. */
+  checkReach: (profile: Profile) => Promise<ReachMap>;
+  /** The same for every profile, in parallel. */
+  checkAllReach: () => Promise<void>;
   run: (profileIds: string[]) => Promise<void>;
   discard: () => Promise<void>;
   /** Writes the current survey to a file the user chooses. */
@@ -119,6 +137,7 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
   const [loading, setLoading] = useState(supported);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reach, setReach] = useState<ReachMap>({});
 
   const fail = useCallback((e: unknown) => {
     setError(e instanceof Error ? e.message : String(e));
@@ -215,6 +234,50 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
 
   const estate = mode === 'survey' && live ? live : demo;
 
+  /**
+   * Tries one socket and records what came back.
+   *
+   * A failure is a result, not an error: "not answering" is exactly what the
+   * caller asked about, so it goes into the map rather than into the error
+   * banner, which is for things that went wrong in the app. The state is
+   * returned as well as stored, so a caller that has to act on it right away
+   * does not have to wait for a render.
+   */
+  const checkSocket = useCallback(
+    async (id: string, host: string, port: number, ssh: boolean): Promise<ReachMap> => {
+      const key = reachKey(id, ssh);
+      setReach((prev) => ({ ...prev, [key]: 'checking' }));
+      let state: ReachState;
+      try {
+        state = { reach: await api.checkReach(host, port), at: new Date().toISOString() };
+      } catch (e) {
+        state = {
+          reach: { up: false, ms: 0, message: e instanceof Error ? e.message : String(e) },
+          at: new Date().toISOString(),
+        };
+      }
+      setReach((prev) => ({ ...prev, [key]: state }));
+      return { [key]: state };
+    },
+    [],
+  );
+
+  const checkReach = useCallback(
+    async (profile: Profile): Promise<ReachMap> => {
+      if (!supported) return {};
+      const results = await Promise.all(
+        socketsOf(profile).map((s) => checkSocket(profile.id, s.host, s.port, s.ssh)),
+      );
+      return Object.assign({}, ...results) as ReachMap;
+    },
+    [supported, checkSocket],
+  );
+
+  const checkAllReach = useCallback(async () => {
+    if (!supported) return;
+    await Promise.all(profiles.map((p) => checkReach(p)));
+  }, [supported, profiles, checkReach]);
+
   const reloadProfiles = useCallback(async () => {
     if (!supported) return;
     try {
@@ -238,6 +301,9 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
     running,
     error,
     clearError: () => setError(null),
+    reach,
+    checkReach,
+    checkAllReach,
 
     useDemo: () => setMode('demo'),
     useSurvey: () => setMode('survey'),
@@ -303,19 +369,41 @@ export function useEstateSource(lang: Lang, t: Dict): EstateApi {
       }
     },
 
+    /*
+     * Runs the survey, after looking whether the machines are there.
+     *
+     * The pre-flight is not politeness. Reading a switched-off host ends in a
+     * connect error several seconds later, per endpoint, and the message that
+     * comes back is about TLS rather than about the machine — so the check
+     * runs first and names what is down in plain terms.
+     */
     run: async (profileIds) => {
       setRunning(true);
       setError(null);
       try {
-        const result = await api.runSurvey(profileIds);
+        const chosen = profiles.filter((p) => profileIds.includes(p.id));
+        const fresh = Object.assign(
+          {},
+          ...(await Promise.all(chosen.map((p) => checkReach(p)))),
+        ) as ReachMap;
+        const down = chosen.filter((p) => healthOf(p, fresh) === 'down');
+        const live = chosen.filter((p) => !down.includes(p));
+        if (down.length > 0 && live.length === 0) {
+          setError(t.survey.allDown(down.map((p) => p.label).join(', ')));
+          return;
+        }
+        const result = await api.runSurvey(live.map((p) => p.id));
         setSnapshot(result);
         setMode('survey');
         // Back to comparing against whatever came immediately before this run,
         // which is what someone who just pressed the button wants to see.
         setCompareWith('');
-        if (result.errors.length > 0) {
-          setError(t.survey.partialRun(result.errors.join('; ')));
-        }
+        // Both notes together: a machine left out because it is off is the
+        // more useful of the two, and must not be hidden by the other.
+        const notes: string[] = [];
+        if (down.length > 0) notes.push(t.survey.someDown(down.map((p) => p.label).join(', ')));
+        if (result.errors.length > 0) notes.push(t.survey.partialRun(result.errors.join('; ')));
+        if (notes.length > 0) setError(notes.join(' '));
         await reloadProfiles();
         await refreshHistory();
       } catch (e) {

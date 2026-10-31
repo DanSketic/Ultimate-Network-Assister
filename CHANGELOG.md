@@ -11,6 +11,46 @@ at each stage rather than what was planned for it.
 
 ---
 
+## [1.12.0] — 2026-10-31
+
+### Fixed
+
+- **A connection profile's light is a measurement, not a decision made once.**
+  The dot next to a profile was green whenever its certificate or host key had
+  been accepted. Accepting a fingerprint says nothing about whether the machine
+  is switched on, so a host that was powered down read as ready, and the
+  survey was started against it — the first sign of trouble being a TLS error
+  several seconds later, per endpoint, phrased about certificates rather than
+  about the machine.
+
+  Green now requires a connect that succeeded. The two facts are kept apart and
+  both shown: whether the fingerprint was accepted, and whether the machine
+  answered. A profile nobody has looked at reads "reachability not checked"
+  rather than passing for ready, and one that did not answer is red with the
+  reason next to it.
+
+### Added
+
+- **The reachability check, on the port the survey itself uses.** Each profile
+  lists its halves separately — the API endpoint and ssh — with the address,
+  whether it answered, how long it took and when it was last tried. The check
+  runs by itself when the profile list opens, and by hand per profile or for
+  all of them.
+
+  It is a TCP connect that is dropped the moment it opens: nothing is sent, no
+  certificate is examined and no credential is offered. Deliberately not an
+  ICMP ping — a ping needs a raw socket on Windows, and a host answers one
+  while Proxmox or the controller is stopped, which is precisely the case that
+  has to show red.
+
+- **The survey says which machine it left out.** Before a run, the chosen
+  systems are checked; anything that does not answer is skipped and named, and
+  if none of them answers the run does not start at all and says to check
+  whether the machine is on and the address right. The guided path goes through
+  the same run, so it gets this too.
+
+---
+
 ## [1.11.1] — 2026-09-15
 
 ### Fixed

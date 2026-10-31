@@ -107,6 +107,14 @@ export interface EndpointProbe {
   message: string;
 }
 
+/** Whether a machine answered on the port the app would use, and how fast. */
+export interface Reach {
+  up: boolean;
+  ms: number;
+  /** Why it is not answering, empty when it is. */
+  message: string;
+}
+
 export interface LogEntry {
   time: string;
   source: string;
