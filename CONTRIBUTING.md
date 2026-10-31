@@ -68,6 +68,41 @@ These are enforced in Rust and should stay that way:
 - **Credentials** live in the operating system's credential store. Nothing that
   is written to the snapshot database may contain a secret.
 
+## Releasing
+
+Cutting a release is a deliberate, separate step; nothing triggers it on its
+own. The version follows [Semantic Versioning](https://semver.org/): a patch for
+a fix, a minor for a new capability or a visible but undisruptive change, a major
+for a break in stored data or the IPC surface.
+
+**The version lives in four files, and all four must agree with the tag:**
+
+| File | Field |
+| --- | --- |
+| `package.json` | `version` |
+| `src-tauri/tauri.conf.json` | `version` |
+| `src-tauri/Cargo.toml` | `package.version` |
+| `src-tauri/Cargo.lock` | the `ultimate-network-assister` package entry |
+
+`Cargo.lock` is the one that gets forgotten, and a stale entry there is the kind
+of mismatch nothing notices until an installer reports a version nobody shipped.
+
+Then: a `CHANGELOG.md` section for the version, an annotated tag `vX.Y.Z` whose
+subject becomes the release title, and a push of both `main` and the tag.
+
+**The installers are built by CI, not on a laptop.** Pushing a `v*` tag runs
+[.github/workflows/release.yml](.github/workflows/release.yml) on a Windows
+runner: it checks that the tag and the four versions agree, takes the release
+body from the changelog section for that version, runs `npm run typecheck`,
+`npm test` and `cargo test`, and only then builds and publishes the MSI and NSIS
+installers to the GitHub release. A release with no installers therefore means a
+run that failed or never happened, rather than an upload somebody forgot.
+
+The workflow can also be started by hand against a tag, but only a tag that
+already contains the workflow file — GitHub resolves a workflow from the ref it
+is asked to run on. Tags cut before it existed have to be built locally with
+`npm run tauri:build` and attached by hand.
+
 ## Schema changes
 
 Snapshots and blueprints are stored as JSON and read back by later builds. Every

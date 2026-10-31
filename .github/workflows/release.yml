@@ -1,0 +1,114 @@
+# The installers, built from the tag rather than from somebody's laptop.
+#
+# Up to now a release was whatever happened to be in `src-tauri/target` on one
+# machine, uploaded by hand — which is why the tags past v1.6.0 have no
+# installers at all. Building here makes the download match the tag by
+# construction, and makes a release that was never cut visible as a missing run
+# rather than as a forgotten upload.
+#
+# The release is also gated: the version has to agree in all four files that
+# carry it, the changelog has to have a section for it, and the measurements
+# have to pass before anything is published.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  # Run by hand against a tag chosen in the interface, to fill in a release
+  # that was tagged before this workflow existed.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows installers
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: This has to run on a tag
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::run this on a tag, not on $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # The version lives in four files and the tag is a fifth copy of it. They
+      # have disagreed before, and a disagreement here means an installer
+      # whose file name is not the version it reports.
+      - name: The tag and the four versions must agree
+        shell: bash
+        run: |
+          set -euo pipefail
+          want="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          toml=$(grep -m1 '^version = ' src-tauri/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          lock=$(grep -A1 '^name = "ultimate-network-assister"$' src-tauri/Cargo.lock \
+                 | grep -m1 '^version = ' | sed 's/.*"\(.*\)".*/\1/')
+          echo "tag $want · package.json $pkg · tauri.conf.json $conf · Cargo.toml $toml · Cargo.lock $lock"
+          for got in "$pkg" "$conf" "$toml" "$lock"; do
+            if [ "$got" != "$want" ]; then
+              echo "::error::version mismatch: the tag says $want, a file says $got"
+              exit 1
+            fi
+          done
+
+      - name: Release notes from the changelog
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'body<<CHANGELOG_SECTION'
+            node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}"
+            echo 'CHANGELOG_SECTION'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: The title the tag was given
+        id: title
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject=$(git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME")
+          # A lightweight tag has no message; the tag name alone is then the
+          # most honest title available.
+          echo "name=${subject:+v}${subject:-$GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - uses: tauri-apps/tauri-action@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ steps.title.outputs.name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false
+          # There is no updater in this application, so a feed describing one
+          # would be a file that promises something the app does not do.
+          uploadUpdaterJson: false
+          tauriScript: npm run tauri --

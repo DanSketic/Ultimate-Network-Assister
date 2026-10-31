@@ -107,7 +107,12 @@ silently accepted.
 
 ## Installing
 
-Windows, built from source. You need [Node.js](https://nodejs.org/) 20 or newer
+The installers for each release are on the
+[releases page](https://github.com/DanSketic/Ultimate-Network-Assister/releases),
+built from the tag by CI: an `x64-setup.exe` and an MSI in English and Hungarian.
+Nothing is code-signed, so Windows will say the publisher is unknown.
+
+To build it yourself instead, you need [Node.js](https://nodejs.org/) 20 or newer
 and a [Rust toolchain](https://rustup.rs/).
 
 ```bash
